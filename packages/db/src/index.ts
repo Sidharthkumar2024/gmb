@@ -1,4 +1,16 @@
+import path from "node:path";
+import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
+
+// Load the repo-root .env before the client reads DATABASE_URL. Done here
+// rather than in each entrypoint because every process that touches the
+// database imports this module — server, workers, seed and tests alike.
+// `override: false` keeps real environment variables (CI, production) winning
+// over a stray local file.
+dotenv.config({
+  path: path.resolve(__dirname, "../../../.env"),
+  override: false,
+});
 
 // Re-export everything Prisma generates (models, enums, the `Prisma` namespace)
 // so the extracted GMB code's `import { GmbPostStatus, Prisma } from

@@ -3,25 +3,62 @@
 The Google Business Profile (Local SEO) subsystem, extracted from the NexaFlow AI
 monorepo (`Sidharthkumar2024/whatsapp-api`).
 
-## Read this first
+## Status
 
-**This is a source extract, not a runnable application.** Nothing here boots on its
-own. It is the GMB code lifted out of a larger platform, published so the subsystem
-can be read, reviewed, or used as the starting point for a standalone product.
+**The API runs standalone.** It boots, authenticates, serves the full GMB surface
+against its own Postgres, and passes the extracted test suite unmodified
+(30 files, 285 tests).
 
-If you want to *run* GMB today, run it from the monorepo — it is complete and
-working there, and as of the `local_seo` product registration it can be sold and
-enabled per customer as its own SKU.
+Not yet built: the **web frontend** (the 12 page directories are present but have
+no Next.js app around them) and **production concerns** — migrations (uses
+`db push`), CI, Docker, and a credit ledger (see the billing caveat below).
+
+## Quick start
+
+```bash
+npm install
+cp .env.example .env            # then set DATABASE_URL and JWT_SECRET
+npm run db:push                 # create the schema
+npx tsx packages/db/prisma/seed.ts
+npx tsx apps/api/src/index.ts   # http://localhost:3001
+```
+
+```bash
+curl -s localhost:3001/api/v1/health
+TOKEN=$(curl -s -X POST localhost:3001/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@adgrowly.local","password":"Demo@1234"}' | jq -r .data.accessToken)
+curl -s localhost:3001/api/v1/gmb/locations -H "Authorization: Bearer $TOKEN"
+curl -s localhost:3001/api/v1/gmb/health -H "Authorization: Bearer $TOKEN"   # probes all 12 GMB tables
+```
+
+Background workers (auto-sync, autopilot, post publisher, report scheduler) are
+opt-in via `ENABLE_WORKERS=true`. Run them on exactly one process — every replica
+that enables them will independently sync Google and publish posts, producing
+duplicate writes against a rate-limited API.
+
+## ⚠️ Before charging anyone money
+
+`billing.service.ts` is **balance-only**: it decrements a wallet with no
+transaction ledger, no idempotency key and no refund path. The monorepo debits
+through an idempotent ledger; that model was not carried over.
+
+Billing is therefore **off by default** (`WALLET_BILLING_ENABLED` unset). Add a
+`WalletTransaction` model and an idempotent adjust before enabling it — a
+balance-only debit cannot be audited or reversed, and a retried request would
+double-charge.
 
 ## What's in here
 
 | Path | Contents |
 |---|---|
-| `api/services/` | 61 service files (~8,200 LOC incl. colocated tests) |
-| `api/routes/` | `gmb.routes.ts` — the whole GMB API surface (~2,450 lines) |
-| `web/app/` | 12 Next.js page directories |
-| `web/components/` | 6 React components |
-| `prisma/gmb.models.prisma` | 19 `Gmb*` models + 13 enums |
+| `apps/api/src/services/` | 61 GMB services + the ported platform layer |
+| `apps/api/src/routes/` | `gmb.routes.ts` (the whole GMB surface) + `auth.routes.ts` |
+| `apps/api/src/middleware/` | auth (JWT), rbac, error handler |
+| `apps/web/app/` | 12 Next.js page directories (no app shell yet) |
+| `apps/web/src/components/` | 6 React components |
+| `packages/db/` | Prisma schema (47 models + enums), client, seed |
+| `packages/shared/` | `ApiError`, `ErrorCodes`, `Permissions`, roles |
 | `docs/` | Coupling analysis + Google GBP integration notes |
 
 Features covered: locations and sync, reviews with AI-drafted replies, Q&A, posts
