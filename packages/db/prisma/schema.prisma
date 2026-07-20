@@ -1,8 +1,261 @@
-// GMB / Google Business Profile models extracted from the NexaFlow monorepo.
-// Every model's only relation outside this set is `tenant -> Tenant`, which
-// is NOT included here: Tenant belongs to the platform layer. To use this
-// schema you must supply a Tenant model (or replace that relation with your
-// own owner/account concept).
+// GMB standalone — Prisma schema.
+// Assembled from platform.prisma (purpose-built core) + gmb.models.prisma
+// (extracted from the NexaFlow monorepo). Do not edit those two files and
+// this one independently; this is the single schema Prisma reads.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// Platform core for the standalone GMB app.
+//
+// These are NOT copies of the monorepo's models. The originals carry relations
+// into WhatsApp/campaign/commerce models that do not exist here (Tenant alone
+// had 226 lines and 14 relations). Each model below was rebuilt from exactly
+// what the extracted GMB code reads — verified by inventorying every
+// `prisma.<model>` access and field read in apps/api.
+//
+// GMB touches only five non-GMB models: Tenant, SecretVaultEntry, Wallet,
+// BrandKit, AiUsage. User exists solely so the app can authenticate; no GMB
+// code queries it.
+// ============================================================================
+
+enum TenantType {
+  DIRECT
+  WHITE_LABEL
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  WHITE_LABEL_ADMIN
+  BUSINESS_ADMIN
+  AGENT
+}
+
+/// An account that owns GMB locations. In the monorepo this is a large
+/// multi-product tenant; here it is only what GMB needs plus the parent link
+/// (gmbReport.service reads `parentTenant.name` for report branding).
+model Tenant {
+  id     String       @id @default(cuid())
+  name   String
+  slug   String       @unique
+  type   TenantType   @default(DIRECT)
+  status TenantStatus @default(ACTIVE)
+
+  // Self-relation: a white-label parent whose name brands generated reports.
+  parentTenantId String?
+  parentTenant   Tenant?  @relation("TenantHierarchy", fields: [parentTenantId], references: [id], onDelete: SetNull)
+  children       Tenant[] @relation("TenantHierarchy")
+
+  // Used by the GMB niche/tone templates.
+  industry String?
+  timezone String  @default("Asia/Kolkata")
+
+  users             User[]
+  wallets           Wallet[]
+  aiUsage           AiUsage[]
+  secretVaultEntries SecretVaultEntry[]
+
+  // GMB back-relations
+  gmbLocations       GmbLocation[]
+  gmbPosts           GmbPost[]
+  gmbReviews         GmbReview[]
+  gmbQuestions       GmbQuestion[]
+  gmbPlaceActions    GmbPlaceAction[]
+  gmbVerifications   GmbVerificationRequest[]
+  gmbTrackedKeywords GmbTrackedKeyword[]
+  gmbRankAlertRules  GmbRankAlertRule[]
+  gmbRankSnapshots   GmbRankSnapshot[]
+  gmbRankGridSnaps   GmbRankGridSnapshot[]
+  gmbInsightSnaps    GmbInsightSnapshot[]
+  gmbCitations       GmbCitation[]
+  gmbReports         GmbReport[]
+  gmbKeywordIdeaSets GmbKeywordIdeaSet[]
+  gmbDescriptions    GmbDescription[]
+  gmbAdvisorReports  GmbAdvisorReport[]
+  gmbImageRequests   GmbImageRequest[]
+  // GmbReportSchedule and GmbAutopilotConfig are deliberately absent: both are
+  // one-row-per-tenant configs keyed by `tenantId @unique` with no declared FK
+  // relation in the source schema. Adding back-relations here would require
+  // changing those models, so the original shape is kept.
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([parentTenantId])
+}
+
+model User {
+  id       String   @id @default(cuid())
+  tenantId String
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email    String   @unique
+  name     String?
+  password String
+  role     UserRole @default(BUSINESS_ADMIN)
+  isActive Boolean  @default(true)
+
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId])
+}
+
+// --- Secret Vault -----------------------------------------------------------
+// gmbGoogleAuth / gmbImage resolve the Google + AI credentials from here.
+
+enum SecretScope {
+  PLATFORM
+  PARTNER
+  CUSTOMER
+}
+
+enum SecretProvider {
+  GOOGLE_BUSINESS_PROFILE
+  OPENAI
+  ANTHROPIC
+  GEMINI
+  REPLICATE
+  SMTP
+  CUSTOM
+}
+
+enum SecretStatus {
+  ACTIVE
+  DISABLED
+}
+
+model SecretVaultEntry {
+  id    String      @id @default(cuid())
+  scope SecretScope
+
+  /// Null for PLATFORM scope; the owning tenant for PARTNER / CUSTOMER.
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  provider SecretProvider
+  label    String
+
+  /// Envelope-encrypted secret material ("v1:..." blob). Never returned raw.
+  ciphertext String
+  /// Last 4 chars of the plaintext, captured at write time, for safe display.
+  last4      String?
+  /// Non-secret metadata (key id, region, public id) as a JSON string.
+  metadata   String?
+
+  status        SecretStatus @default(ACTIVE)
+  lastRotatedAt DateTime?
+  lastTestedAt  DateTime?
+  lastTestOk    Boolean?
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scope, tenantId])
+  @@index([scope, tenantId, provider])
+  @@index([tenantId, status])
+}
+
+// --- AI provider selection --------------------------------------------------
+// Kept because gmbImage.service imports these enums.
+
+enum AiProviderKey {
+  OPENAI
+  ANTHROPIC
+  GEMINI
+  DEEPSEEK
+  GROK
+  REPLICATE
+  CUSTOM
+}
+
+enum AiProviderKind {
+  TEXT
+  IMAGE
+  VIDEO
+  VOICE
+  EMBEDDING
+}
+
+/// Cost ledger for AI calls. gmbImage.service writes one row per generation.
+model AiUsage {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  model   String
+  feature String
+
+  inputTokens  Int @default(0)
+  outputTokens Int @default(0)
+  costInCents  Int
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+// --- Credits ----------------------------------------------------------------
+// gmbDashboard reads only balanceCredits + reservedCredits. The monorepo's
+// Wallet also carries auto-recharge, billing mode and a transaction ledger;
+// none of it is referenced by GMB, so it is deliberately omitted rather than
+// carried over half-working.
+
+enum WalletStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+model Wallet {
+  id       String       @id @default(cuid())
+  tenantId String
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status   WalletStatus @default(ACTIVE)
+
+  balanceCredits  Int @default(0)
+  reservedCredits Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+/// Logo + colours stamped onto branded GMB post images.
+model BrandKit {
+  id             String   @id @default(cuid())
+  tenantId       String   @unique
+  logoUrl        String?
+  phone          String?
+  website        String?
+  primaryColor   String   @default("#0f766e")
+  secondaryColor String   @default("#065f46")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+
+// ============================================================
+// GMB models (extracted from the NexaFlow monorepo)
+// ============================================================
+
 
 enum GmbPostType {
   UPDATE

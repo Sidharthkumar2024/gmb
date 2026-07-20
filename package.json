@@ -1,0 +1,18 @@
+{
+  "name": "gmb",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Adgrowly GMB — standalone Google Business Profile / Local SEO platform",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "db:generate": "npm run generate --workspace=@nexaflow/db",
+    "db:push": "npm run push --workspace=@nexaflow/db",
+    "typecheck": "tsc --noEmit -p apps/api/tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "@types/node": "^20.11.0"
+  }
+}
