@@ -1,0 +1,605 @@
+// GMB / Google Business Profile models extracted from the NexaFlow monorepo.
+// Every model's only relation outside this set is `tenant -> Tenant`, which
+// is NOT included here: Tenant belongs to the platform layer. To use this
+// schema you must supply a Tenant model (or replace that relation with your
+// own owner/account concept).
+
+enum GmbPostType {
+  UPDATE
+  OFFER
+  EVENT
+}
+
+enum GmbPostStatus {
+  DRAFT
+  PENDING_APPROVAL
+  SCHEDULED
+  PUBLISHED
+  FAILED
+}
+
+model GmbPost {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  type     GmbPostType @default(UPDATE)
+  summary  String // the post caption / body
+  mediaUrl String?
+
+  // LEARN_MORE | CALL | ORDER | BOOK | SIGN_UP | SHOP
+  callToActionType String?
+  callToActionUrl  String?
+
+  // Optional Business Profile location label (manual until OAuth lands).
+  locationLabel String?
+
+  scheduledAt DateTime?
+  status      GmbPostStatus @default(DRAFT)
+  publishedAt DateTime?
+  error       String?
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, scheduledAt])
+}
+
+model GmbAutopilotConfig {
+  id               String    @id @default(cuid())
+  tenantId         String    @unique
+  enabled          Boolean   @default(false)
+  businessName     String
+  niche            String    @default("general")
+  tone             String    @default("friendly")
+  postsPerRun      Int       @default(3)
+  cadenceHours     Int       @default(168) // weekly
+  autoDraftReplies Boolean   @default(true)
+  replyTone        String    @default("warm")
+  lastRunAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([enabled])
+}
+
+enum GmbLocationStatus {
+  DRAFT
+  CONNECTED
+  SUSPENDED
+}
+
+model GmbLocation {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name            String
+  storeCode       String?
+  placeId         String? // Google Business Profile location / place id
+  phone           String?
+  website         String?
+  primaryCategory String?
+
+  addressLine String?
+  city        String?
+  region      String?
+  postalCode  String?
+  country     String?
+
+  // Grid rank tracking center. Populated from Google location sync when
+  // available, or geocoded on first grid capture.
+  latitude  Float?
+  longitude Float?
+
+  status            GmbLocationStatus @default(DRAFT)
+  verificationState String?
+  rating            Float?
+  reviewCount       Int               @default(0)
+
+  // Optional pointer to Google API credentials in the Secret Vault.
+  secretId     String?
+  lastSyncedAt DateTime?
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reviews          GmbReview[]
+  questions        GmbQuestion[]
+  placeActions     GmbPlaceAction[]
+  verifications    GmbVerificationRequest[]
+  trackedKeywords  GmbTrackedKeyword[]
+  insightSnapshots GmbInsightSnapshot[]
+  citations        GmbCitation[]
+  reports          GmbReport[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, placeId])
+}
+
+enum GmbReviewStatus {
+  NEW
+  REPLIED
+  FLAGGED
+}
+
+enum GmbQuestionStatus {
+  NEW
+  ANSWERED
+  IGNORED
+}
+
+enum GmbVerificationMethod {
+  PHONE_CALL
+  SMS
+  EMAIL
+  POSTCARD
+}
+
+enum GmbVerificationRequestState {
+  PENDING // requested; awaiting the code
+  VERIFIED // code accepted
+  FAILED // code rejected / expired
+  CANCELED
+}
+
+model GmbVerificationRequest {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  locationId String
+  location   GmbLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  method GmbVerificationMethod
+  state  GmbVerificationRequestState @default(PENDING)
+
+  /// The human who initiated this — never null. Enforces "customer-initiated
+  /// only": there is no code path that creates a request without a user.
+  requestedByUserId String
+
+  requestedAt DateTime  @default(now())
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([locationId, state])
+}
+
+enum GmbPlaceActionType {
+  BOOK
+  APPOINTMENT
+  RESERVE
+  ORDER_ONLINE
+  DINING_RESERVATION
+}
+
+model GmbPlaceAction {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  locationId String
+  location   GmbLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  actionType GmbPlaceActionType
+  url        String
+
+  isActive          Boolean @default(true)
+  /// Whether this link has been pushed to the Google profile (Place Actions
+  /// API write — gated on a live connection). Local-only until then.
+  publishedToGoogle Boolean @default(false)
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One action of each type per location (Google allows a single link per
+  // action type).
+  @@unique([locationId, actionType])
+  @@index([tenantId])
+}
+
+model GmbQuestion {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  locationId String
+  location   GmbLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  /// Google's question resource id (dedupe key for sync). Null for
+  /// manually-logged questions.
+  externalQuestionId String?
+  authorName         String?
+  questionText       String
+  askedAt            DateTime?
+
+  status     GmbQuestionStatus @default(NEW)
+  answerText String?
+  answeredAt DateTime?
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([locationId, externalQuestionId])
+  @@index([tenantId, status])
+  @@index([locationId])
+}
+
+model GmbReview {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  locationId String
+  location   GmbLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  externalReviewId String?
+  authorName       String?
+  rating           Int
+  comment          String?
+  reviewedAt       DateTime?
+
+  status    GmbReviewStatus @default(NEW)
+  replyText String?
+  repliedAt DateTime?
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([locationId])
+}
+
+model GmbTrackedKeyword {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  locationId String
+  location   GmbLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  keyword  String
+  isActive Boolean @default(true)
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  snapshots     GmbRankSnapshot[]
+  gridSnapshots GmbRankGridSnapshot[]
+  alertRules    GmbRankAlertRule[]
+
+  @@unique([locationId, keyword])
+  @@index([tenantId, isActive])
+}
+
+model GmbRankAlertRule {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  keywordId String
+  keyword   GmbTrackedKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  /// Alert when the rank is worse than this (or the business is not found).
+  thresholdRank Int
+
+  /// Optional email recipient. Null = in-app surfacing only.
+  notifyEmail String?
+
+  isActive Boolean @default(true)
+
+  lastTriggeredAt   DateTime?
+  /// Rank that fired the last trigger. Null = "not found in results".
+  lastTriggeredRank Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([keywordId, isActive])
+}
+
+model GmbRankSnapshot {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  keywordId String
+  keyword   GmbTrackedKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  rank      Int?
+  source    String?
+  checkedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([keywordId, checkedAt])
+  @@index([tenantId])
+}
+
+model GmbRankGridSnapshot {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  keywordId String
+  keyword   GmbTrackedKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  gridSize Int   @default(5) // N per side (5 => 25 points)
+  radiusKm Float @default(2) // center → edge distance
+
+  // JSON: [{ lat, lng, rank: number|null }] in row-major order.
+  points String
+
+  // Local leaderboard (Adgrowly GMB Panel design): JSON
+  // [{ rank, name, isYou }] — the ordered local results at the grid's
+  // CENTRE point, captured from the same Places response as the rank check
+  // (no extra API call). Null on older snapshots and manual captures.
+  competitors String?
+
+  // Competitor battle map (Adgrowly GMB Panel design): JSON
+  // { rivals: [{ name, ranks: (number|null)[], avgRank, foundShare }] }
+  // where `ranks` is index-aligned with `points` — i.e. each rival's own
+  // heat-map across the same lattice, so the UI can overlay "them" vs "you".
+  // Derived from the same per-point Places responses as the rank check (no
+  // extra API call); capped to the top rivals to bound row size. Null on
+  // older snapshots and manual captures.
+  battleMap String?
+
+  avgRank    Float? // mean over found points
+  top3Share  Float? // 0..1 of points ranked <= 3
+  foundShare Float? // 0..1 of points where the business appeared
+
+  source     String? // "GOOGLE_PLACES" | "MANUAL"
+  capturedAt DateTime @default(now())
+
+  @@index([keywordId, capturedAt])
+  @@index([tenantId])
+}
+
+model GmbInsightSnapshot {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  locationId String
+  location   GmbLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  mapsViews   Int @default(0)
+  searchViews Int @default(0)
+
+  directSearches    Int @default(0)
+  discoverySearches Int @default(0)
+  brandedSearches   Int @default(0)
+
+  callClicks        Int @default(0)
+  websiteClicks     Int @default(0)
+  directionRequests Int @default(0)
+  messageClicks     Int @default(0)
+  bookingClicks     Int @default(0)
+  photoViews        Int @default(0)
+
+  source String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([locationId, periodStart, periodEnd])
+  @@index([tenantId, periodStart])
+  @@index([locationId, periodStart])
+}
+
+enum GmbCitationStatus {
+  LIVE
+  PENDING
+  MISSING
+}
+
+model GmbCitation {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  locationId String
+  location   GmbLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  directory  String
+  listingUrl String?
+
+  napName    String?
+  napAddress String?
+  napPhone   String?
+
+  status        GmbCitationStatus @default(PENDING)
+  lastCheckedAt DateTime?
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([locationId, directory])
+  @@index([tenantId, status])
+}
+
+enum GmbReportType {
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+model GmbReport {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  locationId String?
+  location   GmbLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  type        GmbReportType @default(MONTHLY)
+  periodStart DateTime
+  periodEnd   DateTime
+
+  data       Json
+  summary    String?
+  actionPlan Json?
+
+  generatedByUserId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, type])
+  @@index([locationId])
+}
+
+model GmbKeywordIdeaSet {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Soft reference to a GmbLocation (no hard FK).
+  locationId String?
+
+  category    String?
+  city        String?
+  region      String?
+  services    String[] @default([])
+  competitors String[] @default([])
+
+  ideas Json
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+enum GmbDescriptionTarget {
+  BUSINESS
+  SERVICE
+  PRODUCT
+}
+
+enum GmbDescriptionStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+}
+
+model GmbDescription {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Soft reference to a GmbLocation (no hard FK).
+  locationId String?
+
+  target    GmbDescriptionTarget @default(BUSINESS)
+  label     String?
+  original  String
+  optimized String?
+  keywords  String[]             @default([])
+  maxLength Int?
+  analysis  Json?
+
+  status GmbDescriptionStatus @default(DRAFT)
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+}
+
+model GmbAdvisorReport {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Soft reference to a GmbLocation (no hard FK).
+  locationId String?
+
+  score     Int
+  grade     String
+  signals   Json
+  breakdown Json
+  tasks     Json
+  // Coach's note — LLM-written via the gmb.ranking_advisor prompt (deterministic fallback).
+  summary   String?
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+enum GmbImageStatus {
+  PENDING
+  READY
+  FAILED
+  APPROVED
+  REJECTED
+}
+
+model GmbImageRequest {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Soft reference to a GmbLocation (no hard FK).
+  locationId String?
+
+  subject String
+  prompt  String
+  style   String?
+  palette String?
+  size    String  @default("1024x1024")
+  quality String?
+
+  provider  String?
+  secretId  String?
+  status    GmbImageStatus @default(PENDING)
+  resultUrl String?
+  error     String?
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+}
+
+model GmbReportSchedule {
+  id        String        @id @default(cuid())
+  tenantId  String        @unique
+  enabled   Boolean       @default(false)
+  frequency GmbReportType @default(MONTHLY)
+  lastRunAt DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([enabled])
+}

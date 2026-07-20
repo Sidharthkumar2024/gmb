@@ -1,0 +1,183 @@
+// ============================================================================
+// GMB report PDF renderer (planning PDF §3 Reports: "Download PDF reports").
+//
+// Mirrors invoicePdfRenderer.service: pdfkit when available (A4, headers,
+// narrative + action plan), otherwise a minimal hand-built valid PDF whose
+// content stream is the plain-text report. Never throws.
+// ============================================================================
+
+interface ReportLike {
+  id: string;
+  type: string;
+  periodStart: Date | string;
+  periodEnd: Date | string;
+  summary: string | null;
+  actionPlan: unknown;
+  data?: unknown;
+  createdAt: Date | string;
+}
+
+interface ReportRenderInput {
+  report: ReportLike;
+  /** Brand shown in the header. Defaults to "NexaFlow AI". */
+  issuerName?: string;
+}
+
+const fmtDate = (d: Date | string) => new Date(d).toISOString().slice(0, 10);
+
+interface TrendLike {
+  momentum?: string;
+  reviewsCount?: number;
+  averageRating?: number;
+  totalViews?: number;
+  totalActions?: number;
+  top3?: number;
+}
+
+function trendFrom(data: unknown): TrendLike | null {
+  if (!data || typeof data !== "object") return null;
+  const t = (data as Record<string, unknown>).trend;
+  return t && typeof t === "object" ? (t as TrendLike) : null;
+}
+
+function actionItems(plan: unknown): Array<{ priority?: string; task?: string }> {
+  return Array.isArray(plan) ? (plan as Array<{ priority?: string; task?: string }>) : [];
+}
+
+const signed = (n: number | undefined) => (n == null ? "0" : n > 0 ? `+${n}` : `${n}`);
+
+/**
+ * Plain-text rendering of the report — the stub PDF body and the
+ * pdfkit content source. Exported for tests so the shape is pinned.
+ */
+export function buildReportPdfLines(input: ReportRenderInput): string[] {
+  const r = input.report;
+  const issuer = input.issuerName ?? "NexaFlow AI";
+  const trend = trendFrom(r.data);
+  const plan = actionItems(r.actionPlan);
+  const lines = [
+    `${issuer} — Google Business performance report`,
+    `Type: ${r.type} · Period: ${fmtDate(r.periodStart)} to ${fmtDate(r.periodEnd)}`,
+    `Generated: ${fmtDate(r.createdAt)}`,
+    "",
+  ];
+  if (r.summary) lines.push("Summary:", ...wrapText(r.summary, 95), "");
+  if (trend) {
+    lines.push(
+      `Vs last period (${trend.momentum ?? "steady"}): ${signed(trend.reviewsCount)} reviews · ` +
+        `${signed(trend.averageRating)} rating · ${signed(trend.totalViews)} views · ` +
+        `${signed(trend.totalActions)} actions · ${signed(trend.top3)} top-3`,
+      "",
+    );
+  }
+  if (plan.length > 0) {
+    lines.push("Action plan:");
+    for (const item of plan) {
+      lines.push(`  [${(item.priority ?? "low").toUpperCase()}] ${item.task ?? ""}`);
+    }
+  }
+  return lines;
+}
+
+/** Greedy word-wrap so long narratives stay inside the PDF page. */
+export function wrapText(text: string, width: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const out: string[] = [];
+  let line = "";
+  for (const w of words) {
+    if (line && line.length + 1 + w.length > width) {
+      out.push(line);
+      line = w;
+    } else {
+      line = line ? `${line} ${w}` : w;
+    }
+  }
+  if (line) out.push(line);
+  return out;
+}
+
+/** Rendered PDF as a Buffer. Falls back to the stub when pdfkit is missing. */
+export async function renderGmbReportPdf(input: ReportRenderInput): Promise<Buffer> {
+  try {
+    return await renderWithPdfkit(input);
+  } catch (err) {
+    console.warn("[gmb-report-pdf] pdfkit unavailable, falling back to text stub:", (err as Error).message);
+    return renderTextStubPdf(input);
+  }
+}
+
+// ---- pdfkit branch ---------------------------------------------------------
+
+interface PdfkitDocLike {
+  fontSize(size: number): PdfkitDocLike;
+  text(value: string, ...rest: unknown[]): PdfkitDocLike;
+  moveDown(lines?: number): PdfkitDocLike;
+  fillColor(color: string): PdfkitDocLike;
+  on(event: "data", cb: (chunk: Buffer) => void): void;
+  on(event: "end", cb: () => void): void;
+  on(event: "error", cb: (err: Error) => void): void;
+  end(): void;
+}
+
+async function renderWithPdfkit(input: ReportRenderInput): Promise<Buffer> {
+  const specifier = "pdfkit";
+  const mod = (await import(/* @vite-ignore */ specifier)) as {
+    default: new (opts?: Record<string, unknown>) => PdfkitDocLike;
+  };
+  const PDFDocument = mod.default;
+
+  return new Promise<Buffer>((resolve, reject) => {
+    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    const chunks: Buffer[] = [];
+    doc.on("data", (c: Buffer) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", (e: Error) => reject(e));
+
+    const [title, ...rest] = buildReportPdfLines(input);
+    doc.fontSize(16).text(title);
+    doc.moveDown();
+    doc.fontSize(10);
+    for (const line of rest) {
+      if (line === "") doc.moveDown(0.5);
+      else doc.text(line);
+    }
+    doc.moveDown(2);
+    doc.fontSize(8).fillColor("#666").text("Generated by NexaFlow AI.", { align: "center" });
+    doc.end();
+  });
+}
+
+// ---- Fallback: minimal valid PDF ------------------------------------------
+
+function renderTextStubPdf(input: ReportRenderInput): Buffer {
+  const lines = buildReportPdfLines(input).map((l) => l.replace(/[()\\]/g, " "));
+  const content = `BT /F1 10 Tf 50 790 Td 13 TL ${lines
+    .map((l, i) => (i === 0 ? `(${l}) Tj` : `T* (${l}) Tj`))
+    .join(" ")} ET`;
+
+  const objects: string[] = [];
+  objects.push("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+  objects.push("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+  objects.push(
+    "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
+  );
+  objects.push("4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n");
+  objects.push(
+    `5 0 obj\n<< /Length ${Buffer.byteLength(content, "utf-8")} >>\nstream\n${content}\nendstream\nendobj\n`,
+  );
+
+  const header = "%PDF-1.4\n";
+  let cursor = Buffer.byteLength(header, "utf-8");
+  const offsets: number[] = [];
+  for (const obj of objects) {
+    offsets.push(cursor);
+    cursor += Buffer.byteLength(obj, "utf-8");
+  }
+  const xrefStart = cursor;
+  const xref =
+    `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n` +
+    offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("") +
+    `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+
+  return Buffer.from(header + objects.join("") + xref, "utf-8");
+}
