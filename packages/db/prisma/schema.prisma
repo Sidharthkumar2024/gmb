@@ -63,10 +63,13 @@ model Tenant {
   industry String?
   timezone String  @default("Asia/Kolkata")
 
-  users             User[]
-  wallets           Wallet[]
-  aiUsage           AiUsage[]
+  users              User[]
+  wallets            Wallet[]
+  aiUsage            AiUsage[]
   secretVaultEntries SecretVaultEntry[]
+  aiProviderConfigs  AiProviderConfig[]
+  googleApiLogs      GoogleApiLog[]
+  auditLogs          AuditLog[]
 
   // GMB back-relations
   gmbLocations       GmbLocation[]
@@ -107,6 +110,8 @@ model User {
   password String
   role     UserRole @default(BUSINESS_ADMIN)
   isActive Boolean  @default(true)
+
+  auditLogs AuditLog[]
 
   lastLoginAt DateTime?
   createdAt   DateTime  @default(now())
@@ -236,6 +241,140 @@ model Wallet {
   updatedAt DateTime @updatedAt
 
   @@index([tenantId])
+}
+
+// --- Platform config + observability ---------------------------------------
+// Required by the ported platform services: prompt templates, Google OAuth
+// credentials, Google API call logging, AI provider selection, and audit.
+
+enum AiProviderStatus {
+  ACTIVE
+  DISABLED
+}
+
+/// Scoped AI provider registry with a fallback order. `secretId` points at a
+/// Secret Vault entry in the same scope; null means use env credentials.
+model AiProviderConfig {
+  id    String      @id @default(cuid())
+  scope SecretScope
+
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  provider AiProviderKey
+  kind     AiProviderKind @default(TEXT)
+  label    String
+
+  secretId String?
+
+  defaultModel String?
+  models       String[] @default([])
+  baseUrl      String?
+
+  /// Lower value = tried first in the fallback chain.
+  priority  Int              @default(100)
+  isDefault Boolean          @default(false)
+  status    AiProviderStatus @default(ACTIVE)
+  metadata  String?
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scope, tenantId])
+  @@index([scope, tenantId, kind, status, priority])
+  @@index([secretId])
+}
+
+/// Admin-editable prompt templates, so GMB copy can be tuned without a deploy.
+model AiPromptTemplate {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  category    String?
+  template    String
+  variables   String[] @default([])
+  model       String?
+  isActive    Boolean  @default(true)
+  version     Int      @default(1)
+
+  updatedByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category, isActive])
+}
+
+/// Single platform row holding the Google Business Profile OAuth client.
+model GoogleOAuthConfig {
+  id                 String  @id @default(cuid())
+  clientId           String  @default("")
+  clientSecretCipher String?
+  clientSecretLast4  String?
+  redirectUri        String  @default("")
+  scope              String  @default("https://www.googleapis.com/auth/business.manage")
+  enabled            Boolean @default(false)
+
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum GoogleApiLogStatus {
+  OK
+  ERROR
+  RATE_LIMITED
+}
+
+/// Every outbound Google API call, for quota and failure visibility.
+model GoogleApiLog {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Soft reference to a GmbLocation (no hard FK).
+  locationId String?
+
+  operation          String
+  status             GoogleApiLogStatus @default(OK)
+  statusCode         Int?
+  message            String?
+  rateLimitRemaining Int?
+  durationMs         Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([locationId])
+  @@index([status])
+}
+
+model AuditLog {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  action     String
+  resource   String
+  resourceId String?
+
+  oldValues String?
+  newValues String?
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 /// Logo + colours stamped onto branded GMB post images.

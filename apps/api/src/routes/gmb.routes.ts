@@ -172,10 +172,6 @@ import { renderGmbReportPdf } from "../services/gmbReportPdf.service";
 import { checkGmbSchema } from "../services/gmbHealth.service";
 import { listGmbAiCosts } from "../services/billing.service";
 import { getReportSchedule, setReportSchedule } from "../services/gmbReportScheduler.service";
-import { sendWhatsAppText } from "../services/whatsapp.service";
-import { assertCanSend, recordSend } from "../services/sendThrottle.service";
-import { requireProduct } from "../services/productAccess.service";
-import { assertCanAffordMessage, debitMessage } from "../services/billing.service";
 import { decryptTokenIfNeeded } from "../lib/tokenCrypto";
 
 // GMB AI Manager routes (Complete Planning PDF §2.19). Tenant-scoped post
@@ -192,7 +188,6 @@ router.use(
   requireAuth,
   requireTenantScope,
   requirePermission(Permissions.GMB_MANAGE),
-  requireProduct("local_seo"),
 );
 
 // Schema self-check: probes every GMB table so un-applied migrations (DB behind
@@ -1813,121 +1808,13 @@ const shareReportSchema = z.object({
 // Share a report summary over WhatsApp (planning PDF §6 hook: "WhatsApp
 // report sharing"). Full compliant send path: afford + throttle gates,
 // recorded + debited like any outbound message.
-router.post("/reports/:id/share-whatsapp", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
-  try {
-    const { to } = shareReportSchema.parse(req.body);
-    const report = await getReport(req.tenantId!, req.params.id);
-    const text = buildReportWhatsAppText(report, await resolveReportIssuer(req.tenantId!));
-
-    const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId! } });
-    if (!tenant?.wabaPhoneNumber || !tenant?.wabaAccessToken) {
-      throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "WhatsApp Business API is not configured for this tenant.");
-    }
-    const accessToken = decryptTokenIfNeeded(tenant.wabaAccessToken);
-    if (!accessToken) {
-      throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "WhatsApp access token failed to decrypt.");
-    }
-
-    await assertCanAffordMessage(req.tenantId!);
-    await assertCanSend(req.tenantId!, { phoneNumberId: tenant.wabaPhoneNumber });
-
-    const metaMessageId = await sendWhatsAppText({
-      tenantId: req.tenantId!,
-      phoneNumberId: tenant.wabaPhoneNumber,
-      accessToken,
-      to: to.replace(/^\+/, ""),
-      body: text,
-    });
-    await recordSend(req.tenantId!, { phoneNumberId: tenant.wabaPhoneNumber });
-    await debitMessage(req.tenantId!, metaMessageId, {
-      actorUserId: req.userId,
-      reason: `GMB report share ${report.id}`,
-    });
-
-    await logAudit({
-      tenantId: req.tenantId!,
-      userId: req.userId!,
-      action: "CREATE",
-      resource: "GmbReportShare",
-      resourceId: report.id,
-      newValues: { channel: "whatsapp", metaMessageId },
-      ...extractRequestMeta(req),
-    });
-
-    res.json({ success: true, data: { sent: true, metaMessageId } });
-  } catch (err) {
-    next(err);
-  }
-});
-
-const reviewRequestSchema = z.object({
-  to: z.string().trim().regex(/^\+?[1-9]\d{6,14}$/, "Enter a valid WhatsApp number (E.164)."),
-  locationId: z.string().cuid().optional(),
-  customerName: z.string().trim().max(120).optional(),
-  link: z.string().trim().url().max(500).optional(),
-});
-
-// Ask a customer for a Google review over WhatsApp (planning PDF §6 hook:
-// "review request sharing"). Same compliant send path as report sharing.
-router.post("/review-request", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
-  try {
-    const body = reviewRequestSchema.parse(req.body);
-    const location = body.locationId
-      ? await prisma.gmbLocation.findFirst({
-          where: { id: body.locationId, tenantId: req.tenantId! },
-          select: { name: true, placeId: true },
-        })
-      : null;
-    if (body.locationId && !location) {
-      throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Location not found.");
-    }
-    const text = buildReviewRequestText({
-      businessName: location?.name ?? "our business",
-      customerName: body.customerName,
-      link: body.link ?? buildGoogleReviewLink(location?.placeId),
-    });
-
-    const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId! } });
-    if (!tenant?.wabaPhoneNumber || !tenant?.wabaAccessToken) {
-      throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "WhatsApp Business API is not configured for this tenant.");
-    }
-    const accessToken = decryptTokenIfNeeded(tenant.wabaAccessToken);
-    if (!accessToken) {
-      throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "WhatsApp access token failed to decrypt.");
-    }
-
-    await assertCanAffordMessage(req.tenantId!);
-    await assertCanSend(req.tenantId!, { phoneNumberId: tenant.wabaPhoneNumber });
-
-    const metaMessageId = await sendWhatsAppText({
-      tenantId: req.tenantId!,
-      phoneNumberId: tenant.wabaPhoneNumber,
-      accessToken,
-      to: body.to.replace(/^\+/, ""),
-      body: text,
-    });
-    await recordSend(req.tenantId!, { phoneNumberId: tenant.wabaPhoneNumber });
-    await debitMessage(req.tenantId!, metaMessageId, {
-      actorUserId: req.userId,
-      reason: `GMB review request${location ? ` (${location.name})` : ""}`,
-    });
-
-    await logAudit({
-      tenantId: req.tenantId!,
-      userId: req.userId!,
-      action: "CREATE",
-      resource: "GmbReviewRequest",
-      resourceId: body.locationId ?? "tenant",
-      newValues: { channel: "whatsapp", metaMessageId },
-      ...extractRequestMeta(req),
-    });
-
-    res.json({ success: true, data: { sent: true, metaMessageId } });
-  } catch (err) {
-    next(err);
-  }
-});
-
+// The monorepo had two WhatsApp cross-sell endpoints here:
+//   POST /reports/:id/share-whatsapp  and  POST /review-request
+// Both are removed in the standalone app — they were the only place GMB
+// touched the WhatsApp product, and reimplementing them would mean pulling in
+// a BSP integration, send throttling and message billing. Re-add them against
+// email/SMS, or as calls back to the WhatsApp product API, if the cross-sell
+// is wanted.
 router.delete("/reports/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     await deleteReport(req.tenantId!, req.params.id);

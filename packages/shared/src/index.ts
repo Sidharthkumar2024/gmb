@@ -59,11 +59,22 @@ export const Permissions = {
 
 export type Permission = (typeof Permissions)[keyof typeof Permissions];
 
-export type RoleName =
-  | "SUPER_ADMIN"
-  | "WHITE_LABEL_ADMIN"
-  | "BUSINESS_ADMIN"
-  | "AGENT";
+/**
+ * Roles, as a value not just a type — secretVault.service switches on
+ * `UserRole.SUPER_ADMIN` etc., so this must exist at runtime. The member names
+ * and values mirror the Prisma `UserRole` enum exactly; they are compared
+ * against `user.role` strings straight from the database.
+ */
+export const UserRole = {
+  SUPER_ADMIN: "SUPER_ADMIN",
+  WHITE_LABEL_ADMIN: "WHITE_LABEL_ADMIN",
+  BUSINESS_ADMIN: "BUSINESS_ADMIN",
+  AGENT: "AGENT",
+} as const;
+
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+
+export type RoleName = UserRole;
 
 export const ROLE_PERMISSIONS: Record<RoleName, readonly Permission[]> = {
   SUPER_ADMIN: Object.values(Permissions),
