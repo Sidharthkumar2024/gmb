@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   Nexa design system tokens (Adgrowly panel style).
+
+   The Tailwind `primary` scale reads these RGB triplets, so a white-label
+   partner theme can re-brand the whole app at runtime by overriding
+   --nx-primary-* on <html> (PartnerShell does this from its stored
+   branding). Default: indigo (Tailwind indigo scale).
+   ========================================================================== */
+:root {
+  /* Adgrowly forest-green brand ramp (was indigo). #16753c is the mark. */
+  --nx-primary-50: 245 250 246;
+  --nx-primary-100: 233 242 236;
+  --nx-primary-200: 207 231 214;
+  --nx-primary-300: 169 214 184;
+  --nx-primary-400: 90 138 107;
+  --nx-primary-500: 22 117 60; /* ← Adgrowly green */
+  --nx-primary-600: 21 94 50;
+  --nx-primary-700: 18 56 35;
+  --nx-primary-800: 15 46 29;
+  --nx-primary-900: 11 36 22;
+  --nx-primary-950: 7 24 17;
+
+  /* Adgrowly warm-editorial surfaces */
+  --nx-sidebar-bg: 251 250 245; /* #fbfaf5 off-white cream */
+  --nx-surface: 255 255 255;
+  --nx-surface-muted: 244 241 233; /* #f4f1e9 cream page */
+
+  /* Adgrowly palette (raw hex, for chrome that isn't token-driven) */
+  --ag-bg: #f4f1e9;
+  --ag-surface: #fbfaf5;
+  --ag-card: #ffffff;
+  --ag-border: #e7e2d4;
+  --ag-border-soft: #ece8de;
+  --ag-text: #1f1d17;
+  --ag-text-muted: #6b6859;
+  --ag-text-subtle: #908c7c;
+  --ag-label: #aaa593;
+  --ag-green: #16753c;
+  --ag-green-strong: #123823;
+  --ag-green-soft: #e9f2ec;
+}
+
+/* Thin, unobtrusive scrollbars for the sidebar + long tables. */
+.nx-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.nx-scroll::-webkit-scrollbar-thumb {
+  background: rgb(203 213 225); /* slate-300 */
+  border-radius: 9999px;
+}
+.nx-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* WhatsApp-style chat wallpaper: a faint dot texture over the base colour
+   (base colour is set by Tailwind bg-* so light/dark both work). */
+.wa-wallpaper {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+:root.dark .wa-wallpaper {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+/* ============================================================================
+   Adgrowly editorial typography.
+   Fonts are loaded via <link> in app/layout.tsx (Newsreader / Geist / Geist Mono).
+   ========================================================================== */
+body {
+  font-family: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+/* Editorial serif for page titles + KPI values — the Adgrowly signature. */
+.ag-serif {
+  font-family: "Newsreader", Georgia, "Times New Roman", serif;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+/* Uppercase micro-labels. */
+.ag-mono {
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ag-label);
+}
+/* Business-panel page headings default to the editorial serif. Scoped to the
+   AppShell content region so admin/partner/marketing shells are untouched. */
+.ag-content h1,
+.ag-content h2 {
+  font-family: "Newsreader", Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  color: var(--ag-text);
+}
+
+/* ============================================================================
+   Adgrowly "GMB Suite" — a purple/cool-gray themed sub-workspace (distinct
+   from the warm-green Business Panel). Scoped: only elements inside .gmb-suite
+   pick up these tokens, so it reads as its own Local-SEO module.
+   ========================================================================== */
+.gmb-suite {
+  --gmb-bg: #f5f5f8;
+  --gmb-card: #ffffff;
+  --gmb-border: #ececf1;
+  --gmb-border-strong: #e2e2ea;
+  --gmb-text: #15131f;
+  --gmb-muted: #56536a;
+  --gmb-subtle: #8d8aa3;
+  --gmb-purple: #6d5efc;
+  --gmb-purple-strong: #5a4af0;
+  --gmb-purple-soft: #ece8ff;
+  --gmb-cta: #1a1726;
+  background: var(--gmb-bg);
+  color: var(--gmb-text);
+}
+/* GMB titles are Geist bold, NOT the Business-panel serif — override .ag-content.
+   Both forms: .gmb-suite on the same element as .ag-content (the shell's <main>)
+   and nested inside it (page-local wrappers). */
+.ag-content.gmb-suite h1,
+.ag-content.gmb-suite h2,
+.ag-content.gmb-suite h3,
+.ag-content .gmb-suite h1,
+.ag-content .gmb-suite h2,
+.ag-content .gmb-suite h3 {
+  font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--gmb-text);
+}
+/* Remap the GMB pages' emerald brand accent → GMB purple, in one place, so
+   every page in the suite reskins without per-file edits. Specificity (0,2,0)
+   beats Tailwind's single utility class (0,1,0). */
+.gmb-suite .text-emerald-700 { color: #5a4af0; }
+.gmb-suite .text-emerald-600 { color: #6d5efc; }
+.gmb-suite .bg-emerald-600 { background-color: #6d5efc; }
+.gmb-suite .bg-emerald-700 { background-color: #5a4af0; }
+.gmb-suite .bg-emerald-500 { background-color: #6d5efc; }
+.gmb-suite .bg-emerald-100 { background-color: #e4ddff; }
+.gmb-suite .bg-emerald-50 { background-color: #f3f1ff; }
+.gmb-suite .border-emerald-200 { border-color: #d8d2ff; }
+.gmb-suite .border-emerald-600 { border-color: #6d5efc; }
+.gmb-suite .ring-emerald-500 { --tw-ring-color: #6d5efc; }
+.gmb-suite .hover\:bg-emerald-700:hover { background-color: #5a4af0; }
+.gmb-suite .hover\:bg-emerald-600:hover { background-color: #6d5efc; }
+.gmb-suite .hover\:bg-emerald-50:hover { background-color: #f3f1ff; }
+.gmb-suite .hover\:text-emerald-700:hover { color: #5a4af0; }
+/* Cards read cleaner on the cool-gray canvas with the GMB border colour. */
+.gmb-suite .border-slate-200 { border-color: #ececf1; }

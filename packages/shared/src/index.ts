@@ -99,3 +99,46 @@ export const ROLE_PERMISSIONS: Record<RoleName, readonly Permission[]> = {
 export function roleHasPermission(role: RoleName, permission: Permission): boolean {
   return (ROLE_PERMISSIONS[role] ?? []).includes(permission);
 }
+
+// --- Wire contracts shared with the web app --------------------------------
+
+export const UserStatus = {
+  ACTIVE: "ACTIVE",
+  INACTIVE: "INACTIVE",
+  SUSPENDED: "SUSPENDED",
+} as const;
+
+export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
+
+/** The user object returned by /auth/login and /auth/me. */
+export interface AuthUserPublic {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  status: UserStatus;
+  tenantId: string | null;
+  emailVerified: boolean;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+}
+
+/** Envelope every API route returns. */
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+  };
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
