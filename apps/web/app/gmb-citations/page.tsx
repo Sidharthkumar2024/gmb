@@ -1,289 +1,353 @@
 "use client";
 
-// AdGrowly — Citations (planning PDF §2/§3). Track NAP listings across
-// directories and see consistency vs the location's canonical profile.
-// Backed by module 5: /api/v1/gmb/citations (+ /summary).
-
-import { FormEvent, useEffect, useState } from "react";
-import { DashboardShell } from "../../src/components/DashboardShell";
-import { GmbLocationSwitcher } from "../../src/components/GmbLocationSwitcher";
-import { useAuth } from "../../src/hooks/useAuth";
-import { useGmbLocation } from "../../src/hooks/useGmbLocation";
+import { useCallback, useEffect, useState } from "react";
+import { GmbShell } from "../../src/components/gmb/GmbShell";
+import { Card, SectionLabel, Pill, Button, EmptyState, ErrorNote, Skeleton } from "../../src/components/gmb/ui";
 import { api, ApiClientError } from "../../src/lib/api";
 
-type NapField = "match" | "mismatch" | "na";
+// Citations — name/address/phone consistency across directories.
+//
+// The whole point is that Google cross-checks your details elsewhere, so this
+// screen shows exactly WHICH field disagrees rather than a bare "inconsistent".
+// A per-field diff is the difference between a fixable task and a shrug.
+
+type CitationStatus = "LIVE" | "PENDING" | "MISSING";
+
+interface Nap {
+  name: string | null;
+  address: string | null;
+  phone: string | null;
+}
 
 interface Citation {
   id: string;
+  locationId: string;
   directory: string;
   listingUrl: string | null;
-  nap: { name: string | null; address: string | null; phone: string | null };
-  status: "LIVE" | "PENDING" | "MISSING";
-  consistency: { name: NapField; address: NapField; phone: NapField; score: number; consistent: boolean } | null;
+  nap: Nap;
+  status: CitationStatus;
+  consistency: {
+    score: number;
+    consistent: boolean;
+    fields: { name: string; address: string; phone: string };
+  } | null;
+  lastCheckedAt: string | null;
 }
 
-interface Summary {
-  total: number;
-  live: number;
-  pending: number;
-  missing: number;
-  consistent: number;
-  inconsistent: number;
-  consistencyScore: number;
+interface LocationLite {
+  id: string;
+  name: string;
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  LIVE: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  PENDING: "bg-amber-50 text-amber-700 border-amber-200",
-  MISSING: "bg-red-50 text-red-700 border-red-200",
+const STATUS_TONE: Record<CitationStatus, "ok" | "warn" | "danger"> = {
+  LIVE: "ok",
+  PENDING: "warn",
+  MISSING: "danger",
 };
 
-const FIELD_STYLES: Record<NapField, string> = {
-  match: "bg-emerald-50 text-emerald-700",
-  mismatch: "bg-red-50 text-red-700",
-  na: "bg-slate-100 text-slate-500",
+const FIELD_TONE: Record<string, string> = {
+  match: "text-gmb-ok",
+  mismatch: "text-gmb-danger",
+  missing: "text-gmb-ink-subtle",
 };
-
-function FieldBadge({ label, state }: { label: string; state: NapField }) {
-  return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${FIELD_STYLES[state]}`}>{label}: {state}</span>;
-}
 
 export default function GmbCitationsPage() {
-  const { user, features, loading, signOut } = useAuth({ required: true });
-  const [locationId] = useGmbLocation();
-  const [items, setItems] = useState<Citation[]>([]);
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [locations, setLocations] = useState<LocationLite[]>([]);
+  const [locationId, setLocationId] = useState("");
+  const [items, setItems] = useState<Citation[] | null>(null);
+  const [summary, setSummary] = useState<{ total: number; consistent: number; consistencyScore: number } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // Directories the scan says you are NOT on yet. This is the most actionable
+  // thing the scan returns for a new profile, so it gets its own panel rather
+  // than being dropped on the floor.
+  const [missing, setMissing] = useState<string[]>([]);
 
-  const [directory, setDirectory] = useState("");
-  const [listingUrl, setListingUrl] = useState("");
-  const [napName, setNapName] = useState("");
-  const [napAddress, setNapAddress] = useState("");
-  const [napPhone, setNapPhone] = useState("");
-  const [scan, setScan] = useState<{ mismatches: { directory: string }[]; missingRecommended: string[]; consistencyScore: number } | null>(null);
-  const [scanning, setScanning] = useState(false);
+  useEffect(() => {
+    void api
+      .get<LocationLite[]>("/api/v1/gmb/locations")
+      .then((rows) => {
+        setLocations(rows ?? []);
+        const saved = window.localStorage.getItem("gmb_active_location");
+        setLocationId(rows?.some((r) => r.id === saved) ? saved! : (rows?.[0]?.id ?? ""));
+      })
+      .catch(() => undefined);
+  }, []);
 
-  async function runScan() {
-    if (!locationId) {
-      setErr("Select a location to scan.");
-      return;
-    }
-    setScanning(true);
-    setErr(null);
-    setNotice(null);
+  const load = useCallback(async () => {
+    if (!locationId) return;
+    setError(null);
     try {
-      const res = await api.post<{ mismatches: { directory: string }[]; missingRecommended: string[]; consistencyScore: number }>(
+      const [list, sum] = await Promise.all([
+        api.get<Citation[]>(`/api/v1/gmb/citations?locationId=${locationId}`),
+        api
+          .get<{ total: number; consistent: number; consistencyScore: number }>(
+            `/api/v1/gmb/citations/summary?locationId=${locationId}`,
+          )
+          .catch(() => null),
+      ]);
+      setItems(list ?? []);
+      setSummary(sum);
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not load citations.");
+      setItems([]);
+    }
+  }, [locationId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function scan() {
+    setBusy("scan");
+    setError(null);
+    try {
+      const result = await api.post<{ missingRecommended: string[] }>(
         "/api/v1/gmb/citations/scan",
         { locationId },
       );
-      setScan(res);
-      setNotice(`Scan complete — ${Math.round(res.consistencyScore * 100)}% consistent.`);
-      await refresh();
+      setMissing(result?.missingRecommended ?? []);
+      await load();
     } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to scan citations.");
+      setError(e instanceof ApiClientError ? e.message : "Could not run the scan.");
     } finally {
-      setScanning(false);
+      setBusy(null);
     }
   }
 
-  async function refresh() {
-    try {
-      setErr(null);
-      const q = locationId.trim() ? `?locationId=${encodeURIComponent(locationId.trim())}` : "";
-      const [list, sum] = await Promise.all([
-        api.get<Citation[]>(`/api/v1/gmb/citations${q}`),
-        api.get<Summary>(`/api/v1/gmb/citations/summary${q}`),
-      ]);
-      setItems(list);
-      setSummary(sum);
-    } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to load citations.");
-    }
-  }
-
-  useEffect(() => {
-    if (user) void refresh();
-    // Reload when the shared location selection changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, locationId]);
-
-  async function add(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!locationId.trim()) {
-      setErr("Enter a Location ID to add a citation.");
-      return;
-    }
-    setErr(null);
-    setNotice(null);
+  /** Record a listing on a directory the scan flagged as missing. */
+  async function addDirectory(directory: string) {
+    setBusy(directory);
+    setError(null);
     try {
       await api.post("/api/v1/gmb/citations", {
-        locationId: locationId.trim(),
-        directory: directory.trim(),
-        listingUrl: listingUrl.trim() || undefined,
-        napName: napName.trim() || undefined,
-        napAddress: napAddress.trim() || undefined,
-        napPhone: napPhone.trim() || undefined,
+        locationId,
+        directory,
+        // PENDING, not LIVE: we have not verified the listing exists — the
+        // owner marks it live once they've actually created it.
+        status: "PENDING",
       });
-      setDirectory("");
-      setListingUrl("");
-      setNapName("");
-      setNapAddress("");
-      setNapPhone("");
-      setNotice("Citation added.");
-      await refresh();
+      setMissing((m) => m.filter((d) => d !== directory));
+      await load();
     } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to add citation.");
+      setError(e instanceof ApiClientError ? e.message : "Could not add the listing.");
+    } finally {
+      setBusy(null);
     }
   }
 
-  async function remove(id: string) {
-    if (!window.confirm("Delete this citation?")) return;
+  async function setStatus(c: Citation, status: CitationStatus) {
+    setBusy(c.id);
     try {
-      await api.delete(`/api/v1/gmb/citations/${id}`);
-      await refresh();
+      await api.patch(`/api/v1/gmb/citations/${c.id}`, { status });
+      await load();
     } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to delete.");
+      setError(e instanceof ApiClientError ? e.message : "Could not update the listing.");
+    } finally {
+      setBusy(null);
     }
   }
 
-  if (loading || !user) {
-    return <div className="p-8 text-sm text-slate-500">Loading...</div>;
+  async function remove(c: Citation) {
+    setBusy(c.id);
+    try {
+      await api.delete(`/api/v1/gmb/citations/${c.id}`);
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not remove the listing.");
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
-    <DashboardShell user={user} features={features} signOut={signOut}>
-      <div className="mb-6">
-        <p className="text-sm font-medium text-emerald-700">Google Business</p>
-        <h1 className="text-2xl font-semibold text-slate-950">Citations</h1>
-        <p className="mt-1 max-w-2xl text-sm text-slate-500">
-          Track your business listings across directories and keep your Name / Address / Phone consistent.
-        </p>
-      </div>
+    <GmbShell title="Citations">
+      {error && <ErrorNote>{error}</ErrorNote>}
 
-      {err && <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>}
-      {notice && <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</div>}
-
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <GmbLocationSwitcher />
-        <button
-          type="button"
-          onClick={() => void runScan()}
-          disabled={scanning}
-          title="Recompute NAP consistency and list directories you're missing"
-          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-        >
-          {scanning ? "Scanning…" : "✨ Scan citations"}
-        </button>
-      </div>
-
-      {scan && (
-        <div className="mb-6 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm font-semibold text-slate-900">NAP mismatches ({scan.mismatches.length})</p>
-            {scan.mismatches.length === 0 ? (
-              <p className="mt-1 text-sm text-emerald-600">All tracked listings are consistent. ✓</p>
-            ) : (
-              <ul className="mt-2 space-y-1 text-sm text-slate-600">
-                {scan.mismatches.map((m) => (
-                  <li key={m.directory} className="flex items-center gap-2">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
-                    {m.directory}
-                  </li>
+      <div className="mb-3.5 grid grid-cols-4 gap-3.5">
+        <Card>
+          <SectionLabel>Listings tracked</SectionLabel>
+          <div className="mt-1.5 text-[28px] font-bold tracking-[-0.02em]">
+            {summary?.total ?? items?.length ?? "—"}
+          </div>
+        </Card>
+        <Card>
+          <SectionLabel>Consistent</SectionLabel>
+          <div
+            className={`mt-1.5 text-[28px] font-bold tracking-[-0.02em] ${
+              summary && summary.consistent === summary.total && summary.total > 0
+                ? "text-gmb-ok"
+                : "text-gmb-warn"
+            }`}
+          >
+            {summary?.consistent ?? "—"}
+          </div>
+          <div className="mt-1 text-xs2 text-gmb-ink-muted">
+            {summary ? `of ${summary.total}` : " "}
+          </div>
+        </Card>
+        <Card>
+          <SectionLabel>Consistency score</SectionLabel>
+          <div className="mt-1.5 text-[28px] font-bold tracking-[-0.02em]">
+            {summary ? `${summary.consistencyScore}%` : "—"}
+          </div>
+        </Card>
+        <Card>
+          <SectionLabel>Scan directories</SectionLabel>
+          <div className="mt-1 text-xs2 text-gmb-ink-muted">
+            Checks the directories that matter for your category.
+          </div>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <Button variant="dark" disabled={busy === "scan" || !locationId} onClick={() => void scan()}>
+              {busy === "scan" ? "Scanning…" : "Run scan"}
+            </Button>
+            {locations.length > 1 && (
+              <select
+                value={locationId}
+                onChange={(e) => setLocationId(e.target.value)}
+                className="rounded-control border border-gmb-line bg-gmb-surface px-2.5 py-2 text-sm2 outline-none"
+              >
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
                 ))}
-              </ul>
+              </select>
             )}
           </div>
-          <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm font-semibold text-slate-900">Get listed on ({scan.missingRecommended.length})</p>
-            {scan.missingRecommended.length === 0 ? (
-              <p className="mt-1 text-sm text-emerald-600">You're on every recommended directory. ✓</p>
-            ) : (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {scan.missingRecommended.map((d) => (
-                  <span key={d} className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">{d}</span>
-                ))}
-              </div>
-            )}
+        </Card>
+      </div>
+
+      {/* Directories the scan says you're absent from — the actionable gap. */}
+      {missing.length > 0 && (
+        <Card className="mb-3.5 border-gmb-warn/30 bg-gmb-warn-bg">
+          <div className="flex items-center gap-2">
+            <SectionLabel>Not listed yet</SectionLabel>
+            <Pill tone="warn">{missing.length}</Pill>
           </div>
-        </div>
+          <div className="mt-1 text-sm2 text-gmb-ink-muted">
+            Google cross-references these. Create the listing on each site, then track it here so
+            we can watch for detail drift.
+          </div>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {missing.map((d) => (
+              <button
+                key={d}
+                type="button"
+                disabled={busy === d}
+                onClick={() => void addDirectory(d)}
+                className="rounded-full border border-gmb-warn/40 bg-gmb-surface px-3 py-1.5 text-xs2 font-semibold text-gmb-ink hover:border-gmb-brand-border disabled:opacity-50"
+              >
+                {busy === d ? "Adding…" : `+ ${d}`}
+              </button>
+            ))}
+          </div>
+        </Card>
       )}
 
-      {summary && (
-        <div className="mb-6 grid gap-4 sm:grid-cols-4">
-          <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Total</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-950">{summary.total}</p>
-          </div>
-          <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Live</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-950">{summary.live}</p>
-          </div>
-          <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Missing</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-950">{summary.missing}</p>
-          </div>
-          <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">NAP consistency</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-950">{Math.round(summary.consistencyScore * 100)}%</p>
-          </div>
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-[320px,1fr]">
-        <form onSubmit={add} className="h-fit rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-base font-semibold text-slate-950">Add citation</h2>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            Directory
-            <input value={directory} onChange={(e) => setDirectory(e.target.value)} required placeholder="Yelp, Bing, Apple Maps…" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          </label>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            Listing URL
-            <input value={listingUrl} onChange={(e) => setListingUrl(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          </label>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            NAP — name
-            <input value={napName} onChange={(e) => setNapName(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          </label>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            NAP — address
-            <input value={napAddress} onChange={(e) => setNapAddress(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          </label>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            NAP — phone
-            <input value={napPhone} onChange={(e) => setNapPhone(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          </label>
-          <button type="submit" className="mt-4 w-full rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Add citation</button>
-        </form>
-
-        <div className="space-y-3">
-          {items.length === 0 && <p className="text-sm text-slate-500">No citations yet.</p>}
-          {items.map((c) => (
-            <div key={c.id} className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium text-slate-800">{c.directory}</div>
-                <div className="flex items-center gap-2">
-                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[c.status]}`}>{c.status}</span>
-                  <button onClick={() => void remove(c.id)} className="text-xs text-slate-400 hover:text-red-600">Delete</button>
-                </div>
-              </div>
-              <p className="mt-1 text-xs text-slate-500">
-                {c.nap.name ?? "—"} · {c.nap.address ?? "—"} · {c.nap.phone ?? "—"}
-              </p>
-              {c.consistency && (
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <FieldBadge label="name" state={c.consistency.name} />
-                  <FieldBadge label="addr" state={c.consistency.address} />
-                  <FieldBadge label="phone" state={c.consistency.phone} />
-                  <span className={`text-xs font-medium ${c.consistency.consistent ? "text-emerald-600" : "text-red-600"}`}>
-                    {c.consistency.consistent ? "consistent" : `${Math.round(c.consistency.score * 100)}%`}
-                  </span>
-                </div>
-              )}
-            </div>
+      {items === null ? (
+        <div className="flex flex-col gap-2.5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-20" />
           ))}
         </div>
-      </div>
-    </DashboardShell>
+      ) : items.length === 0 ? (
+        <EmptyState
+          title="No listings tracked yet"
+          body="Run a scan to check the directories Google cross-references for your category — mismatched name, address or phone details quietly cost you rankings."
+          action={
+            <Button variant="dark" disabled={!locationId} onClick={() => void scan()}>
+              Run first scan
+            </Button>
+          }
+        />
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {items.map((c) => {
+            const working = busy === c.id;
+            const f = c.consistency?.fields;
+            return (
+              <Card key={c.id}>
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[13px] font-semibold">{c.directory}</span>
+                      <Pill tone={STATUS_TONE[c.status]}>{c.status}</Pill>
+                      {c.consistency &&
+                        (c.consistency.consistent ? (
+                          <Pill tone="ok">Matches your profile</Pill>
+                        ) : (
+                          <Pill tone="danger">
+                            {Math.round(c.consistency.score * 100)}% match
+                          </Pill>
+                        ))}
+                      {c.listingUrl && (
+                        <a
+                          href={c.listingUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="font-geist-mono text-micro text-gmb-brand"
+                        >
+                          view listing ↗
+                        </a>
+                      )}
+                    </div>
+
+                    {/* Per-field diff — the actionable part. */}
+                    {f && (
+                      <div className="mt-2.5 grid gap-1.5 sm:grid-cols-3">
+                        {(
+                          [
+                            ["Name", f.name, c.nap.name],
+                            ["Address", f.address, c.nap.address],
+                            ["Phone", f.phone, c.nap.phone],
+                          ] as const
+                        ).map(([label, state, value]) => (
+                          <div
+                            key={label}
+                            className="rounded-control border border-gmb-line bg-gmb-subtle px-2.5 py-1.5"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-geist-mono text-micro uppercase tracking-wide text-gmb-ink-subtle">
+                                {label}
+                              </span>
+                              <span
+                                className={`font-geist-mono text-micro font-semibold ${FIELD_TONE[state] ?? ""}`}
+                              >
+                                {state}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 truncate text-xs2 text-gmb-ink-muted" title={value ?? ""}>
+                              {value || "—"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="mt-2 font-geist-mono text-micro text-gmb-ink-subtle">
+                      {c.lastCheckedAt
+                        ? `checked ${new Date(c.lastCheckedAt).toLocaleDateString()}`
+                        : "never checked"}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-shrink-0 gap-1.5">
+                    {c.status !== "LIVE" && (
+                      <Button variant="ghost" disabled={working} onClick={() => void setStatus(c, "LIVE")}>
+                        Mark live
+                      </Button>
+                    )}
+                    <Button variant="ghost" disabled={working} onClick={() => void remove(c)}>
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </GmbShell>
   );
 }

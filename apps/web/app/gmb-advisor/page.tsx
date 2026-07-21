@@ -1,19 +1,17 @@
 "use client";
 
-// AdGrowly — AI Ranking Advisor (planning PDF §2). Analyze a location's profile
-// gaps into a health score + grade + prioritized weekly task list. Backed by
-// module 12: /api/v1/gmb/advisor.
-
-import { FormEvent, useEffect, useState } from "react";
-import { DashboardShell } from "../../src/components/DashboardShell";
-import { useAuth } from "../../src/hooks/useAuth";
+import { useCallback, useEffect, useState } from "react";
+import { GmbShell } from "../../src/components/gmb/GmbShell";
+import { Card, SectionLabel, Pill, Button, EmptyState, ErrorNote, Skeleton } from "../../src/components/gmb/ui";
 import { api, ApiClientError } from "../../src/lib/api";
 
-interface Task {
-  priority: "high" | "medium" | "low";
-  area: string;
-  task: string;
-}
+// Advisor — the prioritised weekly to-do list.
+//
+// The score is only useful if you can see what is dragging it down, so the
+// breakdown shows points earned against points available per area rather than
+// a bare number. Focus areas come from the API already ranked by recoverable
+// points, so the top item is genuinely the biggest win, not the first
+// alphabetically.
 
 interface ScoreArea {
   area: string;
@@ -21,150 +19,241 @@ interface ScoreArea {
   weight: number;
 }
 
-interface FocusArea {
+interface Task {
+  priority: "high" | "medium" | "low";
   area: string;
-  points: number;
-  weight: number;
-  gap: number;
-  gapPercent: number;
+  task: string;
 }
 
-interface Advice {
+interface Advisor {
   id: string;
-  locationId: string | null;
+  locationId: string;
   score: number;
   grade: string;
   breakdown: ScoreArea[];
-  focusAreas?: FocusArea[];
-  summary?: string | null;
   tasks: Task[];
+  summary: string | null;
+  focusAreas: Array<{ area: string; recoverable: number }>;
   createdAt: string;
 }
 
-const PRIORITY_STYLES: Record<string, string> = {
-  high: "bg-red-50 text-red-700",
-  medium: "bg-amber-50 text-amber-700",
-  low: "bg-slate-100 text-slate-600",
-};
+interface LocationLite {
+  id: string;
+  name: string;
+}
+
+const PRIORITY_TONE = { high: "danger", medium: "warn", low: "neutral" } as const;
+
+function gradeTone(grade: string): string {
+  if (grade.startsWith("A")) return "text-gmb-ok";
+  if (grade.startsWith("B") || grade.startsWith("C")) return "text-gmb-warn";
+  return "text-gmb-danger";
+}
+
+function titleCase(s: string): string {
+  return s.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export default function GmbAdvisorPage() {
-  const { user, features, loading, signOut } = useAuth({ required: true });
-  const [items, setItems] = useState<Advice[]>([]);
+  const [locations, setLocations] = useState<LocationLite[]>([]);
   const [locationId, setLocationId] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  async function refresh() {
-    try {
-      setErr(null);
-      const q = locationId.trim() ? `?locationId=${encodeURIComponent(locationId.trim())}` : "";
-      setItems(await api.get<Advice[]>(`/api/v1/gmb/advisor${q}`));
-    } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to load advisor reports.");
-    }
-  }
+  const [latest, setLatest] = useState<Advisor | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) void refresh();
-  }, [user]);
+    void api
+      .get<LocationLite[]>("/api/v1/gmb/locations")
+      .then((rows) => {
+        setLocations(rows ?? []);
+        const saved = window.localStorage.getItem("gmb_active_location");
+        setLocationId(rows?.some((r) => r.id === saved) ? saved! : (rows?.[0]?.id ?? ""));
+      })
+      .catch(() => undefined);
+  }, []);
 
-  async function generate(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!locationId.trim()) {
-      setErr("Enter a Location ID to analyze.");
-      return;
-    }
-    setErr(null);
-    setNotice(null);
+  const load = useCallback(async () => {
+    if (!locationId) return;
+    setLoading(true);
+    setError(null);
     try {
-      await api.post("/api/v1/gmb/advisor", { locationId: locationId.trim() });
-      setNotice("Advisor report generated.");
-      await refresh();
+      const rows = await api.get<Advisor[]>(`/api/v1/gmb/advisor?locationId=${locationId}`);
+      setLatest(rows?.[0] ?? null);
     } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to generate advice.");
+      setError(e instanceof ApiClientError ? e.message : "Could not load advisor reports.");
+      setLatest(null);
+    } finally {
+      setLoading(false);
     }
-  }
+  }, [locationId]);
 
-  async function remove(id: string) {
-    if (!window.confirm("Delete this report?")) return;
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function run() {
+    setBusy(true);
+    setError(null);
     try {
-      await api.delete(`/api/v1/gmb/advisor/${id}`);
-      await refresh();
+      await api.post("/api/v1/gmb/advisor", { locationId });
+      await load();
     } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to delete.");
+      setError(e instanceof ApiClientError ? e.message : "Could not run the advisor.");
+    } finally {
+      setBusy(false);
     }
   }
-
-  if (loading || !user) {
-    return <div className="p-8 text-sm text-slate-500">Loading...</div>;
-  }
-
-  const scoreColor = (s: number) => (s >= 70 ? "text-emerald-600" : s >= 40 ? "text-amber-600" : "text-red-600");
 
   return (
-    <DashboardShell user={user} features={features} signOut={signOut}>
-      <div className="mb-6">
-        <p className="text-sm font-medium text-emerald-700">Google Business</p>
-        <h1 className="text-2xl font-semibold text-slate-950">Ranking advisor</h1>
-        <p className="mt-1 max-w-2xl text-sm text-slate-500">
-          Analyze a location&apos;s profile gaps into a 0–100 health score, a grade, and a prioritized weekly local-SEO task list.
-        </p>
-      </div>
+    <GmbShell title="Advisor">
+      {error && <ErrorNote>{error}</ErrorNote>}
 
-      {err && <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>}
-      {notice && <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</div>}
+      <Card className="mb-3.5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <SectionLabel>This week&rsquo;s moves</SectionLabel>
+            <div className="mt-1 max-w-xl text-sm2 text-gmb-ink-muted">
+              The advisor reads your profile, reviews, posts, rankings and citations, then ranks
+              what to fix by how many score points it would recover.
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {locations.length > 1 && (
+              <select
+                value={locationId}
+                onChange={(e) => setLocationId(e.target.value)}
+                className="rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 outline-none"
+              >
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Button variant="dark" disabled={busy || !locationId} onClick={() => void run()}>
+              {busy ? "Analysing…" : latest ? "Re-run advisor" : "Run advisor"}
+            </Button>
+          </div>
+        </div>
+      </Card>
 
-      <form onSubmit={generate} className="mb-6 flex flex-wrap items-end gap-3 rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="flex-1 text-sm font-medium text-slate-700">
-          Location ID
-          <input value={locationId} onChange={(e) => setLocationId(e.target.value)} onBlur={() => void refresh()} placeholder="loc_…" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        </label>
-        <button type="submit" className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Analyze</button>
-      </form>
-
-      <div className="space-y-4">
-        {items.length === 0 && <p className="text-sm text-slate-500">No advisor reports yet.</p>}
-        {items.map((a) => (
-          <div key={a.id} className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div className="text-center">
-                  <p className={`text-3xl font-bold ${scoreColor(a.score)}`}>{a.score}</p>
-                  <p className="text-xs text-slate-500">grade {a.grade}</p>
+      {loading ? (
+        <Skeleton className="h-64" />
+      ) : !latest ? (
+        <EmptyState
+          title="No advisor run yet"
+          body="Run the advisor to get a visibility score and a ranked list of the fixes that would move it most."
+          action={
+            <Button variant="dark" disabled={!locationId} onClick={() => void run()}>
+              Run advisor
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid gap-3.5 lg:grid-cols-[1fr_1.2fr] lg:items-start">
+          {/* Score + breakdown */}
+          <div className="flex flex-col gap-3.5">
+            <div className="rounded-panel bg-gradient-to-br from-gmb-night to-gmb-night-deep p-6 text-white">
+              <div className="font-geist-mono text-micro uppercase tracking-[0.1em] text-gmb-brand-border">
+                Visibility score
+              </div>
+              <div className="mt-1 flex items-end gap-3">
+                <div className="text-[42px] font-bold leading-none tracking-[-0.025em]">
+                  {latest.score}
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {a.breakdown.map((b) => (
-                    <span key={b.area} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{b.area} {b.points}/{b.weight}</span>
-                  ))}
+                <div className="mb-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-tiny font-semibold">
+                  Grade {latest.grade}
                 </div>
               </div>
-              <button onClick={() => void remove(a.id)} className="text-xs text-slate-400 hover:text-red-600">Delete</button>
+              {latest.summary && (
+                <p className="mt-3 text-sm2 leading-relaxed text-white/75">{latest.summary}</p>
+              )}
+              <div className="mt-3 font-geist-mono text-micro text-white/50">
+                run {new Date(latest.createdAt).toLocaleString()}
+              </div>
             </div>
-            {a.summary && (
-              <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">{a.summary}</p>
-            )}
-            {a.focusAreas && a.focusAreas.length > 0 && (
-              <p className="mt-3 text-xs text-slate-500">
-                <span className="font-medium text-slate-700">Focus first:</span>{" "}
-                {a.focusAreas.slice(0, 3).map((f) => `${f.area} (+${f.gap} pts)`).join(" · ")}
-              </p>
-            )}
-            {a.tasks.length > 0 ? (
-              <ul className="mt-3 space-y-1">
-                {a.tasks.map((t, i) => (
-                  <li key={i} className="text-sm text-slate-600">
-                    <span className={`mr-2 rounded px-1.5 py-0.5 text-xs font-medium ${PRIORITY_STYLES[t.priority]}`}>{t.priority}</span>
-                    {t.task}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-3 text-sm text-emerald-600">No action items — this profile is in great shape.</p>
-            )}
-            <p className="mt-2 text-xs text-slate-400">{new Date(a.createdAt).toLocaleString()}</p>
+
+            <Card>
+              <SectionLabel>Where the points are</SectionLabel>
+              <div className="mt-3 flex flex-col gap-2.5">
+                {(latest.breakdown ?? []).map((b) => {
+                  const share = b.weight > 0 ? b.points / b.weight : 0;
+                  return (
+                    <div key={b.area}>
+                      <div className="flex items-center justify-between text-xs2">
+                        <span className="font-medium text-gmb-ink">{titleCase(b.area)}</span>
+                        <span className="font-geist-mono text-micro text-gmb-ink-subtle">
+                          {b.points}/{b.weight}
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gmb-line-soft">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${Math.round(share * 100)}%`,
+                            background:
+                              share >= 0.8 ? "#22c55e" : share >= 0.5 ? "#f59e0b" : "#f04438",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
           </div>
-        ))}
-      </div>
-    </DashboardShell>
+
+          {/* Tasks */}
+          <div className="flex flex-col gap-3.5">
+            {latest.focusAreas?.length > 0 && (
+              <Card>
+                <SectionLabel>Biggest opportunities</SectionLabel>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  {latest.focusAreas.slice(0, 4).map((f) => (
+                    <span
+                      key={f.area}
+                      className="rounded-full border border-gmb-brand-border bg-gmb-brand-wash px-3 py-1 text-xs2 font-semibold text-gmb-brand"
+                    >
+                      {titleCase(f.area)}
+                      <span className="ml-1.5 font-geist-mono opacity-70">
+                        +{f.recoverable} pts
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            <Card>
+              <SectionLabel>Do these next</SectionLabel>
+              {(latest.tasks ?? []).length === 0 ? (
+                <div className="mt-3 text-sm2 text-gmb-ink-muted">
+                  Nothing outstanding — your profile is in good shape.
+                </div>
+              ) : (
+                <ol className="mt-3 flex list-none flex-col gap-2 p-0">
+                  {(latest.tasks ?? []).map((t, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-3 rounded-control border border-gmb-line p-3"
+                    >
+                      <Pill tone={PRIORITY_TONE[t.priority] ?? "neutral"}>{t.priority}</Pill>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm2 leading-snug text-gmb-ink">{t.task}</div>
+                        <div className="mt-0.5 font-geist-mono text-micro uppercase tracking-wide text-gmb-ink-subtle">
+                          {titleCase(t.area)}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </Card>
+          </div>
+        </div>
+      )}
+    </GmbShell>
   );
 }
