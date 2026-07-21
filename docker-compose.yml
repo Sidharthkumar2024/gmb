@@ -1,0 +1,54 @@
+# Local stack: Postgres, Redis and the API.
+#
+#   docker compose up -d          start everything
+#   docker compose run --rm api npm run db:deploy    apply migrations
+#   docker compose run --rm api npm run db:seed      create the demo workspace
+#
+# Redis is only needed when ENABLE_WORKERS=true; the API runs without it.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gmb
+      POSTGRES_PASSWORD: gmb
+      POSTGRES_DB: gmb_dev
+    ports: ["5432:5432"]
+    volumes: [gmb_pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gmb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    ports: ["3001:3001"]
+    environment:
+      DATABASE_URL: postgresql://gmb:gmb@postgres:5432/gmb_dev
+      REDIS_URL: redis://redis:6379
+      # Override for anything but local use — the app refuses to sign tokens
+      # with a placeholder secret.
+      JWT_SECRET: ${JWT_SECRET:-local_dev_secret_change_me_0123456789abcdef}
+      WEB_URL: ${WEB_URL:-http://localhost:3000}
+      API_PORT: "3001"
+      # Workers default off: every replica running them would duplicate Google
+      # syncs and post publishes. Enable on exactly one instance.
+      ENABLE_WORKERS: ${ENABLE_WORKERS:-false}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+volumes:
+  gmb_pgdata:

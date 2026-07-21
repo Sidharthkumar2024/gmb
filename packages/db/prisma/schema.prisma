@@ -70,6 +70,7 @@ model Tenant {
   aiProviderConfigs  AiProviderConfig[]
   googleApiLogs      GoogleApiLog[]
   auditLogs          AuditLog[]
+  settings           TenantSettings?
 
   // GMB back-relations
   gmbLocations       GmbLocation[]
@@ -101,23 +102,99 @@ model Tenant {
   @@index([parentTenantId])
 }
 
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
 model User {
-  id       String   @id @default(cuid())
+  id       String     @id @default(cuid())
   tenantId String
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email    String   @unique
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email    String     @unique
   name     String?
   password String
-  role     UserRole @default(BUSINESS_ADMIN)
-  isActive Boolean  @default(true)
+  role     UserRole   @default(BUSINESS_ADMIN)
+  status   UserStatus @default(ACTIVE)
+  isActive Boolean    @default(true)
 
-  auditLogs AuditLog[]
+  emailVerified   Boolean   @default(false)
+  emailVerifiedAt DateTime?
+
+  auditLogs     AuditLog[]
+  refreshTokens RefreshToken[]
+  authTokens    AuthToken[]
 
   lastLoginAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   @@index([tenantId])
+}
+
+/// Long-lived session token. Only the SHA-256 hash is stored: a leaked database
+/// dump must not yield usable sessions. Rotated on every refresh, and the old
+/// row is revoked so a stolen token cannot be replayed after the real client
+/// has already used it.
+model RefreshToken {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String  @unique
+
+  expiresAt DateTime
+  revokedAt DateTime?
+  /// Set when this token was rotated, pointing at its successor — lets a
+  /// reuse-detection sweep spot a replayed ancestor.
+  replacedByHash String?
+
+  userAgent String?
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum AuthTokenPurpose {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+/// Single-use, hashed, expiring token for email verification and password
+/// reset. `usedAt` makes replay a no-op rather than a second valid reset.
+model AuthToken {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   AuthTokenPurpose
+  tokenHash String           @unique
+
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+}
+
+/// Per-tenant language + currency preference. One row per tenant; the API
+/// returns platform defaults when absent so the UI never has to special-case
+/// a fresh workspace.
+model TenantSettings {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  languageCode String @default("en")
+  locale       String @default("en-IN")
+  currencyCode String @default("INR")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // --- Secret Vault -----------------------------------------------------------

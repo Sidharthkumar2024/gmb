@@ -47,6 +47,20 @@ export function signAccessToken(
 }
 
 /**
+ * Access-token lifetime in seconds, for the `expiresIn` the client uses to
+ * schedule a refresh. Parsed from the same JWT_EXPIRES_IN the signer uses so
+ * the two can never drift apart.
+ */
+export function accessTokenTtlSeconds(): number {
+  const raw = process.env.JWT_EXPIRES_IN ?? "1h";
+  const m = /^(\d+)([smhd])$/.exec(raw.trim());
+  if (!m) return 3600;
+  const n = Number(m[1]);
+  const mult = { s: 1, m: 60, h: 3600, d: 86400 }[m[2] as "s" | "m" | "h" | "d"];
+  return n * mult;
+}
+
+/**
  * Verify the bearer token and attach identity to the request. Rejects tokens
  * for users or tenants that have since been deactivated — a still-valid JWT
  * must not outlive the account it names.

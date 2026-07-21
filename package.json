@@ -11,7 +11,11 @@
     "db:generate": "npm run generate --workspace=@nexaflow/db",
     "db:push": "npm run push --workspace=@nexaflow/db",
     "typecheck": "tsc --noEmit -p apps/api/tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:migrate": "npm run migrate --workspace=@nexaflow/db",
+    "db:deploy": "npm run migrate:deploy --workspace=@nexaflow/db",
+    "db:seed": "npm run seed --workspace=@nexaflow/db",
+    "dev": "tsx watch apps/api/src/index.ts"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
