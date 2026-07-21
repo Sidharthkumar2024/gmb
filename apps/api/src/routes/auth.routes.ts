@@ -123,8 +123,16 @@ const signupSchema = z.object({
   email: z.string().email(),
   // 8 is the floor; length beats composition rules for real-world strength.
   password: z.string().min(8, "Password must be at least 8 characters."),
-  name: z.string().min(1),
+  // The sign-up form asks for the business, not the person, so `name` is
+  // optional and falls back to the email's local part.
+  name: z.string().min(1).optional(),
   companyName: z.string().min(1),
+  // Optional profile hints from the form. `category` seeds the tenant's
+  // industry (which drives niche-aware AI copy) and `city` seeds the first
+  // location, so a new workspace has something to work with instead of an
+  // empty Locations screen.
+  city: z.string().trim().max(120).optional(),
+  category: z.string().trim().max(120).optional(),
 });
 
 router.post(
@@ -140,8 +148,11 @@ router.post(
           parsed.error.issues[0]?.message ?? "Invalid signup details.",
         );
       }
-      const { email, password, name, companyName } = parsed.data;
+      const { email, password, companyName, city, category } = parsed.data;
       const normalized = email.toLowerCase();
+      // The form asks for the business, not the person; fall back to the
+      // email's local part so the account always has something to greet with.
+      const name = parsed.data.name ?? normalized.split("@")[0];
 
       const existing = await prisma.user.findUnique({ where: { email: normalized } });
       if (existing) {
@@ -166,12 +177,26 @@ router.post(
       }
 
       const user = await prisma.$transaction(async (tx) => {
-        const tenant = await tx.tenant.create({ data: { name: companyName, slug } });
+        const tenant = await tx.tenant.create({
+          data: { name: companyName, slug, ...(category ? { industry: category } : {}) },
+        });
         // Every workspace gets a wallet so AI-credit reads never hit a null.
         await tx.wallet.create({
           data: {
             tenantId: tenant.id,
             balanceCredits: Number(process.env.SIGNUP_BONUS_CREDITS ?? 100),
+          },
+        });
+        // Seed the first location from what the form already asked for, so a
+        // new workspace opens onto real content instead of an empty state.
+        // It is a local draft until the owner connects Google and maps it —
+        // nothing here claims to be verified or synced.
+        await tx.gmbLocation.create({
+          data: {
+            tenantId: tenant.id,
+            name: companyName,
+            ...(city ? { city } : {}),
+            ...(category ? { primaryCategory: category } : {}),
           },
         });
         return tx.user.create({
