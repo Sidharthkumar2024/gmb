@@ -33,13 +33,21 @@ const nextConfig = {
   // public image/text files cache for an hour. Auth-gated dashboard
   // pages intentionally stay uncached (no header → Next default).
   async headers() {
+    // In production, chunk filenames are content-hashed, so caching them
+    // forever is correct. In dev the filenames are STABLE while the contents
+    // change on every edit — telling the browser they are immutable for a year
+    // makes it serve pre-edit JavaScript indefinitely, which looks exactly like
+    // "my change didn't apply". Only apply the long cache in production.
+    const isProd = process.env.NODE_ENV === "production";
     return [
       {
         source: "/_next/static/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
+            value: isProd
+              ? "public, max-age=31536000, immutable"
+              : "no-store, must-revalidate",
           },
         ],
       },

@@ -29,6 +29,8 @@ interface Location {
     postalCode: string | null;
     country: string | null;
   };
+  latitude: number | null;
+  longitude: number | null;
   status: "DRAFT" | "CONNECTED" | "SUSPENDED";
   verificationState: string | null;
   rating: number | null;
@@ -108,6 +110,34 @@ export default function GmbLocationsPage() {
       setError(e instanceof ApiClientError ? e.message : "Could not delete the location.");
     } finally {
       setBusy((b) => ({ ...b, [id]: "" }));
+    }
+  }
+
+  // Grid rank tracking needs coordinates, and the rank tracker's own error
+  // tells the owner to "edit the location" — so that has to be possible here.
+  async function setCoords(l: Location) {
+    const current = l.latitude !== null && l.longitude !== null ? `${l.latitude}, ${l.longitude}` : "";
+    const raw = window.prompt(
+      `Coordinates for "${l.name}"\n\nPaste "latitude, longitude" — right-click the pin in Google Maps and the first item is exactly this.`,
+      current,
+    );
+    if (raw === null) return;
+    const [latStr, lngStr] = raw.split(",").map((s) => s.trim());
+    const latitude = Number(latStr);
+    const longitude = Number(lngStr);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      setError('Coordinates must look like "43.6532, -79.3832".');
+      return;
+    }
+    setBusy((b) => ({ ...b, [l.id]: "coords" }));
+    setError(null);
+    try {
+      await api.patch(`/api/v1/gmb/locations/${l.id}`, { latitude, longitude });
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not save the coordinates.");
+    } finally {
+      setBusy((b) => ({ ...b, [l.id]: "" }));
     }
   }
 
@@ -245,6 +275,9 @@ export default function GmbLocationsPage() {
                           {l.primaryCategory}
                         </span>
                       )}
+                      {l.latitude === null || l.longitude === null ? (
+                        <Pill tone="warn">No coordinates</Pill>
+                      ) : null}
                     </div>
                     <div className="mt-1.5 text-sm2 text-gmb-ink-muted">{formatAddress(l.address)}</div>
                     <div className="mt-2 flex flex-wrap gap-4 font-geist-mono text-micro text-gmb-ink-subtle">
@@ -266,6 +299,17 @@ export default function GmbLocationsPage() {
 
                   <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
                     <div className="flex gap-1.5">
+                      <Button
+                        variant={l.latitude === null ? "primary" : "ghost"}
+                        disabled={Boolean(working)}
+                        onClick={() => void setCoords(l)}
+                      >
+                        {working === "coords"
+                          ? "Saving…"
+                          : l.latitude === null
+                            ? "Set coordinates"
+                            : "Coordinates"}
+                      </Button>
                       <Button
                         variant="ghost"
                         disabled={Boolean(working)}
