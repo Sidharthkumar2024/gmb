@@ -1,25 +1,19 @@
 "use client";
 
-// AdGrowly — Google Business channel Overview ("reputation command center",
-// planning PDF §3). Read-only aggregate served by GET /api/v1/gmb/dashboard
-// (gmbDashboard.service). The channel tab-bar + quick actions link out to the
-// existing Locations / Reviews / Posts / Analytics pages.
-
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import {
-  MapPin,
-  Star,
-  MessageCircle,
-  TrendingUp,
-  ShieldCheck,
-} from "lucide-react";
-import { DashboardShell } from "../../src/components/DashboardShell";
-import { ModernStatCard, ModernBadge } from "../../src/components/ui/ModernUI";
-import { useAuth } from "../../src/hooks/useAuth";
+import { useEffect, useState } from "react";
+import { GmbShell, useActiveLocationId } from "../../src/components/gmb/GmbShell";
+import { Card, SectionLabel, Stat, Pill, ErrorNote, Skeleton } from "../../src/components/gmb/ui";
 import { api, ApiClientError } from "../../src/lib/api";
 
-interface Dashboard {
+// Dashboard — the GMB Suite landing screen.
+//
+// Every figure comes from GET /api/v1/gmb/dashboard. Where the API has no
+// value (no advisor run, no keywords tracked) the tile says so rather than
+// rendering a zero: "0" and "not measured yet" mean very different things to
+// someone deciding what to fix next.
+
+interface DashboardData {
   businessScore: number | null;
   grade: string | null;
   locations: { total: number; connected: number };
@@ -29,244 +23,209 @@ interface Dashboard {
   posts: { recent: number; total: number };
   credits: number | null;
   advisor: { score: number; grade: string; at: string } | null;
-  alerts: { severity: "high" | "medium" | "low"; area: string; message: string }[];
+  alerts: Array<{ severity: string; message: string }>;
   generatedAt: string;
 }
 
-const TABS = [
-  { label: "Overview", href: "/gmb-dashboard", active: true },
-  { label: "Locations", href: "/gmb-locations" },
-  { label: "Reviews", href: "/gmb-reputation" },
-  { label: "Posts", href: "/gmb" },
-  { label: "Analytics", href: "/gmb-insights" },
-];
-
+const SEVERITY_TONE: Record<string, "danger" | "warn" | "neutral"> = {
+  high: "danger",
+  medium: "warn",
+  low: "neutral",
+};
 
 export default function GmbDashboardPage() {
-  const { user, features, loading, signOut } = useAuth({ required: true });
-  const [data, setData] = useState<Dashboard | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function refresh() {
-    setBusy(true);
-    try {
-      setErr(null);
-      setData(await api.get<Dashboard>("/api/v1/gmb/dashboard"));
-    } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to load the dashboard.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const locationId = useActiveLocationId();
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) void refresh();
-  }, [user]);
-
-  const handledPct = useMemo(() => {
-    if (!data || data.reviews.count === 0) return 100;
-    return Math.round(((data.reviews.count - data.reviews.unanswered) / data.reviews.count) * 100);
-  }, [data]);
-
-  const setup = useMemo(() => {
-    const loc = data?.locations ?? { total: 0, connected: 0 };
-    const rev = data?.reviews ?? { count: 0, average: 0, unanswered: 0 };
-    return [
-      { label: "Google connected", done: loc.connected > 0 },
-      { label: "Locations available", done: loc.total > 0 },
-      { label: "Locations selected", done: loc.total > 0 },
-      { label: "Locations mapped", done: loc.connected > 0 },
-      { label: "Reviews synced", done: rev.count > 0 },
-    ];
-  }, [data]);
-
-  if (loading || !user) {
-    return <div className="p-8 text-sm text-slate-500">Loading...</div>;
-  }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const qs = locationId ? `?locationId=${locationId}` : "";
+    void api
+      .get<DashboardData>(`/api/v1/gmb/dashboard${qs}`)
+      .then((d) => {
+        if (!cancelled) setData(d);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e instanceof ApiClientError ? e.message : "Could not load the dashboard.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [locationId]);
 
   return (
-    <DashboardShell user={user} features={features} signOut={signOut}>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6d5efc]">GMB Suite · Local SEO workspace</p>
-          <h1 className="text-[26px] font-bold tracking-[-0.02em] text-[#15131f]">Google Business</h1>
-          <p className="mt-1 max-w-2xl text-sm text-[#56536a]">
-            Connect Google once, map locations, auto-sync reviews, reply with AI, and track Google review performance from one place.
-          </p>
+    <GmbShell title="Dashboard">
+      {error && <ErrorNote>{error}</ErrorNote>}
+
+      {loading && !data ? (
+        <div className="grid grid-cols-4 gap-3.5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-[104px]" />
+          ))}
         </div>
-        <Link href="/gmb-locations" className="inline-flex flex-none items-center rounded-lg bg-[#1a1726] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2b2440]">
-          Connect Google
-        </Link>
-      </div>
-
-      <nav className="mb-6 flex flex-wrap gap-1 border-b border-slate-200">
-        {TABS.map((t) => (
-          <Link
-            key={t.href}
-            href={t.href}
-            className={`rounded-t-md px-4 py-2 text-sm font-medium ${t.active ? "border-b-2 border-[#6d5efc] text-[#5a4af0]" : "text-slate-500 hover:text-slate-800"}`}
-          >
-            {t.label}
-          </Link>
-        ))}
-      </nav>
-
-      {err && <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>}
-
-      {data && (
-        <div className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-[1fr,320px]">
-            <div className="rounded-2xl border border-[#ececf1] bg-white p-6 shadow-sm">
-              <span className="rounded-full bg-[#ece8ff] px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-[#5a4af0]">Location Workspace</span>
-              <h2 className="mt-3 text-xl font-semibold text-slate-950">Google reputation command center</h2>
-              <p className="mt-1 max-w-xl text-sm text-slate-500">
-                Map every Google Business location, keep reviews synced in the background, and move reply work into one focused queue.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Link href="/gmb-locations" className="rounded-lg bg-[#6d5efc] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5a4af0]">Map locations</Link>
-                <Link href="/gmb-reputation" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Open reviews</Link>
-                <Link href="/gmb-insights" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">View analytics</Link>
+      ) : data ? (
+        <div className="flex flex-col gap-3.5">
+          {/* Hero: score + next actions */}
+          <div className="grid grid-cols-[1.3fr_1fr] items-start gap-3.5">
+            <div className="rounded-panel bg-gradient-to-br from-gmb-night to-gmb-night-deep p-6 text-white">
+              <div className="font-geist-mono text-micro uppercase tracking-[0.1em] text-gmb-brand-border">
+                Visibility score
               </div>
-              <div className="mt-5 rounded-md border border-slate-200 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Review health</p>
-                <p className="mt-1 text-4xl font-bold text-slate-950">{data.reviews.average || "—"}<span className="ml-2 text-sm font-normal text-slate-400">avg rating</span></p>
-                <div className="mt-2 h-1.5 rounded-full bg-slate-100">
-                  <div className="h-1.5 rounded-full bg-[#6d5efc]" style={{ width: `${handledPct}%` }} />
+              <div className="mt-1 flex items-end gap-3">
+                <div className="text-[42px] font-bold leading-none tracking-[-0.025em]">
+                  {data.businessScore ?? "—"}
                 </div>
-                <p className="mt-1 text-xs text-slate-500">{handledPct}% of reviews handled or drafted</p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-[#ececf1] bg-white p-6 shadow-sm">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Setup progress</p>
-              <h3 className="mt-1 text-lg font-semibold text-slate-950">Location coverage</h3>
-              <ul className="mt-3 space-y-2">
-                {setup.map((s) => (
-                  <li key={s.label} className="flex items-center gap-2 text-sm">
-                    <span className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${s.done ? "bg-[#e4ddff] text-[#5a4af0]" : "bg-slate-100 text-slate-400"}`}>
-                      {s.done ? "✓" : "•"}
-                    </span>
-                    <span className={s.done ? "text-slate-700" : "text-slate-400"}>{s.label}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <ModernStatCard
-              title="Locations"
-              value={data.locations.total}
-              subtitle={`${data.locations.connected} connected to Google`}
-              icon={<MapPin className="h-6 w-6" />}
-              gradient="from-blue-500 to-cyan-500"
-            />
-            <ModernStatCard
-              title="Reviews"
-              value={data.reviews.count}
-              subtitle={
-                data.reviews.average
-                  ? `${data.reviews.average} average rating`
-                  : "No ratings yet"
-              }
-              icon={<Star className="h-6 w-6" />}
-              gradient="from-amber-500 to-orange-500"
-            />
-            <ModernStatCard
-              title="Reply queue"
-              value={data.reviews.unanswered}
-              subtitle={`${handledPct}% handled`}
-              icon={<MessageCircle className="h-6 w-6" />}
-              gradient={
-                data.reviews.unanswered > 0
-                  ? "from-rose-500 to-red-500"
-                  : "from-emerald-500 to-teal-500"
-              }
-              trend={data.reviews.unanswered > 0 ? "down" : "up"}
-              trendValue={
-                data.reviews.unanswered > 0
-                  ? `${data.reviews.unanswered} waiting`
-                  : "all clear"
-              }
-            />
-            <ModernStatCard
-              title="Business score"
-              value={data.businessScore ?? "—"}
-              subtitle={data.grade ? `Grade ${data.grade}` : "Run the advisor"}
-              icon={
-                data.businessScore != null ? (
-                  <ShieldCheck className="h-6 w-6" />
-                ) : (
-                  <TrendingUp className="h-6 w-6" />
-                )
-              }
-              gradient="from-purple-500 to-pink-500"
-            />
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-[1fr,320px]">
-            <div className="rounded-2xl border border-[#ececf1] bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-800">Recommended next actions</h3>
-              <div className="mt-3 grid gap-4 sm:grid-cols-3">
-                {[
-                  { title: "Choose locations", body: "Select only the Google locations this workspace should manage.", href: "/gmb-locations" },
-                  { title: "Clear reply queue", body: "Open not-replied reviews and generate AI drafts faster.", href: "/gmb-reputation" },
-                  { title: "Track performance", body: "Watch ranking and review trends over time.", href: "/gmb-insights" },
-                ].map((a) => (
-                  <Link key={a.title} href={a.href} className="block rounded-md border border-slate-200 p-3 hover:bg-slate-50">
-                    <p className="text-sm font-medium text-slate-900">{a.title}</p>
-                    <p className="mt-1 text-xs text-slate-500">{a.body}</p>
-                    <p className="mt-2 text-xs font-semibold text-[#5a4af0]">Open →</p>
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-[#ececf1] bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800">Risk watch</h3>
-                {data.alerts.length > 0 && (
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">{data.alerts.length} alert{data.alerts.length === 1 ? "" : "s"}</span>
+                {data.grade && (
+                  <div className="mb-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-tiny font-semibold">
+                    Grade {data.grade}
+                  </div>
                 )}
               </div>
+              <div className="mt-2 text-sm2 text-white/70">
+                {data.advisor
+                  ? `Last advisor run ${new Date(data.advisor.at).toLocaleDateString()}`
+                  : "No advisor run yet — run one to get a score and a fix list."}
+              </div>
+              <div className="mt-4 flex gap-2">
+                <Link href="/gmb-advisor" className="no-underline hover:no-underline">
+                  <span className="inline-block rounded-control bg-white px-4 py-2 text-sm2 font-semibold text-gmb-night">
+                    {data.advisor ? "See this week's moves" : "Run the advisor"}
+                  </span>
+                </Link>
+                <Link href="/gmb-ranking" className="no-underline hover:no-underline">
+                  <span className="inline-block rounded-control border border-white/25 px-4 py-2 text-sm2 font-semibold text-white">
+                    Open rank tracker
+                  </span>
+                </Link>
+              </div>
+            </div>
+
+            <Card>
+              <SectionLabel>Risk watch</SectionLabel>
               {data.alerts.length === 0 ? (
-                <p className="mt-3 text-sm text-[#16a34a]">All clear — no action items right now.</p>
+                <div className="mt-3 text-sm2 text-gmb-ink-muted">
+                  Nothing needs attention right now.
+                </div>
               ) : (
-                <ul className="mt-3 space-y-2">
-                  {data.alerts.slice(0, 4).map((a, i) => (
-                    <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <ModernBadge
-                        size="sm"
-                        variant={
-                          a.severity === "high"
-                            ? "error"
-                            : a.severity === "medium"
-                              ? "warning"
-                              : "default"
-                        }
-                      >
-                        {a.severity}
-                      </ModernBadge>
-                      <span className="pt-0.5">{a.message}</span>
+                <ul className="mt-3 flex list-none flex-col gap-2.5 p-0">
+                  {data.alerts.slice(0, 5).map((a, i) => (
+                    <li key={i} className="flex items-start gap-2.5">
+                      <Pill tone={SEVERITY_TONE[a.severity] ?? "neutral"}>{a.severity}</Pill>
+                      <span className="text-sm2 leading-snug text-gmb-ink-muted">{a.message}</span>
                     </li>
                   ))}
                 </ul>
               )}
-              <Link href="/gmb-reputation" className="mt-4 block rounded-md border border-slate-300 px-3 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-50">
-                Review reply queue
-              </Link>
-            </div>
+            </Card>
           </div>
 
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-slate-400">Generated {new Date(data.generatedAt).toLocaleString()}</p>
-            <button onClick={() => void refresh()} disabled={busy} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-              {busy ? "Refreshing..." : "Refresh"}
-            </button>
+          {/* Tiles */}
+          <div className="grid grid-cols-4 gap-3.5">
+            <Stat
+              label="Locations"
+              value={data.locations.total}
+              caption={`${data.locations.connected} connected to Google`}
+            />
+            <Stat
+              label="Reviews"
+              value={data.reviews.count}
+              caption={
+                data.reviews.count > 0
+                  ? `${data.reviews.average.toFixed(1)} average rating`
+                  : "No reviews synced yet"
+              }
+            />
+            <Stat
+              label="Reply queue"
+              value={data.reviews.unanswered}
+              tone={data.reviews.unanswered > 0 ? "warn" : "ok"}
+              caption={data.reviews.unanswered > 0 ? "awaiting a reply" : "all clear"}
+            />
+            <Stat
+              label="Posts (30d)"
+              value={data.posts.recent}
+              caption={`${data.posts.total} total`}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3.5">
+            <Card>
+              <SectionLabel>Rank tracker</SectionLabel>
+              {data.ranking.trackedKeywords === 0 ? (
+                <div className="mt-3 text-sm2 text-gmb-ink-muted">
+                  No keywords tracked yet.{" "}
+                  <Link href="/gmb-ranking" className="font-semibold text-gmb-brand">
+                    Add some →
+                  </Link>
+                </div>
+              ) : (
+                <div className="mt-3 flex items-baseline gap-5">
+                  <div>
+                    <div className="text-2xl font-bold text-gmb-ok">{data.ranking.top3}</div>
+                    <div className="text-micro uppercase tracking-wide text-gmb-ink-subtle">
+                      top 3
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{data.ranking.top10}</div>
+                    <div className="text-micro uppercase tracking-wide text-gmb-ink-subtle">
+                      top 10
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-gmb-ink-subtle">
+                      {data.ranking.notFound}
+                    </div>
+                    <div className="text-micro uppercase tracking-wide text-gmb-ink-subtle">
+                      not found
+                    </div>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            <Card>
+              <SectionLabel>Citations</SectionLabel>
+              {data.citations.total === 0 ? (
+                <div className="mt-3 text-sm2 text-gmb-ink-muted">No citation scan yet.</div>
+              ) : (
+                <>
+                  <div className="mt-3 text-2xl font-bold">
+                    {data.citations.consistencyScore}
+                    <span className="text-sm font-medium text-gmb-ink-subtle">%</span>
+                  </div>
+                  <div className="mt-1 text-xs2 text-gmb-ink-muted">
+                    {data.citations.consistent} of {data.citations.total} listings consistent
+                  </div>
+                </>
+              )}
+            </Card>
+
+            <Card>
+              <SectionLabel>Credits</SectionLabel>
+              <div className="mt-3 text-2xl font-bold">
+                {data.credits === null ? "—" : data.credits.toLocaleString()}
+              </div>
+              <div className="mt-1 text-xs2 text-gmb-ink-muted">
+                {data.credits === null ? "Billing is not enabled" : "AI credits remaining"}
+              </div>
+            </Card>
+          </div>
+
+          <div className="text-right font-geist-mono text-micro text-gmb-ink-subtle">
+            Generated {new Date(data.generatedAt).toLocaleString()}
           </div>
         </div>
-      )}
-    </DashboardShell>
+      ) : null}
+    </GmbShell>
   );
 }

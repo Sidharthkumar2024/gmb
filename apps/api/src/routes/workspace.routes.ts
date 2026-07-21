@@ -55,7 +55,7 @@ function languagePayload(s: { tenantId: string; languageCode: string; locale: st
 
 router.get("/language-settings", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
-    res.json(languagePayload(await settingsFor(req.tenantId!)));
+    res.json({ success: true, data: languagePayload(await settingsFor(req.tenantId!)) });
   } catch (err) {
     next(err);
   }
@@ -82,7 +82,7 @@ router.patch("/language-settings", async (req: RequestWithAuth, res: Response, n
       update: { languageCode, ...(locale ? { locale } : {}) },
       create: { tenantId: req.tenantId!, languageCode, locale: locale ?? "en-IN" },
     });
-    res.json(languagePayload(saved));
+    res.json({ success: true, data: languagePayload(saved) });
   } catch (err) {
     next(err);
   }
@@ -125,7 +125,7 @@ function currencyPayload(s: { tenantId: string; currencyCode: string; locale: st
 
 router.get("/currency-settings", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
-    res.json(currencyPayload(await settingsFor(req.tenantId!)));
+    res.json({ success: true, data: currencyPayload(await settingsFor(req.tenantId!)) });
   } catch (err) {
     next(err);
   }
@@ -156,7 +156,7 @@ router.patch("/currency-settings", async (req: RequestWithAuth, res: Response, n
         locale: parsed.data.locale ?? "en-IN",
       },
     });
-    res.json(currencyPayload(saved));
+    res.json({ success: true, data: currencyPayload(saved) });
   } catch (err) {
     next(err);
   }
@@ -171,21 +171,24 @@ router.get("/customer/wallets", async (req: RequestWithAuth, res: Response, next
       orderBy: { createdAt: "asc" },
     });
     res.json({
-      wallets: wallets.map((w) => ({
-        id: w.id,
-        status: w.status,
-        balanceCredits: w.balanceCredits,
-        reservedCredits: w.reservedCredits,
-        availableCredits: w.balanceCredits - w.reservedCredits,
-      })),
-      primaryWallet: wallets[0]
-        ? {
-            id: wallets[0].id,
-            balanceCredits: wallets[0].balanceCredits,
-            reservedCredits: wallets[0].reservedCredits,
-            availableCredits: wallets[0].balanceCredits - wallets[0].reservedCredits,
-          }
-        : null,
+      success: true,
+      data: {
+        wallets: wallets.map((w) => ({
+          id: w.id,
+          status: w.status,
+          balanceCredits: w.balanceCredits,
+          reservedCredits: w.reservedCredits,
+          availableCredits: w.balanceCredits - w.reservedCredits,
+        })),
+        primaryWallet: wallets[0]
+          ? {
+              id: wallets[0].id,
+              balanceCredits: wallets[0].balanceCredits,
+              reservedCredits: wallets[0].reservedCredits,
+              availableCredits: wallets[0].balanceCredits - wallets[0].reservedCredits,
+            }
+          : null,
+      },
     });
   } catch (err) {
     next(err);
@@ -198,18 +201,21 @@ router.get("/products/customer-access", async (_req: RequestWithAuth, res: Respo
   // Single-product app: Local SEO is always on. Kept in the catalog shape the
   // shared AppShell expects so its nav gating works untouched.
   res.json({
-    products: [
-      {
-        key: "local_seo",
-        name: "Local SEO (GMB)",
-        enabled: true,
-        source: "GLOBAL",
-        addOns: [],
-      },
-    ],
-    productsByKey: { local_seo: true },
-    features: {},
-    terminology: { public: "Customer", internal: "Workspace" },
+    success: true,
+    data: {
+      products: [
+        {
+          key: "local_seo",
+          name: "Local SEO (GMB)",
+          enabled: true,
+          source: "GLOBAL",
+          addOns: [],
+        },
+      ],
+      productsByKey: { local_seo: true },
+      features: {},
+      terminology: { public: "Customer", internal: "Workspace" },
+    },
   });
 });
 

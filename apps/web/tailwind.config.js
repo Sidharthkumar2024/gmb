@@ -8,6 +8,44 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // ---------------------------------------------------------------
+        // Adgrowly GMB Suite tokens, transcribed from the design file.
+        // Namespaced under `gmb` so they sit alongside the inherited
+        // `primary` scale without disturbing pages that still use it.
+        // Screens should use these and never a raw hex.
+        // ---------------------------------------------------------------
+        gmb: {
+          canvas: "#f5f5f8",
+          surface: "#ffffff",
+          subtle: "#fafafc",
+
+          brand: "#5a4af0",
+          "brand-hover": "#4536d6",
+          "brand-light": "#6d5efc",
+          "brand-lighter": "#8b7bff",
+          "brand-tint": "#ece8ff",
+          "brand-wash": "#f7f5ff",
+          "brand-border": "#ded8ff",
+
+          ink: "#15131f",
+          "ink-muted": "#56536a",
+          "ink-subtle": "#8d8aa3",
+
+          line: "#ececf1",
+          "line-soft": "#f0eff5",
+
+          ok: "#16803c",
+          "ok-bg": "#eaf7ef",
+          "ok-dot": "#22c55e",
+          warn: "#b25e09",
+          "warn-bg": "#fef3e2",
+          danger: "#d92d20",
+          "danger-bg": "#fdecea",
+
+          night: "#1a1726",
+          "night-soft": "#2c2839",
+          "night-deep": "#2c2452",
+        },
         // Nexa design system primary (indigo/violet, Adgrowly panel style).
         // Driven by CSS variables so white-label partners can re-theme at
         // runtime by overriding --nx-primary-* (see globals.css :root).
@@ -94,6 +132,22 @@ module.exports = {
         'xl': '1rem',
         '2xl': '1.5rem',
         '3xl': '2rem',
+        // GMB Suite: the design uses 9px controls and 16/18px cards.
+        control: '9px',
+        card: '16px',
+        panel: '18px',
+      },
+      fontFamily: {
+        geist: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        'geist-mono': ['Geist Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+      },
+      fontSize: {
+        // The design leans on half-pixel sizes; named so screens don't
+        // sprinkle arbitrary values.
+        micro: ['9px', { lineHeight: '1.3' }],
+        tiny: ['10.5px', { lineHeight: '1.35' }],
+        xs2: ['11.5px', { lineHeight: '1.4' }],
+        sm2: ['12.5px', { lineHeight: '1.45' }],
       },
     },
   },

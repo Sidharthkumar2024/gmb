@@ -3,8 +3,8 @@ import "../src/globals.css";
 import { I18nProvider } from "../src/i18n/I18nProvider";
 
 export const metadata: Metadata = {
-  title: "NexaFlow AI",
-  description: "AI-powered WhatsApp marketing & automation platform",
+  title: "GMB Suite by Adgrowly",
+  description: "Google Business Profile management, reviews, rankings and local SEO",
 };
 
 export default function RootLayout({
@@ -15,9 +15,9 @@ export default function RootLayout({
   // lang/dir are seeded to the default here and updated client-side by the
   // I18nProvider once the saved locale hydrates (incl. RTL for ar/ur).
   return (
-    <html lang="en" dir="ltr" className="h-full bg-[#f4f1e9]">
+    <html lang="en" dir="ltr" className="h-full bg-gmb-canvas">
       <head>
-        {/* Adgrowly editorial type system */}
+        {/* Geist + Geist Mono per the GMB Suite design file. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
@@ -29,7 +29,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="h-full bg-[#f4f1e9] text-[#1f1d17] antialiased">
+      <body className="h-full bg-gmb-canvas font-geist text-gmb-ink antialiased">
         <I18nProvider>{children}</I18nProvider>
       </body>
     </html>
