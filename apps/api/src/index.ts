@@ -7,6 +7,10 @@ import { errorHandler } from "./middleware/errorHandler";
 import authRoutes from "./routes/auth.routes";
 import gmbRoutes from "./routes/gmb.routes";
 import workspaceRoutes from "./routes/workspace.routes";
+import {
+  primeGoogleOAuthCache,
+  getCachedGoogleClientConfig,
+} from "./services/googleOAuthConfig.service";
 
 import {
   startGmbAutoSyncWorker,
@@ -104,6 +108,19 @@ async function stopWorkers(): Promise<void> {
 
 const server = app.listen(PORT, () => {
   console.log(`[api] GMB API listening on http://localhost:${PORT}`);
+  // Load the stored Google OAuth client into the in-process cache. Without
+  // this the cache stays null and every OAuth call silently falls back to env
+  // credentials, so a client saved through the admin path would never be used.
+  void primeGoogleOAuthCache()
+    .then(() => {
+      const cfg = getCachedGoogleClientConfig();
+      console.log(
+        cfg
+          ? "[google] OAuth client loaded from the encrypted config"
+          : "[google] no stored OAuth client — falling back to env credentials",
+      );
+    })
+    .catch((err) => console.warn("[google] failed to prime OAuth cache:", err));
   void startWorkers().catch((err) => {
     console.error("[workers] failed to start:", err);
   });

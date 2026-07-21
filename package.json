@@ -15,7 +15,8 @@
     "db:migrate": "npm run migrate --workspace=@nexaflow/db",
     "db:deploy": "npm run migrate:deploy --workspace=@nexaflow/db",
     "db:seed": "npm run seed --workspace=@nexaflow/db",
-    "dev": "tsx watch apps/api/src/index.ts"
+    "dev": "tsx watch apps/api/src/index.ts",
+    "db:setup-google": "tsx packages/db/prisma/setup-google.ts"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
