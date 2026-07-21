@@ -15,7 +15,11 @@ export default function RootLayout({
   // lang/dir are seeded to the default here and updated client-side by the
   // I18nProvider once the saved locale hydrates (incl. RTL for ar/ur).
   return (
-    <html lang="en" dir="ltr" className="h-full bg-gmb-canvas">
+    // suppressHydrationWarning: I18nProvider rewrites lang/dir on <html> from
+    // the saved locale after mount, so the server's "en"/"ltr" legitimately
+    // differs from the client's. Without this React discards the entire
+    // document on hydration rather than patching two attributes.
+    <html lang="en" dir="ltr" suppressHydrationWarning className="h-full bg-gmb-canvas">
       <head>
         {/* Geist + Geist Mono per the GMB Suite design file. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />

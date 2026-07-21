@@ -102,10 +102,19 @@ export function GmbShell({
   const [locMenu, setLocMenu] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
 
+  // Auth lives in localStorage, so the server renders a signed-out shell while
+  // the client renders a signed-in one. React treats that as a hydration
+  // mismatch and throws away the whole document — slow, and it briefly paints
+  // the wrong content. Holding the first client render identical to the
+  // server's (a neutral skeleton) removes the divergence entirely.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const locRef = useOutsideClose(useCallback(() => setLocMenu(false), []));
   const userRef = useOutsideClose(useCallback(() => setUserMenu(false), []));
 
   useEffect(() => {
+    if (!mounted) return;
     let cancelled = false;
     void api
       .get<GmbLocationLite[]>("/api/v1/gmb/locations")
@@ -131,7 +140,7 @@ export function GmbShell({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [mounted]);
 
   useEffect(() => {
     if (!activeId) return;
@@ -162,6 +171,24 @@ export function GmbShell({
     [locations, activeId],
   );
 
+  // Everything below depends on localStorage (auth token, chosen location), so
+  // the server literally cannot render it correctly. Rather than emit a
+  // signed-out tree and let React discard the whole document on hydration,
+  // render a neutral skeleton until mount. Server HTML and the first client
+  // render are then byte-identical, so hydration is clean and React patches in
+  // the real content on the next tick.
+  if (!mounted) {
+    return (
+      <div className="flex h-screen overflow-hidden bg-gmb-canvas font-geist text-gmb-ink">
+        <aside className="w-[248px] flex-shrink-0 border-r border-gmb-line bg-gmb-surface" />
+        <main className="flex min-w-0 flex-1 flex-col">
+          <header className="h-16 flex-shrink-0 border-b border-gmb-line bg-gmb-canvas" />
+          <div className="flex-1" />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-gmb-canvas font-geist text-gmb-ink">
       {/* ---------------- Sidebar ---------------- */}
@@ -189,12 +216,24 @@ export function GmbShell({
               className="h-[7px] w-[7px] flex-shrink-0 rounded-full"
               style={{ background: scoreTone(active?.score) }}
             />
+            {/* Auth and the chosen location live in localStorage, so the server
+                cannot know them. The divergence is intentional, not a bug, and
+                suppressHydrationWarning is React's supported way to say so —
+                without it React discards the whole document on hydration. */}
             <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-semibold text-gmb-ink">
-                {active?.name ?? (locations.length ? "Select location" : "No locations")}
+              <div
+                suppressHydrationWarning
+                className="truncate text-xs font-semibold text-gmb-ink"
+              >
+                {!mounted
+                  ? "Loading…"
+                  : (active?.name ?? (locations.length ? "Select location" : "No locations"))}
               </div>
-              <div className="font-geist-mono text-micro text-gmb-ink-subtle">
-                {active?.city ?? (locations.length ? "—" : "Add one to begin")}
+              <div
+                suppressHydrationWarning
+                className="font-geist-mono text-micro text-gmb-ink-subtle"
+              >
+                {!mounted ? " " : (active?.city ?? (locations.length ? "—" : "Add one to begin"))}
               </div>
             </div>
             <span className="text-[10px] text-gmb-ink-subtle">▾</span>
@@ -285,11 +324,11 @@ export function GmbShell({
         <div className="m-3 rounded-[14px] bg-gradient-to-br from-gmb-brand-light to-gmb-brand-lighter p-3.5 text-white">
           <div className="text-sm2 font-semibold">Local visibility score</div>
           <div className="mt-1 text-3xl font-bold tracking-[-0.02em]">
-            {score ? score.value : "—"}
+            {mounted && score ? score.value : "—"}
             <span className="text-sm font-medium opacity-70">/100</span>
           </div>
           <div className="mt-0.5 text-[11px] opacity-85">
-            {score
+            {mounted && score
               ? score.grade
                 ? `Grade ${score.grade}`
                 : "From your latest advisor run"
@@ -315,7 +354,7 @@ export function GmbShell({
           >
             <span className="h-[7px] w-[7px] rounded-full bg-gmb-brand-light" />
             <span className="font-geist-mono text-[11px] text-gmb-ink-muted">
-              {credits === null ? "—" : credits.toLocaleString()} credits
+              {!mounted || credits === null ? "—" : credits.toLocaleString()} credits
             </span>
           </span>
 
@@ -326,7 +365,7 @@ export function GmbShell({
               aria-label="Account menu"
               className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-gmb-brand text-xs font-semibold text-white"
             >
-              {initials(user?.name, user?.email)}
+              {mounted ? initials(user?.name, user?.email) : ""}
             </button>
 
             {userMenu && (
