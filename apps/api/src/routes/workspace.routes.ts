@@ -195,6 +195,52 @@ router.get("/customer/wallets", async (req: RequestWithAuth, res: Response, next
   }
 });
 
+// --- AI usage ----------------------------------------------------------------
+// Read-only spend history for the billing page. AiUsage rows are written by the
+// AI gateway after each call; this just reports them. No money moves here.
+
+router.get("/customer/ai-usage", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const rows = await prisma.aiUsage.findMany({
+      where: { tenantId: req.tenantId! },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+
+    // Group by feature so the page can show "where the credits went" without
+    // the client re-summing a hundred rows.
+    const byFeature = new Map<string, { calls: number; costInCents: number }>();
+    let totalCostInCents = 0;
+    for (const r of rows) {
+      totalCostInCents += r.costInCents;
+      const cur = byFeature.get(r.feature) ?? { calls: 0, costInCents: 0 };
+      cur.calls += 1;
+      cur.costInCents += r.costInCents;
+      byFeature.set(r.feature, cur);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        totalCalls: rows.length,
+        totalCostInCents,
+        byFeature: [...byFeature.entries()]
+          .map(([feature, v]) => ({ feature, ...v }))
+          .sort((a, b) => b.costInCents - a.costInCents),
+        recent: rows.slice(0, 20).map((r) => ({
+          id: r.id,
+          feature: r.feature,
+          model: r.model,
+          costInCents: r.costInCents,
+          createdAt: r.createdAt,
+        })),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // --- product access ---------------------------------------------------------
 
 router.get("/products/customer-access", async (_req: RequestWithAuth, res: Response) => {
