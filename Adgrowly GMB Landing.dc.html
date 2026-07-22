@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #f5f5f8; }
+  a { color: #5a4af0; text-decoration: none; }
+  a:hover { color: #4536d6; text-decoration: underline; }
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #f5f5f8; font-family: Geist, sans-serif; color: #15131f;">
+  <header style="display: flex; align-items: center; gap: 28px; padding: 18px 48px; border-bottom: 1px solid #ececf1; background: #ffffff;">
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <div style="width: 28px; height: 28px; border-radius: 9px; background: linear-gradient(135deg, #6d5efc, #8b7bff); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">G</div>
+      <span style="font-size: 17px; font-weight: 700; letter-spacing: -0.01em;">GMB Suite</span>
+      <span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-top: 3px;">by Adgrowly</span>
+    </div>
+    <nav style="display: flex; gap: 22px; font-size: 13px;">
+      <a href="#features" style="color: #56536a;">Features</a>
+      <a href="#pricing" style="color: #56536a;">Pricing</a>
+      <a href="#agencies" style="color: #56536a;">For agencies</a>
+    </nav>
+    <div style="flex: 1;"></div>
+    <button onClick="{{ goLogin }}" style="padding: 8px 16px; border: 1px solid #ececf1; border-radius: 9px; background: #ffffff; color: #15131f; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">Log in</button>
+    <button onClick="{{ goSignup }}" style="padding: 8px 18px; background: #5a4af0; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer;" style-hover="background: #4536d6;">Start free scan</button>
+  </header>
+
+  <sc-if value="{{ showAuth }}" hint-placeholder-val="{{ false }}">
+    <main style="display: grid; grid-template-columns: minmax(380px, 1fr) minmax(0, 1.1fr); min-height: calc(100vh - 66px);">
+      <div style="display: flex; align-items: center; justify-content: center; padding: 40px 32px; box-sizing: border-box;">
+        <div style="width: 380px; max-width: 100%;">
+          <div style="width: 44px; height: 44px; border-radius: 13px; background: linear-gradient(135deg, #6d5efc, #8b7bff); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700;">G</div>
+
+          <sc-if value="{{ showLogin }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 20px;">Welcome back</div>
+            <div style="font-size: 13px; color: #56536a; margin-top: 6px;">Log in to your GMB Suite workspace — your Adgrowly account works here too.</div>
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 26px;">
+              <div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Email</div>
+                <input placeholder="you@business.com" style="width: 100%; box-sizing: border-box; padding: 11px 14px; border: 1px solid #ececf1; border-radius: 10px; background: #fafafc; font-family: Geist, sans-serif; font-size: 13px; color: #15131f; outline: none;" style-focus="border-color: #5a4af0;">
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Password</span>
+                  <a href="#" onClick="{{ goForgot }}" style="font-size: 11px;">Forgot?</a>
+                </div>
+                <input type="password" placeholder="••••••••" style="width: 100%; box-sizing: border-box; padding: 11px 14px; border: 1px solid #ececf1; border-radius: 10px; background: #fafafc; font-family: Geist, sans-serif; font-size: 13px; color: #15131f; outline: none;" style-focus="border-color: #5a4af0;">
+              </div>
+              <button style="padding: 12px; background: #5a4af0; color: #ffffff; border: none; border-radius: 10px; font-family: Geist, sans-serif; font-size: 13.5px; font-weight: 600; cursor: pointer; margin-top: 4px; box-shadow: 0 4px 14px rgba(90,74,240,0.3);" style-hover="background: #4536d6;">Log in</button>
+              <div style="display: flex; align-items: center; gap: 10px; margin: 4px 0;">
+                <div style="flex: 1; height: 1px; background: #f0eff5;"></div>
+                <span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">or</span>
+                <div style="flex: 1; height: 1px; background: #f0eff5;"></div>
+              </div>
+              <button style="padding: 11px; border: 1px solid #ececf1; border-radius: 10px; background: #ffffff; color: #15131f; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;" style-hover="background: #fafafc;">Continue with Google</button>
+              <button style="padding: 11px; border: 1px solid #ececf1; border-radius: 10px; background: #ffffff; color: #15131f; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;" style-hover="background: #fafafc;">Log in with Adgrowly</button>
+            </div>
+            <div style="font-size: 12.5px; color: #56536a; margin-top: 22px;">New to GMB Suite? <a href="#" onClick="{{ goSignup }}" style="font-weight: 600;">Create an account</a></div>
+          </sc-if>
+
+          <sc-if value="{{ showSignup }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 20px;">Create your account</div>
+            <div style="font-size: 13px; color: #56536a; margin-top: 6px;">14-day free trial on Grow · no credit card · cancel anytime.</div>
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 26px;">
+              <div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Business name</div>
+                <input placeholder="Maple Dental Studio" style="width: 100%; box-sizing: border-box; padding: 11px 14px; border: 1px solid #ececf1; border-radius: 10px; background: #fafafc; font-family: Geist, sans-serif; font-size: 13px; color: #15131f; outline: none;" style-focus="border-color: #5a4af0;">
+                <div style="font-size: 11px; color: #8d8aa3; margin-top: 4px;">Exactly as it appears on your Google profile — we'll find it automatically.</div>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">City</div>
+                  <input placeholder="Toronto" style="width: 100%; box-sizing: border-box; padding: 11px 14px; border: 1px solid #ececf1; border-radius: 10px; background: #fafafc; font-family: Geist, sans-serif; font-size: 13px; color: #15131f; outline: none;" style-focus="border-color: #5a4af0;">
+                </div>
+                <div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Category</div>
+                  <input placeholder="Dentist" style="width: 100%; box-sizing: border-box; padding: 11px 14px; border: 1px solid #ececf1; border-radius: 10px; background: #fafafc; font-family: Geist, sans-serif; font-size: 13px; color: #15131f; outline: none;" style-focus="border-color: #5a4af0;">
+                </div>
+              </div>
+              <div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Work email</div>
+                <input placeholder="you@business.com" style="width: 100%; box-sizing: border-box; padding: 11px 14px; border: 1px solid #ececf1; border-radius: 10px; background: #fafafc; font-family: Geist, sans-serif; font-size: 13px; color: #15131f; outline: none;" style-focus="border-color: #5a4af0;">
+              </div>
+              <div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Password</div>
+                <input type="password" placeholder="8+ characters" style="width: 100%; box-sizing: border-box; padding: 11px 14px; border: 1px solid #ececf1; border-radius: 10px; background: #fafafc; font-family: Geist, sans-serif; font-size: 13px; color: #15131f; outline: none;" style-focus="border-color: #5a4af0;">
+              </div>
+              <button style="padding: 12px; background: #5a4af0; color: #ffffff; border: none; border-radius: 10px; font-family: Geist, sans-serif; font-size: 13.5px; font-weight: 600; cursor: pointer; margin-top: 4px; box-shadow: 0 4px 14px rgba(90,74,240,0.3);" style-hover="background: #4536d6;">Create account &amp; run first scan</button>
+              <button style="padding: 11px; border: 1px solid #ececf1; border-radius: 10px; background: #ffffff; color: #15131f; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;" style-hover="background: #fafafc;">Sign up with Google</button>
+            </div>
+            <div style="font-size: 11px; color: #8d8aa3; margin-top: 14px; line-height: 1.5;">By continuing you agree to the <a href="#">Terms</a> and <a href="#">Privacy policy</a>.</div>
+            <div style="font-size: 12.5px; color: #56536a; margin-top: 14px;">Already have an account? <a href="#" onClick="{{ goLogin }}" style="font-weight: 600;">Log in</a></div>
+          </sc-if>
+
+          <sc-if value="{{ showForgot }}" hint-placeholder-val="{{ false }}">
+            <sc-if value="{{ resetSent }}" hint-placeholder-val="{{ false }}">
+              <div style="width: 48px; height: 48px; border-radius: 13px; background: #eaf7ef; color: #16803c; display: flex; align-items: center; justify-content: center; font-size: 22px; margin-top: 20px;">✓</div>
+              <div style="font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-top: 14px;">Check your inbox</div>
+              <div style="font-size: 13px; color: #56536a; margin-top: 6px; line-height: 1.6;">We sent a password reset link to <strong style="color: #15131f;">you@business.com</strong>. It expires in 30 minutes.</div>
+              <button onClick="{{ goLogin }}" style="width: 100%; padding: 12px; background: #5a4af0; color: #ffffff; border: none; border-radius: 10px; font-family: Geist, sans-serif; font-size: 13.5px; font-weight: 600; cursor: pointer; margin-top: 22px;" style-hover="background: #4536d6;">Back to log in</button>
+              <div style="font-size: 12px; color: #8d8aa3; margin-top: 14px;">Didn't get it? <a href="#" onClick="{{ goForgot }}" style="font-weight: 600;">Resend</a></div>
+            </sc-if>
+            <sc-if value="{{ resetForm }}" hint-placeholder-val="{{ true }}">
+              <div style="font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 20px;">Reset your password</div>
+              <div style="font-size: 13px; color: #56536a; margin-top: 6px;">Enter your email and we'll send a secure reset link.</div>
+              <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 26px;">
+                <div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Work email</div>
+                  <input placeholder="you@business.com" style="width: 100%; box-sizing: border-box; padding: 11px 14px; border: 1px solid #ececf1; border-radius: 10px; background: #fafafc; font-family: Geist, sans-serif; font-size: 13px; color: #15131f; outline: none;" style-focus="border-color: #5a4af0;">
+                </div>
+                <button onClick="{{ sendReset }}" style="padding: 12px; background: #5a4af0; color: #ffffff; border: none; border-radius: 10px; font-family: Geist, sans-serif; font-size: 13.5px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(90,74,240,0.3);" style-hover="background: #4536d6;">Send reset link</button>
+              </div>
+              <div style="font-size: 12.5px; color: #56536a; margin-top: 18px;">Remembered it? <a href="#" onClick="{{ goLogin }}" style="font-weight: 600;">Log in</a></div>
+            </sc-if>
+          </sc-if>
+
+          <div style="margin-top: 24px;"><a href="#" onClick="{{ goHome }}" style="font-size: 12px; color: #8d8aa3;">← Back to gmb.adgrowly.com</a></div>
+        </div>
+      </div>
+
+      <div style="background: linear-gradient(160deg, #1a1726 0%, #241d3f 55%, #35286a 100%); color: #ffffff; padding: 56px 52px; display: flex; flex-direction: column; justify-content: center; gap: 28px; min-width: 0;">
+        <div>
+          <div style="font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; max-width: 380px; text-wrap: balance;">Businesses on GMB Suite climb 3.1 map positions in their first 90 days.</div>
+          <div style="font-size: 12.5px; color: #a29fb8; margin-top: 8px;">Median across 1,284 tracked locations, Jan–Jun 2026.</div>
+        </div>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <sc-for list="{{ authStats }}" as="st" hint-placeholder-count="3">
+            <div style="flex: 1; min-width: 120px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 14px 16px;">
+              <div style="font-size: 24px; font-weight: 700; letter-spacing: -0.02em; color: #b3a9ff;">{{ st.value }}</div>
+              <div style="font-size: 11px; color: #a29fb8; margin-top: 3px;">{{ st.label }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 18px 20px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="width: 34px; height: 34px; border-radius: 99px; background: #b3a9ff; color: #241d3f; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">SR</span>
+            <div>
+              <div style="font-size: 12.5px; font-weight: 600;">Sofia Ricci</div>
+              <div style="font-size: 11px; color: #a29fb8;">Casa Nonna Trattoria · Toronto</div>
+            </div>
+            <span style="margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 11px; color: #e3b558;">★★★★★</span>
+          </div>
+          <div style="font-size: 13px; line-height: 1.6; color: #d8d5e6; margin-top: 12px;">"We went from invisible to #2 for 'italian restaurant near me' in one season. The AI answers our reviews better than I do — in two languages."</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+          <sc-for list="{{ trustItems }}" as="tr" hint-placeholder-count="3">
+            <span style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #a29fb8;"><span style="width: 14px; height: 14px; border-radius: 99px; background: rgba(179,169,255,0.25); color: #b3a9ff; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700;">✓</span>{{ tr }}</span>
+          </sc-for>
+        </div>
+      </div>
+    </main>
+  </sc-if>
+
+  <sc-if value="{{ showHome }}" hint-placeholder-val="{{ true }}">
+  <main>
+    <section style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 72px 48px 0;">
+      <span style="font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #5a4af0; background: #ece8ff; padding: 5px 14px; border-radius: 99px;">Local SEO on autopilot</span>
+      <h1 style="font-size: 54px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.08; margin: 24px 0 0; max-width: 720px; text-wrap: balance;">Own the map. Win the neighborhood.</h1>
+      <p style="font-size: 16px; color: #56536a; line-height: 1.6; max-width: 520px; margin: 18px 0 0;">Track your Google ranking street by street, reply to every review with AI, and keep your profile perfect — while you run the business.</p>
+      <div style="display: flex; gap: 12px; margin-top: 28px;">
+        <button onClick="{{ goSignup }}" style="padding: 13px 26px; background: #5a4af0; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 14px; font-weight: 600; cursor: pointer;" style-hover="background: #4536d6;">Scan my business free</button>
+        <button style="padding: 13px 26px; border: 1px solid #ececf1; border-radius: 9px; background: #ffffff; color: #15131f; font-family: Geist, sans-serif; font-size: 14px; font-weight: 500; cursor: pointer;">Watch 2-min demo</button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px; margin-top: 18px; font-size: 12px; color: #8d8aa3;">
+        <span style="font-family: 'Geist Mono', monospace; color: #b25e09;">★★★★★</span>
+        <span>4.9 from 380+ reviews · free scan takes 60 seconds</span>
+      </div>
+      <div style="margin-top: 56px; display: flex; align-items: flex-end; gap: 20px; max-width: 900px; width: 100%;">
+        <div style="flex: 1.2; background: #ffffff; border: 1px solid #ececf1; border-radius: 20px 20px 0 0; border-bottom: none; padding: 24px 28px 0; box-shadow: 0 -12px 48px rgba(90,74,240,0.08);">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 13px; font-weight: 600;">dentist near me</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #8d8aa3;">avg rank #4.2 → #2.8</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin: 16px auto 0; max-width: 300px; padding-bottom: 24px;">
+            <sc-for list="{{ heroCells }}" as="hc" hint-placeholder-count="49">
+              <div style="aspect-ratio: 1; border-radius: 99px; background: {{ hc.bg }}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 500;">{{ hc.rank }}</div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; padding-bottom: 24px;">
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 14px 18px; text-align: left; box-shadow: 0 8px 24px rgba(21,19,31,0.06);">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #b25e09;">★★★★★</span>
+              <span style="font-size: 12px; font-weight: 600;">Karen L.</span>
+            </div>
+            <div style="font-size: 12px; color: #56536a; margin-top: 4px;">"Dr. Rana is fantastic with nervous patients…"</div>
+            <div style="margin-top: 8px; background: #f7f5ff; border: 1px solid #ded8ff; border-radius: 9px; padding: 8px 10px; font-size: 11px; color: #4536d6;">AI reply drafted · posted in 1 click</div>
+          </div>
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 14px 18px; text-align: left; box-shadow: 0 8px 24px rgba(21,19,31,0.06);">
+            <div style="font-size: 12px; font-weight: 600;">Advisor</div>
+            <div style="font-size: 12px; color: #56536a; margin-top: 4px;">Add "emergency dentist" to services — competitors listing it rank 7 spots higher.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="background: #ffffff; border-top: 1px solid #ececf1; padding: 28px 48px;">
+      <div style="max-width: 980px; margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 36px; flex-wrap: wrap;">
+        <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: #8d8aa3;">1,284 local businesses rank with us</span>
+        <sc-for list="{{ clientLogos }}" as="cl" hint-placeholder-count="6">
+          <span style="font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: #b5b2c6;">{{ cl }}</span>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="background: #ffffff; padding: 64px 48px 72px; border-top: 1px solid #f0eff5;">
+      <div style="max-width: 980px; margin: 0 auto;">
+        <div style="text-align: center;">
+          <span style="font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #5a4af0;">How it works</span>
+          <h2 style="font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 14px 0 0;">Live in three steps, ranked in one season</h2>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 40px;">
+          <sc-for list="{{ steps }}" as="s" hint-placeholder-count="3">
+            <div style="position: relative; border: 1px solid #ececf1; border-radius: 18px; padding: 24px 24px 22px; background: linear-gradient(180deg, #fafafc, #ffffff);">
+              <span style="font-size: 44px; font-weight: 700; letter-spacing: -0.03em; color: #ece8ff; position: absolute; top: 12px; right: 20px; line-height: 1;">{{ s.num }}</span>
+              <div style="font-size: 15px; font-weight: 600;">{{ s.title }}</div>
+              <div style="font-size: 12.5px; color: #56536a; line-height: 1.65; margin-top: 6px;">{{ s.desc }}</div>
+              <div style="margin-top: 14px; font-family: 'Geist Mono', monospace; font-size: 10px; color: #5a4af0; background: #f7f5ff; border: 1px solid #ded8ff; border-radius: 99px; padding: 4px 12px; display: inline-block;">{{ s.time }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" style="border-top: 1px solid #ececf1; padding: 72px 48px;">
+      <div style="max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center;">
+          <div>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #5a4af0;">Rank tracker</span>
+            <h3 style="font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 12px 0 0; line-height: 1.2;">Know exactly where you rank — on every street corner</h3>
+            <p style="font-size: 13.5px; color: #56536a; line-height: 1.7; margin: 12px 0 0;">Google shows different results one block apart. Our 49-point grid scans your whole service area per keyword, so you see the streets you own and the ones competitors are stealing — with weekly movement and a local leaderboard.</p>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
+              <span style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #15131f;"><span style="width: 16px; height: 16px; border-radius: 99px; background: #eaf7ef; color: #16803c; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700;">✓</span>Track unlimited keywords, per location</span>
+              <span style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #15131f;"><span style="width: 16px; height: 16px; border-radius: 99px; background: #eaf7ef; color: #16803c; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700;">✓</span>See the top 5 competitors at every point</span>
+              <span style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #15131f;"><span style="width: 16px; height: 16px; border-radius: 99px; background: #eaf7ef; color: #16803c; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700;">✓</span>Alerts when you drop out of the top 3</span>
+            </div>
+          </div>
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 20px; padding: 24px; box-shadow: 0 16px 48px rgba(90,74,240,0.08);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 12.5px; font-weight: 600;">invisalign toronto</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #16803c;">▲ moved up 2 this week</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin: 14px auto 0; max-width: 280px;">
+              <sc-for list="{{ heroCells }}" as="hc2" hint-placeholder-count="49">
+                <div style="aspect-ratio: 1; border-radius: 99px; background: {{ hc2.bg }}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 500;">{{ hc2.rank }}</div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center;">
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 16px 18px; box-shadow: 0 10px 32px rgba(21,19,31,0.06);">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #d92d20;">★★☆☆☆</span>
+                <span style="font-size: 12px; font-weight: 600;">Raj T. · 5 days ago</span>
+              </div>
+              <div style="font-size: 12px; color: #56536a; margin-top: 5px;">"Good dentist but I waited 35 minutes past my appointment…"</div>
+              <div style="margin-top: 10px; background: #f7f5ff; border: 1px solid #ded8ff; border-radius: 10px; padding: 10px 12px;">
+                <span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5a4af0;">AI draft · your tone</span>
+                <div style="font-size: 11.5px; color: #15131f; margin-top: 4px; line-height: 1.55;">"Raj, we're sorry about the wait — that's not the experience we aim for. We've reviewed Thursday's schedule…"</div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <div style="flex: 1; background: #ffffff; border: 1px solid #ececf1; border-radius: 14px; padding: 12px 14px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: #5a4af0;">97%</div>
+                <div style="font-size: 10.5px; color: #8d8aa3;">replied within 24h</div>
+              </div>
+              <div style="flex: 1; background: #ffffff; border: 1px solid #ececf1; border-radius: 14px; padding: 12px 14px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: #5a4af0;">+0.4★</div>
+                <div style="font-size: 10.5px; color: #8d8aa3;">avg rating lift · 6 months</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #5a4af0;">Reputation</span>
+            <h3 style="font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 12px 0 0; line-height: 1.2;">Every review answered — in your voice, in any language</h3>
+            <p style="font-size: 13.5px; color: #56536a; line-height: 1.7; margin: 12px 0 0;">Review response rate is a ranking signal Google confirms. GMB Suite drafts a reply the moment a review lands — warm for the 5-stars, careful and de-escalating for the rough ones. Approve each one, or turn on autopilot for 4★+.</p>
+            <p style="font-size: 13.5px; color: #56536a; line-height: 1.7; margin: 10px 0 0;">Questions on your profile get the same treatment, answered straight from your own documents — hours, insurance, parking — before a competitor's customer sees silence.</p>
+          </div>
+        </div>
+
+        <div>
+          <h3 style="font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 0; text-align: center;">And the rest of the toolkit</h3>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 32px;">
+            <sc-for list="{{ features }}" as="f" hint-placeholder-count="6">
+              <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 22px;" style-hover="border-color: #ded8ff; box-shadow: 0 8px 24px rgba(90,74,240,0.07);">
+                <span style="width: 34px; height: 34px; border-radius: 10px; background: #ece8ff; color: #5a4af0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;">{{ f.glyph }}</span>
+                <div style="font-size: 14px; font-weight: 600; margin-top: 12px;">{{ f.name }}</div>
+                <div style="font-size: 12.5px; color: #56536a; line-height: 1.6; margin-top: 4px;">{{ f.desc }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="background: #1a1726; color: #ffffff; padding: 56px 48px;">
+      <div style="max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; text-align: center;">
+        <sc-for list="{{ bigStats }}" as="bs" hint-placeholder-count="4">
+          <div>
+            <div style="font-size: 36px; font-weight: 700; letter-spacing: -0.02em; color: #b3a9ff;">{{ bs.value }}</div>
+            <div style="font-size: 12px; color: #a29fb8; margin-top: 4px;">{{ bs.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="background: #ffffff; padding: 72px 48px;">
+      <div style="max-width: 980px; margin: 0 auto;">
+        <h2 style="font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0; text-align: center;">Loved by the businesses next door</h2>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 40px;">
+          <sc-for list="{{ testimonials }}" as="tm" hint-placeholder-count="3">
+            <div style="border: 1px solid #ececf1; border-radius: 18px; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; background: linear-gradient(180deg, #fafafc, #ffffff);">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #b25e09;">★★★★★</span>
+              <div style="font-size: 13px; line-height: 1.65; color: #15131f; flex: 1;">"{{ tm.quote }}"</div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="width: 32px; height: 32px; border-radius: 99px; background: #ece8ff; color: #5a4af0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;">{{ tm.initials }}</span>
+                <div>
+                  <div style="font-size: 12.5px; font-weight: 600;">{{ tm.name }}</div>
+                  <div style="font-size: 11px; color: #8d8aa3;">{{ tm.role }}</div>
+                </div>
+                <span style="margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 10px; color: #16803c;">{{ tm.result }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <section id="pricing" style="padding: 72px 48px;">
+      <div style="max-width: 860px; margin: 0 auto;">
+        <h2 style="font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0; text-align: center;">Simple pricing per location</h2>
+        <p style="font-size: 14px; color: #56536a; text-align: center; margin: 10px 0 0;">Included free with Adgrowly Growth and Scale plans.</p>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 36px;">
+          <sc-for list="{{ tiers }}" as="t" hint-placeholder-count="3">
+            <div style="background: #ffffff; border: 1.5px solid {{ t.border }}; border-radius: 18px; padding: 24px 26px; display: flex; flex-direction: column; gap: 12px; position: relative;">
+              <sc-if value="{{ t.popular }}" hint-placeholder-val="{{ false }}">
+                <span style="position: absolute; top: -11px; left: 50%; transform: translateX(-50%); background: #5a4af0; color: #ffffff; border-radius: 99px; font-size: 10px; font-weight: 600; padding: 3px 12px; letter-spacing: 0.04em;">MOST POPULAR</span>
+              </sc-if>
+              <div style="font-size: 14px; font-weight: 600;">{{ t.name }}</div>
+              <div><span style="font-size: 34px; font-weight: 700; letter-spacing: -0.02em;">{{ t.price }}</span><span style="font-size: 12px; color: #8d8aa3;">/mo per location</span></div>
+              <div style="display: flex; flex-direction: column; gap: 7px; border-top: 1px solid #f0eff5; padding-top: 12px; flex: 1;">
+                <sc-for list="{{ t.features }}" as="tf" hint-placeholder-count="4">
+                  <span style="font-size: 12.5px; color: #56536a;">· {{ tf }}</span>
+                </sc-for>
+              </div>
+              <button style="padding: 10px; border-radius: 9px; border: {{ t.btnBorder }}; background: {{ t.btnBg }}; color: {{ t.btnColor }}; font-family: Geist, sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;">{{ t.cta }}</button>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <section id="agencies" style="background: #1a1726; padding: 72px 48px;">
+      <div style="max-width: 900px; margin: 0 auto;">
+        <div style="text-align: center;">
+          <span style="font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #b3a9ff;">For agencies</span>
+          <h2 style="font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 14px 0 0; color: #ffffff;">Resell GMB Suite under your own brand</h2>
+          <p style="font-size: 14px; color: #a29fb8; margin: 10px 0 0;">White-label the whole product, buy your own domain, set your own prices — keep the margin.</p>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 36px;">
+          <sc-for list="{{ agencyTiers }}" as="ag" hint-placeholder-count="3">
+            <div style="background: {{ ag.cardBg }}; border: 1.5px solid {{ ag.border }}; border-radius: 18px; padding: 24px 26px; display: flex; flex-direction: column; gap: 12px; position: relative; color: #ffffff;">
+              <sc-if value="{{ ag.popular }}" hint-placeholder-val="{{ false }}">
+                <span style="position: absolute; top: -11px; left: 50%; transform: translateX(-50%); background: #7dd8a0; color: #16141f; border-radius: 99px; font-size: 10px; font-weight: 600; padding: 3px 12px; letter-spacing: 0.04em;">BEST MARGIN</span>
+              </sc-if>
+              <div style="font-size: 14px; font-weight: 600;">{{ ag.name }}</div>
+              <div><span style="font-size: 30px; font-weight: 700; letter-spacing: -0.02em;">{{ ag.wholesale }}</span><span style="font-size: 12px; color: #a29fb8;">/mo wholesale · per tenant</span></div>
+              <div style="font-size: 12px; color: #7dd8a0;">You set retail — typical margin {{ ag.margin }}</div>
+              <div style="display: flex; flex-direction: column; gap: 7px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; flex: 1;">
+                <sc-for list="{{ ag.features }}" as="af" hint-placeholder-count="4">
+                  <span style="font-size: 12.5px; color: #d8d5e6;">· {{ af }}</span>
+                </sc-for>
+              </div>
+              <button style="padding: 10px; border-radius: 9px; border: none; background: {{ ag.btnBg }}; color: {{ ag.btnColor }}; font-family: Geist, sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;">Become a partner</button>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <section style="background: #ffffff; border-top: 1px solid #f0eff5; padding: 72px 48px;">
+      <div style="max-width: 680px; margin: 0 auto;">
+        <h2 style="font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0; text-align: center;">Questions, answered</h2>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 32px;">
+          <sc-for list="{{ faqs }}" as="fq" hint-placeholder-count="5">
+            <div style="border: 1px solid #ececf1; border-radius: 14px; overflow: hidden;">
+              <button onClick="{{ fq.toggle }}" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 15px 20px; border: none; background: {{ fq.headBg }}; font-family: Geist, sans-serif; font-size: 13.5px; font-weight: 600; color: #15131f; text-align: left; cursor: pointer;" style-hover="background: #fafafc;">
+                <span>{{ fq.q }}</span>
+                <span style="color: #5a4af0; font-size: 14px; flex-shrink: 0;">{{ fq.icon }}</span>
+              </button>
+              <sc-if value="{{ fq.open }}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 0 20px 16px; font-size: 13px; color: #56536a; line-height: 1.7;">{{ fq.a }}</div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <section style="background: #1a1726; color: #ffffff; padding: 64px 48px; text-align: center;">
+      <h2 style="font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin: 0;">See where you rank — right now</h2>
+      <p style="font-size: 14px; color: #a29fb8; margin: 12px auto 0; max-width: 420px;">Free 49-point scan of your neighborhood. No card, no signup — just your business name.</p>
+      <div style="display: flex; gap: 10px; justify-content: center; margin-top: 24px; flex-wrap: wrap;">
+        <input value="{{ scanName }}" onChange="{{ setScanName }}" placeholder="Your business name" style="width: 280px; padding: 12px 16px; border: 1px solid #3a3550; border-radius: 9px; background: #262234; font-family: Geist, sans-serif; font-size: 13px; color: #ffffff; outline: none;" style-focus="border-color: #5a4af0;">
+        <button onClick="{{ runScan }}" style="padding: 12px 24px; background: {{ scanBtnBg }}; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 13.5px; font-weight: 600; cursor: pointer; min-width: 140px;" style-hover="background: #6d5efc;">{{ scanBtnLabel }}</button>
+      </div>
+      <sc-if value="{{ scanResult }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width: 460px; margin: 20px auto 0; background: #262234; border: 1px solid #3a3550; border-radius: 16px; padding: 18px 22px; text-align: left;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 13px; font-weight: 600;">{{ scanName }}</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #b3a9ff;">preview · 9 of 49 points</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; margin-top: 12px;">
+            <sc-for list="{{ previewCells }}" as="pc" hint-placeholder-count="9">
+              <div style="aspect-ratio: 1; border-radius: 99px; background: {{ pc.bg }}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 500;">{{ pc.rank }}</div>
+            </sc-for>
+          </div>
+          <div style="font-size: 12px; color: #a29fb8; margin-top: 12px;">Found at avg rank <strong style="color: #ffffff;">#6.3</strong> — invisible on 2 of 9 points. Create a free account to see all 49 points and who's outranking you.</div>
+          <button onClick="{{ goSignup }}" style="width: 100%; margin-top: 12px; padding: 11px; background: #5a4af0; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;" style-hover="background: #6d5efc;">See my full report — free</button>
+        </div>
+      </sc-if>
+    </section>
+    <footer style="background: #ffffff; border-top: 1px solid #ececf1; padding: 48px 48px 28px;">
+      <div style="max-width: 980px; margin: 0 auto;">
+        <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 24px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="width: 24px; height: 24px; border-radius: 8px; background: linear-gradient(135deg, #6d5efc, #8b7bff); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">G</div>
+              <span style="font-size: 14px; font-weight: 700;">GMB Suite</span>
+            </div>
+            <div style="font-size: 12px; color: #8d8aa3; line-height: 1.6; margin-top: 10px; max-width: 220px;">Local SEO on autopilot for businesses that would rather run the business.</div>
+          </div>
+          <sc-for list="{{ footerCols }}" as="fc" hint-placeholder-count="3">
+            <div>
+              <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">{{ fc.title }}</div>
+              <div style="display: flex; flex-direction: column; gap: 7px; margin-top: 12px;">
+                <sc-for list="{{ fc.links }}" as="fl" hint-placeholder-count="4">
+                  <a href="#" style="font-size: 12.5px; color: #56536a;">{{ fl }}</a>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 36px; padding-top: 20px; border-top: 1px solid #f0eff5; font-size: 11.5px; color: #8d8aa3;">
+          <span>© 2026 Adgrowly Inc. · Toronto, Canada</span>
+          <span>Google Business Profile API partner · SOC 2 Type II</span>
+        </div>
+      </div>
+    </footer>
+  </main>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startView&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;home&quot;, &quot;login&quot;, &quot;signup&quot;, &quot;forgot&quot;], &quot;default&quot;: &quot;home&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;View&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, openFaq: 0, scanName: "", scanning: false, scanned: false, resetSent: false };
+
+  componentWillUnmount() { clearTimeout(this._scanT); }
+
+  renderVals() {
+    const view = this.state.view ?? this.props.startView ?? "home";
+    const ranks = [
+      7,5,4,3,4,6,0,
+      5,3,2,2,2,5,7,
+      4,2,1,1,1,4,6,
+      3,2,1,1,1,3,5,
+      4,2,1,1,2,4,7,
+      6,4,3,2,3,5,0,
+      0,7,5,4,6,0,0,
+    ];
+    const heroCells = ranks.map((r) => ({
+      rank: r === 0 ? "–" : String(r),
+      bg: r === 0 ? "#c9c7d4" : r <= 3 ? "#22c55e" : r <= 7 ? "#f59e0b" : "#f04438",
+    }));
+    const features = [
+      { glyph: "R", name: "Grid rank tracker", desc: "See your position at 49 points around your location, per keyword, updated on your schedule." },
+      { glyph: "A", name: "AI review replies", desc: "Every review gets a drafted reply in your voice — approve in one click or set full auto-pilot." },
+      { glyph: "Q", name: "Q&A autopilot", desc: "Answer profile questions instantly from your knowledge base before competitors' customers see silence." },
+      { glyph: "P", name: "Posts that publish themselves", desc: "AI drafts weekly offers, updates, and events; you approve the calendar once a month." },
+      { glyph: "C", name: "Citation guard", desc: "Watches 24 directories for name, address, and phone mismatches — and fixes them." },
+      { glyph: "V", name: "Advisor", desc: "A prioritized weekly to-do list of the moves that actually raise your local ranking." },
+    ];
+    const tiers = [
+      { name: "Scan", price: "$0", cta: "Start free", popular: false, border: "#ececf1", btnBg: "#ffffff", btnColor: "#5a4af0", btnBorder: "1px solid #ded8ff", features: ["Monthly 49-point scan", "1 keyword", "Visibility score", "Email report"] },
+      { name: "Grow", price: "$49", cta: "Start 14-day trial", popular: true, border: "#5a4af0", btnBg: "#5a4af0", btnColor: "#ffffff", btnBorder: "none", features: ["Weekly scans · 10 keywords", "AI review replies + Q&A", "Posts & scheduling", "Citation monitoring"] },
+      { name: "Dominate", price: "$99", cta: "Talk to sales", popular: false, border: "#ececf1", btnBg: "#ffffff", btnColor: "#5a4af0", btnBorder: "1px solid #ded8ff", features: ["Daily scans · unlimited keywords", "Competitor tracking", "Citation auto-fix", "Multi-location + API"] },
+    ];
+    const agencyTiers = [
+      { name: "Reseller", wholesale: "$29", margin: "40-60%", popular: false, cardBg: "#1d1a29", border: "#2c2839", btnBg: "#262234", btnColor: "#edecf4", features: ["Up to 10 tenant accounts", "White-label branding", "Shared domain (yoursub.adgrowly.app)", "Standard support"] },
+      { name: "Agency", wholesale: "$79", margin: "50-70%", popular: true, cardBg: "#241d3f", border: "#7dd8a0", btnBg: "#7dd8a0", btnColor: "#16141f", features: ["Up to 50 tenant accounts", "Buy & connect your own domain", "Custom brand color + logo", "Priority support + Slack channel"] },
+      { name: "Enterprise", wholesale: "Custom", margin: "60-75%", popular: false, cardBg: "#1d1a29", border: "#2c2839", btnBg: "#262234", btnColor: "#edecf4", features: ["Unlimited tenants", "Multiple domains", "Dedicated account manager", "API + custom integrations"] },
+    ];
+    const clientLogos = ["Maple Dental", "Casa Nonna", "FitFirst", "Bloor Physio", "Lakeview Realty", "Sparkle Auto"];
+    const steps = [
+      { num: "1", title: "Connect your Google profile", time: "~2 minutes", desc: "One-click OAuth with Google. We pull your listing, reviews, Q&A, posts, and insights — nothing to install." },
+      { num: "2", title: "Get your baseline scan", time: "~60 seconds", desc: "A 49-point grid scan of your neighborhood for your top keywords shows exactly where you stand today, block by block." },
+      { num: "3", title: "Follow the Advisor", time: "~15 min / week", desc: "Each Monday you get 3 prioritized moves — reply to these reviews, add this service, post this offer. Do them, watch the map turn green." },
+    ];
+    const bigStats = [
+      { value: "+3.1", label: "median map-position gain · 90 days" },
+      { value: "2.4M", label: "grid points scanned monthly" },
+      { value: "38k", label: "AI review replies posted" },
+      { value: "24", label: "directories monitored per listing" },
+    ];
+    const testimonials = [
+      { initials: "SR", name: "Sofia Ricci", role: "Casa Nonna Trattoria", result: "#7 → #2", quote: "We went from invisible to #2 for 'italian restaurant near me' in one season. The AI answers our reviews better than I do — in two languages." },
+      { initials: "PR", name: "Dr. Priya Rana", role: "Maple Dental Studio", result: "+41% calls", quote: "The Monday Advisor email is the only marketing task list I actually finish. Fifteen minutes a week, and calls from Google are up 41%." },
+      { initials: "MT", name: "Marc Tremblay", role: "FitFirst Gym", result: "4.2★ → 4.7★", quote: "A bad review used to sit for weeks. Now there's a thoughtful draft waiting before I've even seen the notification. Our rating climbed half a star." },
+    ];
+    const faqData = [
+      ["Do I need to give you my Google password?", "No. You connect through Google's official OAuth — the same secure flow as 'Sign in with Google'. We're a Google Business Profile API partner and can only touch what you approve. Revoke access anytime from your Google account."],
+      ["Will AI replies sound like a robot wrote them?", "You set the voice once — tone, sign-off, phrases to avoid — and every draft follows it. Most owners edit fewer than 1 in 10 drafts. You can also keep approval manual for negative reviews only."],
+      ["How is this different from just checking Google myself?", "Google shows you one result: yours, from where you're standing. Rankings change block by block. The grid scan shows all 49 positions across your service area — plus who's beating you at each one and why."],
+      ["What if I have multiple locations?", "Every plan is per location, and the Dominate plan adds a multi-location dashboard with roll-up reporting and an API. Agencies get white-label options through the Adgrowly partner program."],
+      ["Can I cancel anytime?", "Yes — monthly plans, no contracts. If you cancel, your data exports as CSV, and your Google profile is untouched (it's always been yours)."],
+    ];
+    const faqs = faqData.map(([q, a], i) => {
+      const open = this.state.openFaq === i;
+      return {
+        q, a, open,
+        icon: open ? "–" : "+",
+        headBg: open ? "#fafafc" : "#ffffff",
+        toggle: () => this.setState({ openFaq: open ? -1 : i }),
+      };
+    });
+    const footerCols = [
+      { title: "Product", links: ["Rank tracker", "Reputation", "Q&A autopilot", "Posts", "Citations", "Pricing"] },
+      { title: "Company", links: ["About Adgrowly", "Partner program", "Careers", "Blog"] },
+      { title: "Support", links: ["Help center", "Contact us", "System status", "Privacy & Terms"] },
+    ];
+    const previewRanks = [8, 5, 3, 6, 4, 9, 0, 7, 0];
+    const previewCells = previewRanks.map((r) => ({
+      rank: r === 0 ? "–" : String(r),
+      bg: r === 0 ? "#4a4660" : r <= 3 ? "#22c55e" : r <= 7 ? "#f59e0b" : "#f04438",
+    }));
+    return {
+      heroCells, features, tiers, agencyTiers, clientLogos, steps, bigStats, testimonials, faqs, footerCols,
+      previewCells,
+      scanName: this.state.scanName,
+      setScanName: (e) => this.setState({ scanName: e.target.value, scanned: false }),
+      runScan: () => {
+        if (this.state.scanning) return;
+        if (!this.state.scanName.trim()) { this.setState({ scanName: "Maple Dental Studio" }); }
+        this.setState({ scanning: true, scanned: false });
+        this._scanT = setTimeout(() => this.setState({ scanning: false, scanned: true }), 1600);
+      },
+      scanBtnLabel: this.state.scanning ? "Scanning…" : "Run free scan",
+      scanBtnBg: this.state.scanning ? "#4a4660" : "#5a4af0",
+      scanResult: this.state.scanned,
+      authStats: [
+        { value: "+3.1", label: "map positions · first 90 days" },
+        { value: "97%", label: "reviews replied within 24h" },
+        { value: "4.9★", label: "avg customer rating" },
+      ],
+      trustItems: ["Google Business Profile API partner", "SOC 2 Type II", "Cancel anytime"],
+      goLogin: () => this.setState({ view: "login" }),
+      goSignup: () => this.setState({ view: "signup" }),
+      goForgot: () => this.setState({ view: "forgot", resetSent: false }),
+      sendReset: () => this.setState({ resetSent: true }),
+      goHome: () => this.setState({ view: "home" }),
+      showHome: view === "home",
+      showAuth: view === "login" || view === "signup" || view === "forgot",
+      showLogin: view === "login", showSignup: view === "signup",
+      showForgot: view === "forgot",
+      resetSent: this.state.resetSent, resetForm: !this.state.resetSent,
+    };
+  }
+}
+</script>
+</body>
+</html>

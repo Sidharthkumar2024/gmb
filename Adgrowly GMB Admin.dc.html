@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #131120; }
+  a { color: #b3a9ff; text-decoration: none; }
+  a:hover { color: #d1cbff; text-decoration: underline; }
+  ::placeholder { color: #6b6880; }
+</style>
+</helmet>
+<sc-if value="{{ loggedOut }}" hint-placeholder-val="{{ false }}">
+  <div style="position: fixed; inset: 0; z-index: 100; background: radial-gradient(1200px 500px at 50% -10%, #241d3f, #131120); font-family: Geist, sans-serif; color: #edecf4; display: flex; align-items: center; justify-content: center; padding: 24px;">
+    <div style="width: 380px; max-width: 100%;">
+      <div style="display: flex; align-items: center; gap: 10px; justify-content: center;">
+        <div style="width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, #6d5efc, #8b7bff); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700;">G</div>
+        <span style="font-size: 18px; font-weight: 700;">GMB Suite <span style="color: #8b7bff;">Admin</span></span>
+      </div>
+      <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 18px; padding: 30px 32px; margin-top: 22px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+        <div style="font-size: 22px; font-weight: 700; letter-spacing: -0.02em; text-align: center;">Internal console</div>
+        <div style="font-size: 12.5px; color: #a29fb8; text-align: center; margin-top: 6px;">Staff access only · SSO enforced</div>
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 24px;">
+          <div>
+            <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; margin-bottom: 5px;">Work email</div>
+            <input value="s.kumar@adgrowly.com" style="width: 100%; box-sizing: border-box; padding: 11px 14px; border: 1px solid #2b2740; border-radius: 10px; background: #131120; font-family: Geist, sans-serif; font-size: 13px; color: #edecf4; outline: none;" style-focus="border-color: #6d5efc;">
+          </div>
+          <div>
+            <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; margin-bottom: 5px;">Password</div>
+            <input type="password" value="thisisapassword" style="width: 100%; box-sizing: border-box; padding: 11px 14px; border: 1px solid #2b2740; border-radius: 10px; background: #131120; font-family: Geist, sans-serif; font-size: 13px; color: #edecf4; outline: none;" style-focus="border-color: #6d5efc;">
+          </div>
+          <button onClick="{{ requestOtp }}" style="padding: 12px; background: #5a4af0; color: #ffffff; border: none; border-radius: 10px; font-family: Geist, sans-serif; font-size: 13.5px; font-weight: 600; cursor: pointer; margin-top: 4px; box-shadow: 0 4px 16px rgba(90,74,240,0.35);" style-hover="background: #4536d6;">Enter admin console</button>
+          <button onClick="{{ requestOtp }}" style="padding: 11px; border: 1px solid #2b2740; border-radius: 10px; background: #131120; color: #edecf4; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;" style-hover="background: #1f1b30;">Continue with Google Workspace</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; justify-content: center; margin-top: 18px; font-size: 11px; color: #6b6880;">
+          <span style="width: 6px; height: 6px; border-radius: 99px; background: #7dd8a0;"></span> Protected by 2FA · all actions audited
+        </div>
+      </div>
+    </div>
+  </div>
+</sc-if>
+<sc-if value="{{ otpStage }}" hint-placeholder-val="{{ false }}">
+  <div style="position: fixed; inset: 0; z-index: 100; background: radial-gradient(1200px 500px at 50% -10%, #241d3f, #131120); font-family: Geist, sans-serif; color: #edecf4; display: flex; align-items: center; justify-content: center; padding: 24px;">
+    <div style="width: 380px; max-width: 100%; background: #1a1729; border: 1px solid #2b2740; border-radius: 18px; padding: 30px 32px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); text-align: center;">
+      <div style="width: 44px; height: 44px; margin: 0 auto; border-radius: 13px; background: rgba(179,169,255,0.16); color: #b3a9ff; display: flex; align-items: center; justify-content: center; font-size: 19px;">✉</div>
+      <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin-top: 14px;">Check your email</div>
+      <div style="font-size: 12.5px; color: #a29fb8; margin-top: 6px; line-height: 1.6;">We sent a 6-digit code to <strong style="color: #edecf4;">s.kumar@adgrowly.com</strong>. Enter it below — expires in 5 minutes.</div>
+      <div style="display: flex; gap: 8px; justify-content: center; margin-top: 22px;">
+        <sc-for list="{{ otpBoxes }}" as="ob" hint-placeholder-count="6">
+          <input maxLength="1" value="{{ ob.v }}" style="width: 42px; height: 50px; text-align: center; border: 1px solid {{ ob.border }}; border-radius: 9px; background: #131120; font-family: 'Geist Mono', monospace; font-size: 20px; color: #edecf4; outline: none;">
+        </sc-for>
+      </div>
+      <button onClick="{{ verifyOtp }}" style="width: 100%; padding: 11px; background: #5a4af0; color: #fff; border: none; border-radius: 10px; font-family: Geist, sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 20px;" style-hover="background: #4536d6;">Verify &amp; enter console</button>
+      <div style="font-size: 11.5px; color: #6b6880; margin-top: 14px;">Didn't get it? <a href="#" onClick="{{ requestOtp }}">Resend code</a></div>
+    </div>
+  </div>
+</sc-if>
+<div style="display: flex; height: 100vh; background: #131120; font-family: Geist, sans-serif; color: #edecf4; overflow: hidden;">
+  <aside style="width: 236px; flex-shrink: 0; background: #1a1729; border-right: 1px solid #2b2740; display: flex; flex-direction: column;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 20px 20px 16px;">
+      <div style="width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, #6d5efc, #8b7bff); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;">G</div>
+      <div>
+        <div style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em; line-height: 1;">GMB Suite</div>
+        <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8b7bff; margin-top: 3px;">Admin</div>
+      </div>
+    </div>
+    <nav style="flex: 1; overflow-y: auto; padding: 6px 12px 12px; display: flex; flex-direction: column; gap: 18px;">
+      <sc-for list="{{ navSections }}" as="sec" hint-placeholder-count="3">
+        <div>
+          <div style="padding: 0 10px 7px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">{{ sec.label }}</div>
+          <div style="display: flex; flex-direction: column; gap: 1px;">
+            <sc-for list="{{ sec.items }}" as="item" hint-placeholder-count="4">
+              <button onClick="{{ item.select }}" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border: none; border-radius: 9px; background: {{ item.bg }}; color: {{ item.color }}; font-family: Geist, sans-serif; font-size: 13px; font-weight: {{ item.weight }}; text-align: left; cursor: pointer; width: 100%;" style-hover="background: #241f38;">
+                <span>{{ item.name }}</span>
+                <sc-if value="{{ item.badge }}" hint-placeholder-val="{{ false }}">
+                  <span style="background: #3d2323; color: #e58c7f; border-radius: 99px; font-size: 10.5px; font-weight: 600; padding: 1px 7px;">{{ item.badge }}</span>
+                </sc-if>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </nav>
+    <div style="margin: 12px; padding: 12px 14px; background: #241f38; border: 1px solid #2b2740; border-radius: 14px;">
+      <div style="display: flex; align-items: center; gap: 7px;">
+        <span style="width: 7px; height: 7px; border-radius: 99px; background: {{ queueDot }};"></span>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #a29fb8;">Scan queue: {{ queueDepth }} jobs</span>
+      </div>
+      <div style="font-size: 11px; color: #6b6880; margin-top: 6px;">DataForSEO p95 3.8s · 0 failures 24h</div>
+    </div>
+  </aside>
+  <main style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+    <header style="height: 64px; flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 0 28px; border-bottom: 1px solid #2b2740;">
+      <h1 style="font-size: 21px; font-weight: 700; letter-spacing: -0.01em; margin: 0;">{{ screenTitle }}</h1>
+      <div style="flex: 1;"></div>
+      <input placeholder="Search accounts, locations…" style="width: 230px; padding: 8px 12px; border: 1px solid #2b2740; border-radius: 9px; background: #1a1729; font-family: Geist, sans-serif; font-size: 12.5px; color: #edecf4; outline: none;">
+      <span style="padding: 4px 12px; border-radius: 99px; background: #3d2323; color: #e58c7f; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.06em;">PRODUCTION</span>
+      <div style="position: relative;">
+        <button onClick="{{ toggleMenu }}" style="width: 34px; height: 34px; border: none; border-radius: 99px; background: #5a4af0; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; cursor: pointer;">SK</button>
+        <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position: absolute; top: 42px; right: 0; width: 210px; background: #1a1729; border: 1px solid #2b2740; border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,0.4); padding: 6px; z-index: 40;">
+            <div style="padding: 10px 12px; border-bottom: 1px solid #221e35;">
+              <div style="font-size: 12.5px; font-weight: 600;">Sidharth Kumar</div>
+              <div style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #6b6880; margin-top: 2px;">s.kumar@adgrowly.com · SuperAdmin</div>
+            </div>
+            <button onClick="{{ logout }}" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 12px; border: none; border-radius: 9px; background: transparent; font-family: Geist, sans-serif; font-size: 12.5px; color: #e58c7f; text-align: left; cursor: pointer; margin-top: 4px;" style-hover="background: #3d2323;">↩&#xFE0E; Log out</button>
+          </div>
+        </sc-if>
+      </div>
+    </header>
+    <div style="flex: 1; overflow-y: auto; padding: 24px 28px 40px;">
+
+      <sc-if value="{{ showOverview }}" hint-placeholder-val="{{ true }}">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;">
+          <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 16px 20px;">
+              <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">{{ k.label }}</div>
+              <div style="font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin-top: 6px; color: {{ k.color }};">{{ k.value }}</div>
+              <div style="font-size: 11.5px; color: #a29fb8; margin-top: 2px;">{{ k.hint }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; margin-top: 14px;">
+          <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+            <div style="padding: 14px 20px; border-bottom: 1px solid #2b2740; font-size: 14px; font-weight: 600;">Needs attention</div>
+            <sc-for list="{{ attention }}" as="at" hint-placeholder-count="4">
+              <div style="display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #221e35;" style-hover="background: #1f1b30;">
+                <span style="width: 8px; height: 8px; flex-shrink: 0; border-radius: 99px; background: {{ at.dot }};"></span>
+                <div style="flex: 1;">
+                  <div style="font-size: 13px; font-weight: 500;">{{ at.title }}</div>
+                  <div style="font-size: 11.5px; color: #a29fb8; margin-top: 1px;">{{ at.detail }}</div>
+                </div>
+                <a href="#" style="font-size: 12px; font-weight: 500; flex-shrink: 0;">{{ at.cta }}</a>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 20px 24px;">
+            <span style="font-size: 14px; font-weight: 600;">Scans per day · this week</span>
+            <div style="display: flex; align-items: flex-end; gap: 10px; height: 140px; margin-top: 16px;">
+              <sc-for list="{{ scanBars }}" as="b" hint-placeholder-count="7">
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; align-self: stretch; justify-content: flex-end;">
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #a29fb8;">{{ b.n }}</span>
+                  <div style="width: 100%; height: {{ b.h }}px; background: {{ b.color }}; border-radius: 5px 5px 2px 2px;"></div>
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 9px; color: #6b6880;">{{ b.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showAccounts }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; color: #a29fb8;">438 accounts · 512 locations</span>
+          <div style="flex: 1;"></div>
+          <select style="padding: 8px 10px; border: 1px solid #2b2740; border-radius: 9px; background: #1a1729; font-family: Geist, sans-serif; font-size: 12.5px; color: #a29fb8;"><option>All plans</option><option>Scan (free)</option><option>Grow</option><option>Dominate</option></select>
+          <button style="padding: 8px 14px; border: 1px solid #2b2740; border-radius: 9px; background: #1a1729; color: #a29fb8; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">Export CSV</button>
+        </div>
+        <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 1.8fr 1fr 0.8fr 0.9fr 1fr 0.9fr 0.9fr; gap: 12px; padding: 11px 20px; border-bottom: 1px solid #2b2740; background: #1f1b30;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Business</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">City</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Plan</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; text-align: right;">Keywords</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; text-align: right;">Scans 30d</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Status</span>
+            <span></span>
+          </div>
+          <sc-for list="{{ accounts }}" as="a" hint-placeholder-count="7">
+            <div style="display: grid; grid-template-columns: 1.8fr 1fr 0.8fr 0.9fr 1fr 0.9fr 0.9fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #221e35;" style-hover="background: #1f1b30;">
+              <div>
+                <div style="font-size: 13px; font-weight: 500;">{{ a.name }}</div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #6b6880; margin-top: 1px;">{{ a.id }}</div>
+              </div>
+              <span style="font-size: 12px; color: #a29fb8;">{{ a.city }}</span>
+              <span style="justify-self: start; padding: 2px 10px; border-radius: 99px; background: {{ a.planBg }}; color: {{ a.planColor }}; font-size: 10.5px; font-weight: 600;">{{ a.plan }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; text-align: right; color: #a29fb8;">{{ a.keywords }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; text-align: right; color: #a29fb8;">{{ a.scans }}</span>
+              <span style="justify-self: start; padding: 2px 10px; border-radius: 99px; background: {{ a.statusBg }}; color: {{ a.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ a.status }}</span>
+              <a href="#" style="font-size: 12px; font-weight: 500; justify-self: end;">Impersonate</a>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showQueue }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 14px;">
+          <sc-for list="{{ queueKpis }}" as="k" hint-placeholder-count="3">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 16px 20px;">
+              <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">{{ k.label }}</div>
+              <div style="font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin-top: 6px; color: {{ k.color }};">{{ k.value }}</div>
+              <div style="font-size: 11.5px; color: #a29fb8; margin-top: 2px;">{{ k.hint }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #2b2740;">
+            <span style="font-size: 14px; font-weight: 600;">Live queue</span>
+            <button onClick="{{ retryFailed }}" style="padding: 6px 14px; border: 1px solid {{ retryBorder }}; border-radius: 9px; background: {{ retryBg }}; color: {{ retryColor }}; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">{{ retryLabel }}</button>
+          </div>
+          <sc-for list="{{ queueJobs }}" as="q" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 110px 1.6fr 1.4fr 0.9fr 0.9fr; gap: 12px; align-items: center; padding: 11px 20px; border-bottom: 1px solid #221e35;">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #6b6880;">{{ q.id }}</span>
+              <span style="font-size: 12.5px; font-weight: 500;">{{ q.account }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #a29fb8;">{{ q.keyword }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #a29fb8;">{{ q.grid }}</span>
+              <span style="justify-self: end; padding: 2px 10px; border-radius: 99px; background: {{ q.statusBg }}; color: {{ q.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ q.status }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showProviders }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 12px 16px; background: #2e2a1c; border: 1px solid #4a4227; border-radius: 14px; font-size: 12.5px; color: #e3b558;">
+          <strong style="font-weight: 600;">Write-only secrets.</strong> Values are stored encrypted, shown masked, and never returned by the API.
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <sc-for list="{{ providers }}" as="pv" hint-placeholder-count="4">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #2b2740;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="font-size: 14px; font-weight: 600;">{{ pv.name }}</span>
+                  <span style="padding: 2px 10px; border-radius: 99px; background: {{ pv.statusBg }}; color: {{ pv.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ pv.status }}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #6b6880;">{{ pv.usage }}</span>
+                  <button style="padding: 6px 14px; border: 1px solid #2b2740; border-radius: 9px; background: #1a1729; color: #a29fb8; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">Test connection</button>
+                </div>
+              </div>
+              <sc-for list="{{ pv.fields }}" as="fld" hint-placeholder-count="2">
+                <div style="display: grid; grid-template-columns: 220px 1fr auto; gap: 14px; align-items: center; padding: 11px 20px; border-bottom: 1px solid #221e35;">
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #a29fb8;">{{ fld.key }}</span>
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; color: {{ fld.valColor }};">{{ fld.value }}</span>
+                  <div style="display: flex; gap: 10px;">
+                    <a href="#" style="font-size: 11.5px; font-weight: 500;">Replace</a>
+                    <sc-if value="{{ fld.canReveal }}" hint-placeholder-val="{{ false }}"><a href="#" style="font-size: 11.5px; font-weight: 500;">Reveal once</a></sc-if>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showPlans }}" hint-placeholder-val="{{ false }}">
+        <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden; margin-bottom: 14px;">
+          <div style="padding: 14px 20px; border-bottom: 1px solid #2b2740; font-size: 14px; font-weight: 600;">Plans</div>
+          <div style="display: grid; grid-template-columns: 1fr 0.9fr 1fr 1.1fr 1fr 0.7fr; gap: 12px; padding: 11px 20px; border-bottom: 1px solid #2b2740; background: #1f1b30;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Plan</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; text-align: right;">Price</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Scan cadence</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Keywords</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; text-align: right;">Accounts</span>
+            <span></span>
+          </div>
+          <sc-for list="{{ adminPlans }}" as="ap" hint-placeholder-count="3">
+            <div style="display: grid; grid-template-columns: 1fr 0.9fr 1fr 1.1fr 1fr 0.7fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #221e35;">
+              <span style="font-size: 13px; font-weight: 500;">{{ ap.name }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; text-align: right;">{{ ap.price }}</span>
+              <span style="font-size: 12px; color: #a29fb8;">{{ ap.cadence }}</span>
+              <span style="font-size: 12px; color: #a29fb8;">{{ ap.keywords }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; text-align: right; color: #a29fb8;">{{ ap.accounts }}</span>
+              <a href="#" style="font-size: 12px; font-weight: 500; justify-self: end;">Edit</a>
+            </div>
+          </sc-for>
+        </div>
+        <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 18px 22px;">
+          <span style="font-size: 14px; font-weight: 600;">Unit economics</span>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 14px;">
+            <sc-for list="{{ unitCosts }}" as="uc" hint-placeholder-count="4">
+              <div style="border: 1px solid #2b2740; border-radius: 12px; padding: 12px 14px;">
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">{{ uc.label }}</div>
+                <div style="font-size: 19px; font-weight: 700; margin-top: 4px; color: #b3a9ff;">{{ uc.value }}</div>
+                <div style="font-size: 10.5px; color: #6b6880;">{{ uc.unit }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showPayments }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px;">
+          <sc-for list="{{ payKpis }}" as="k" hint-placeholder-count="4">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 16px 20px;">
+              <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">{{ k.label }}</div>
+              <div style="font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 6px; color: {{ k.color }};">{{ k.value }}</div>
+              <div style="font-size: 11.5px; color: #a29fb8; margin-top: 2px;">{{ k.hint }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px;">
+          <sc-for list="{{ payRegionTabs }}" as="rt" hint-placeholder-count="3">
+            <button onClick="{{ rt.select }}" style="padding: 7px 16px; border: 1px solid {{ rt.border }}; border-radius: 99px; background: {{ rt.bg }}; color: {{ rt.color }}; font-family: Geist, sans-serif; font-size: 12px; font-weight: {{ rt.weight }}; cursor: pointer;">{{ rt.name }}</button>
+          </sc-for>
+          <div style="flex: 1;"></div>
+          <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #6b6880;">Default checkout: {{ defaultGateway }}</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px;">
+          <sc-for list="{{ payProviders }}" as="pp" hint-placeholder-count="8">
+            <div style="background: #1a1729; border: 1px solid {{ pp.cardBorder }}; border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="width: 34px; height: 34px; border-radius: 10px; background: {{ pp.iconBg }}; color: {{ pp.iconColor }}; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;">{{ pp.glyph }}</span>
+                <div style="flex: 1;">
+                  <div style="font-size: 13.5px; font-weight: 600;">{{ pp.name }}</div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #6b6880;">{{ pp.region }} · {{ pp.methods }}</div>
+                </div>
+                <span style="padding: 2px 9px; border-radius: 99px; background: {{ pp.statusBg }}; color: {{ pp.statusColor }}; font-size: 9.5px; font-weight: 600;">{{ pp.status }}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 11px; color: #a29fb8; border-top: 1px solid #221e35; padding-top: 10px;">
+                <span>Fee {{ pp.fee }}</span>
+                <span style="font-family: 'Geist Mono', monospace;">{{ pp.volume }}</span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button onClick="{{ pp.toggle }}" style="flex: 1; padding: 7px; border: 1px solid {{ pp.btnBorder }}; border-radius: 9px; background: {{ pp.btnBg }}; color: {{ pp.btnColor }}; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 600; cursor: pointer;">{{ pp.btnLabel }}</button>
+                <button style="padding: 7px 12px; border: 1px solid #2b2740; border-radius: 9px; background: #1a1729; color: #a29fb8; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">Keys</button>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showGoogleApis }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 12px 16px; background: #1a2a3d; border: 1px solid #274a6b; border-radius: 14px; font-size: 12.5px; color: #6ba3e0;">
+          <strong style="font-weight: 600;">Google Cloud project:</strong> adgrowly-prod-4812 · OAuth consent verified · {{ googleQuotaNote }}
+        </div>
+        <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 1.8fr 1fr 1.4fr 0.9fr 0.9fr; gap: 12px; padding: 11px 20px; border-bottom: 1px solid #2b2740; background: #1f1b30;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Google API</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Purpose</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Quota used</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Status</span>
+            <span></span>
+          </div>
+          <sc-for list="{{ googleApis }}" as="ga" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 1.8fr 1fr 1.4fr 0.9fr 0.9fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #221e35;" style-hover="background: #1f1b30;">
+              <div>
+                <div style="font-size: 13px; font-weight: 500;">{{ ga.name }}</div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #6b6880; margin-top: 1px;">{{ ga.id }}</div>
+              </div>
+              <span style="font-size: 11.5px; color: #a29fb8;">{{ ga.purpose }}</span>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 10px; color: #a29fb8; margin-bottom: 3px;"><span>{{ ga.used }}</span><span>{{ ga.limit }}</span></div>
+                <div style="height: 6px; background: #221e35; border-radius: 99px; overflow: hidden;"><div style="height: 100%; width: {{ ga.pct }}; background: {{ ga.barColor }}; border-radius: 99px;"></div></div>
+              </div>
+              <span style="justify-self: start; padding: 2px 10px; border-radius: 99px; background: {{ ga.statusBg }}; color: {{ ga.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ ga.status }}</span>
+              <a href="#" style="font-size: 12px; font-weight: 500; justify-self: end;">{{ ga.action }}</a>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showStorage }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px;">
+          <sc-for list="{{ storageKpis }}" as="k" hint-placeholder-count="4">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 16px 20px;">
+              <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">{{ k.label }}</div>
+              <div style="font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 6px; color: {{ k.color }};">{{ k.value }}</div>
+              <div style="font-size: 11.5px; color: #a29fb8; margin-top: 2px;">{{ k.hint }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px;">
+          <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+            <div style="padding: 14px 20px; border-bottom: 1px solid #2b2740; font-size: 14px; font-weight: 600;">S3 buckets</div>
+            <div style="display: grid; grid-template-columns: 1.8fr 0.9fr 0.9fr 0.9fr; gap: 12px; padding: 11px 20px; border-bottom: 1px solid #2b2740; background: #1f1b30;">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Bucket</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; text-align: right;">Objects</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; text-align: right;">Size</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Access</span>
+            </div>
+            <sc-for list="{{ buckets }}" as="b" hint-placeholder-count="4">
+              <div style="display: grid; grid-template-columns: 1.8fr 0.9fr 0.9fr 0.9fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #221e35;" style-hover="background: #1f1b30;">
+                <div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 11.5px; font-weight: 500;">{{ b.name }}</div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #6b6880; margin-top: 1px;">{{ b.region }}</div>
+                </div>
+                <span style="font-family: 'Geist Mono', monospace; font-size: 11px; text-align: right; color: #a29fb8;">{{ b.objects }}</span>
+                <span style="font-family: 'Geist Mono', monospace; font-size: 11px; text-align: right; color: #a29fb8;">{{ b.size }}</span>
+                <span style="justify-self: start; padding: 2px 9px; border-radius: 99px; background: {{ b.accessBg }}; color: {{ b.accessColor }}; font-size: 10px; font-weight: 600;">{{ b.access }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 18px 22px;">
+              <span style="font-size: 14px; font-weight: 600;">Storage config</span>
+              <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 12px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px;"><span style="color: #6b6880;">Provider</span><span>AWS S3 · ap-south-1</span></div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px;"><span style="color: #6b6880;">CDN</span><span>CloudFront · edge cached</span></div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px;"><span style="color: #6b6880;">Image pipeline</span><span>Auto-WebP · 3 sizes</span></div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px;"><span style="color: #6b6880;">Lifecycle</span><span>Cold after 90d</span></div>
+              </div>
+            </div>
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 18px 22px;">
+              <span style="font-size: 14px; font-weight: 600;">Credentials</span>
+              <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="flex: 1; font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #6b6880;">S3_ACCESS_KEY_ID</span>
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #a29fb8;">AKIA••••••7Q2F</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="flex: 1; font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #6b6880;">S3_SECRET_KEY</span>
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #a29fb8;">••••••••••8kR</span>
+                </div>
+              </div>
+              <button style="width: 100%; margin-top: 12px; padding: 8px; border: 1px solid #2b2740; border-radius: 9px; background: #1a1729; color: #a29fb8; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">Rotate keys</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showUsers }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; color: #a29fb8;">2,140 users across 512 locations</span>
+          <div style="flex: 1;"></div>
+          <button style="padding: 8px 14px; border: 1px solid #2b2740; border-radius: 9px; background: #1a1729; color: #a29fb8; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">Export</button>
+          <button style="padding: 8px 16px; background: #5a4af0; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">+ Invite user</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px; background: linear-gradient(120deg, #1a1729, #2c2452); border: 1px solid #3d3564; border-radius: 16px; padding: 16px 22px; margin-bottom: 14px;">
+          <span style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px; background: rgba(179,169,255,0.16); color: #b3a9ff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700;">AI</span>
+          <div style="flex: 1;">
+            <div style="font-size: 13.5px; font-weight: 600; color: #ffffff;">AI risk monitor</div>
+            <div style="font-size: 12px; color: #a29fb8; margin-top: 2px;">{{ aiRiskSummary }}</div>
+          </div>
+          <button onClick="{{ runRiskScan }}" style="padding: 8px 16px; background: #b3a9ff; color: #241d3f; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0;">{{ riskScanLabel }}</button>
+        </div>
+        <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 1.8fr 1.4fr 0.9fr 1.2fr 0.9fr; gap: 12px; padding: 11px 20px; border-bottom: 1px solid #2b2740; background: #1f1b30;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">User</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Account</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Role</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">AI risk</span>
+            <span></span>
+          </div>
+          <sc-for list="{{ users }}" as="u" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 1.8fr 1.4fr 0.9fr 1.2fr 0.9fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #221e35;" style-hover="background: #1f1b30;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="width: 30px; height: 30px; flex-shrink: 0; border-radius: 99px; background: {{ u.avBg }}; color: {{ u.avColor }}; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600;">{{ u.initials }}</span>
+                <div>
+                  <div style="font-size: 12.5px; font-weight: 500;">{{ u.name }}</div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #6b6880;">{{ u.email }}</div>
+                </div>
+              </div>
+              <span style="font-size: 12px; color: #a29fb8;">{{ u.account }}</span>
+              <span style="justify-self: start; padding: 2px 10px; border-radius: 99px; background: {{ u.roleBg }}; color: {{ u.roleColor }}; font-size: 10.5px; font-weight: 600;">{{ u.role }}</span>
+              <div style="display: flex; align-items: center; gap: 7px;">
+                <span style="width: 7px; height: 7px; border-radius: 99px; background: {{ u.riskDot }};"></span>
+                <span style="font-size: 11.5px; color: {{ u.riskColor }};">{{ u.risk }}</span>
+              </div>
+              <button onClick="{{ u.manage }}" style="font-size: 12px; font-weight: 500; justify-self: end; border: none; background: transparent; color: #b3a9ff; font-family: Geist, sans-serif; cursor: pointer;">Manage</button>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showApiKeys }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; color: #a29fb8;">Platform API keys issued to accounts &amp; integrations</span>
+          <div style="flex: 1;"></div>
+          <button onClick="{{ createKey }}" style="padding: 8px 16px; background: #5a4af0; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">{{ createKeyLabel }}</button>
+        </div>
+        <sc-if value="{{ newKeyShown }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; align-items: center; gap: 12px; background: #1c3527; border: 1px solid #2a4a37; border-radius: 14px; padding: 14px 18px; margin-bottom: 14px;">
+            <span style="font-size: 12px; color: #7dd8a0; font-weight: 600;">New key — copy it now, shown once:</span>
+            <span style="flex: 1; font-family: 'Geist Mono', monospace; font-size: 12px; color: #edecf4;">agw_live_9f2c8b4e7a1d6003fK</span>
+            <button style="padding: 6px 14px; border: 1px solid #2a4a37; border-radius: 9px; background: #16141f; color: #7dd8a0; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">Copy</button>
+          </div>
+        </sc-if>
+        <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 1.3fr 1.6fr 1fr 0.9fr 0.9fr 0.7fr; gap: 12px; padding: 11px 20px; border-bottom: 1px solid #2b2740; background: #1f1b30;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Name</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Key</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Scopes</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; text-align: right;">Calls 30d</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Status</span>
+            <span></span>
+          </div>
+          <sc-for list="{{ apiKeys }}" as="ak" hint-placeholder-count="5">
+            <div style="display: grid; grid-template-columns: 1.3fr 1.6fr 1fr 0.9fr 0.9fr 0.7fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #221e35;" style-hover="background: #1f1b30;">
+              <div>
+                <div style="font-size: 12.5px; font-weight: 500;">{{ ak.name }}</div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #6b6880;">{{ ak.created }}</div>
+              </div>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #a29fb8;">{{ ak.key }}</span>
+              <span style="font-size: 11.5px; color: #a29fb8;">{{ ak.scopes }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11px; text-align: right; color: #a29fb8;">{{ ak.calls }}</span>
+              <span style="justify-self: start; padding: 2px 10px; border-radius: 99px; background: {{ ak.statusBg }}; color: {{ ak.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ ak.status }}</span>
+              <a href="#" style="font-size: 11.5px; font-weight: 500; justify-self: end; color: #e58c7f;">Revoke</a>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showAiModels }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 12px 16px; background: #241d3f; border: 1px solid #3d3564; border-radius: 14px; font-size: 12.5px; color: #b3a9ff;">
+          <strong style="font-weight: 600;">AI budget · July:</strong> $1,284 of $3,000 used across all features · keys stored write-only, rotated quarterly.
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <sc-for list="{{ aiModels }}" as="m" hint-placeholder-count="5">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 16px 20px;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px; background: {{ m.iconBg }}; color: {{ m.iconColor }}; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;">{{ m.glyph }}</span>
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-size: 13.5px; font-weight: 600;">{{ m.feature }}</div>
+                  <div style="font-size: 11.5px; color: #a29fb8; margin-top: 1px;">{{ m.desc }}</div>
+                </div>
+                <button onClick="{{ m.toggle }}" style="width: 40px; height: 22px; flex-shrink: 0; border: none; border-radius: 99px; background: {{ m.onBg }}; cursor: pointer; position: relative;">
+                  <span style="position: absolute; top: 3px; left: {{ m.knob }}; width: 16px; height: 16px; border-radius: 99px; background: #fff; transition: left 0.15s;"></span>
+                </button>
+              </div>
+              <div style="display: grid; grid-template-columns: 1.4fr 1.6fr 0.9fr 0.9fr; gap: 12px; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid #221e35;">
+                <div><div style="font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Model</div><div style="font-family: 'Geist Mono', monospace; font-size: 11px; margin-top: 2px;">{{ m.model }}</div></div>
+                <div><div style="font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">API key</div><div style="font-family: 'Geist Mono', monospace; font-size: 11px; margin-top: 2px; color: #a29fb8;">{{ m.key }}</div></div>
+                <div style="text-align: right;"><div style="font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Calls 30d</div><div style="font-family: 'Geist Mono', monospace; font-size: 11px; margin-top: 2px;">{{ m.calls }}</div></div>
+                <div style="text-align: right;"><div style="font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Cost</div><div style="font-family: 'Geist Mono', monospace; font-size: 11px; margin-top: 2px; color: #b3a9ff;">{{ m.cost }}</div></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showAudit }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <select style="padding: 8px 10px; border: 1px solid #2b2740; border-radius: 9px; background: #1a1729; font-family: Geist, sans-serif; font-size: 12.5px; color: #a29fb8;"><option>All actors</option><option>Admins</option><option>System</option></select>
+          <select style="padding: 8px 10px; border: 1px solid #2b2740; border-radius: 9px; background: #1a1729; font-family: Geist, sans-serif; font-size: 12.5px; color: #a29fb8;"><option>Last 24 hours</option><option>Last 7 days</option></select>
+          <div style="flex: 1;"></div>
+          <button style="padding: 8px 14px; border: 1px solid #2b2740; border-radius: 9px; background: #1a1729; color: #a29fb8; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">Export log</button>
+        </div>
+        <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+          <sc-for list="{{ audit }}" as="au" hint-placeholder-count="8">
+            <div style="display: grid; grid-template-columns: 130px 1fr auto; gap: 14px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #221e35;">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #6b6880;">{{ au.time }}</span>
+              <div style="font-size: 12.5px;"><strong style="font-weight: 600;">{{ au.actor }}</strong> {{ au.action }} <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #b3a9ff;">{{ au.target }}</span></div>
+              <span style="padding: 2px 10px; border-radius: 99px; background: {{ au.tagBg }}; color: {{ au.tagColor }}; font-size: 10px; font-weight: 600;">{{ au.tag }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showHealth }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px;">
+          <sc-for list="{{ healthKpis }}" as="k" hint-placeholder-count="4">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 16px 20px;">
+              <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">{{ k.label }}</div>
+              <div style="font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 6px; color: {{ k.color }};">{{ k.value }}</div>
+              <div style="font-size: 11.5px; color: #a29fb8; margin-top: 2px;">{{ k.hint }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+          <div style="padding: 14px 20px; border-bottom: 1px solid #2b2740; font-size: 14px; font-weight: 600;">Service status</div>
+          <sc-for list="{{ services }}" as="s" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 1.6fr 1fr 0.9fr 0.9fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #221e35;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="width: 8px; height: 8px; border-radius: 99px; background: {{ s.dot }};"></span>
+                <span style="font-size: 12.5px; font-weight: 500;">{{ s.name }}</span>
+              </div>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #a29fb8;">p95 {{ s.latency }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #a29fb8; text-align: right;">{{ s.uptime }}</span>
+              <span style="justify-self: end; padding: 2px 10px; border-radius: 99px; background: {{ s.statusBg }}; color: {{ s.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ s.status }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showSupport }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px;">
+          <sc-for list="{{ supportKpis }}" as="k" hint-placeholder-count="4">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 16px 20px;">
+              <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">{{ k.label }}</div>
+              <div style="font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 6px; color: {{ k.color }};">{{ k.value }}</div>
+              <div style="font-size: 11.5px; color: #a29fb8; margin-top: 2px;">{{ k.hint }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px;">
+          <sc-for list="{{ ticketTabs }}" as="tt" hint-placeholder-count="4">
+            <button onClick="{{ tt.select }}" style="padding: 7px 15px; border: 1px solid {{ tt.border }}; border-radius: 99px; background: {{ tt.bg }}; color: {{ tt.color }}; font-family: Geist, sans-serif; font-size: 12px; font-weight: {{ tt.weight }}; cursor: pointer;">{{ tt.name }}</button>
+          </sc-for>
+        </div>
+        <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 90px 1.8fr 1.2fr 0.9fr 0.9fr 0.9fr; gap: 12px; padding: 11px 20px; border-bottom: 1px solid #2b2740; background: #1f1b30;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Ticket</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Subject</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Requester</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Priority</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Status</span>
+            <span></span>
+          </div>
+          <sc-for list="{{ tickets }}" as="t" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 90px 1.8fr 1.2fr 0.9fr 0.9fr 0.9fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #221e35;" style-hover="background: #1f1b30;">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #6b6880;">{{ t.id }}</span>
+              <div>
+                <div style="font-size: 12.5px; font-weight: 500;">{{ t.subject }}</div>
+                <div style="font-size: 10.5px; color: #6b6880; margin-top: 1px;">{{ t.preview }}</div>
+              </div>
+              <div>
+                <div style="font-size: 12px;">{{ t.who }}</div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #6b6880;">{{ t.channel }}</div>
+              </div>
+              <span style="justify-self: start; padding: 2px 10px; border-radius: 99px; background: {{ t.priBg }}; color: {{ t.priColor }}; font-size: 10.5px; font-weight: 600;">{{ t.priority }}</span>
+              <span style="justify-self: start; padding: 2px 10px; border-radius: 99px; background: {{ t.statusBg }}; color: {{ t.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ t.status }}</span>
+              <button onClick="{{ t.open }}" style="justify-self: end; padding: 6px 14px; border: 1px solid #3d3564; border-radius: 9px; background: #2c2452; color: #b3a9ff; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">Open</button>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showInvoices }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; color: #a29fb8;">512 invoices issued · {{ invoiceOverdue }} overdue</span>
+          <div style="flex: 1;"></div>
+          <button style="padding: 8px 14px; border: 1px solid #2b2740; border-radius: 9px; background: #1a1729; color: #a29fb8; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">Export CSV</button>
+          <button onClick="{{ toggleTemplate }}" style="padding: 8px 16px; background: #5a4af0; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">{{ templateBtnLabel }}</button>
+        </div>
+        <sc-if value="{{ showInvoiceTemplate }}" hint-placeholder-val="{{ false }}">
+          <div style="display: grid; grid-template-columns: 300px 1fr; gap: 14px; margin-bottom: 14px;">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 18px 20px;">
+              <span style="font-size: 14px; font-weight: 600;">Invoice template</span>
+              <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
+                <div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; margin-bottom: 5px;">Business name</div>
+                  <input value="Adgrowly Inc." style="width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; font-family: Geist, sans-serif; font-size: 12.5px; color: #edecf4; outline: none;">
+                </div>
+                <div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; margin-bottom: 5px;">Tax ID / GSTIN</div>
+                  <input value="29AACCA1234N1Z8" style="width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; font-family: 'Geist Mono', monospace; font-size: 11.5px; color: #a29fb8; outline: none;">
+                </div>
+                <div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; margin-bottom: 5px;">Footer note</div>
+                  <input value="Thank you for growing with Adgrowly." style="width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; font-family: Geist, sans-serif; font-size: 12px; color: #edecf4; outline: none;">
+                </div>
+              </div>
+              <button onClick="{{ saveTemplate }}" style="width: 100%; margin-top: 14px; padding: 9px; background: #5a4af0; color: #fff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer;">{{ saveTemplateLabel }}</button>
+            </div>
+            <div style="background: #ffffff; border-radius: 16px; padding: 26px 30px; color: #15131f;">
+              <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+                <div>
+                  <div style="width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, #6d5efc, #8b7bff);"></div>
+                  <div style="font-size: 15px; font-weight: 700; margin-top: 10px;">Adgrowly Inc.</div>
+                  <div style="font-size: 11px; color: #56536a; margin-top: 2px;">482 Maple Ave, Toronto, ON · GSTIN 29AACCA1234N1Z8</div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.01em;">INVOICE</div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #56536a; margin-top: 3px;">#INV-4821 · Jul 1, 2026</div>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-top: 26px; padding-top: 16px; border-top: 1px solid #eee; font-size: 12px;">
+                <div><div style="color: #8d8aa3;">Billed to</div><div style="font-weight: 600; margin-top: 2px;">Maple Dental Studio</div></div>
+                <div style="text-align: right;"><div style="color: #8d8aa3;">Amount due</div><div style="font-weight: 700; font-size: 18px; margin-top: 2px;">$199.00</div></div>
+              </div>
+              <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px; margin-top: 20px; font-size: 12px; border-top: 1px solid #eee; padding-top: 10px;">
+                <span>GMB Suite — Grow plan · Jul 2026</span><span style="text-align: right;">$199.00</span>
+              </div>
+              <div style="font-size: 11px; color: #8d8aa3; margin-top: 24px; border-top: 1px solid #eee; padding-top: 14px;">Thank you for growing with Adgrowly.</div>
+            </div>
+          </div>
+        </sc-if>
+        <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 1fr 1.6fr 0.9fr 0.9fr 0.9fr; gap: 12px; padding: 11px 20px; border-bottom: 1px solid #2b2740; background: #1f1b30;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Invoice</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Account</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; text-align: right;">Amount</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Status</span>
+            <span></span>
+          </div>
+          <sc-for list="{{ invoices }}" as="inv" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 1fr 1.6fr 0.9fr 0.9fr 0.9fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #221e35;" style-hover="background: #1f1b30;">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #b3a9ff;">{{ inv.id }}</span>
+              <div><div style="font-size: 12.5px; font-weight: 500;">{{ inv.account }}</div><div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #6b6880;">{{ inv.date }}</div></div>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; text-align: right;">{{ inv.amount }}</span>
+              <span style="justify-self: start; padding: 2px 10px; border-radius: 99px; background: {{ inv.statusBg }}; color: {{ inv.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ inv.status }}</span>
+              <a href="#" style="font-size: 12px; font-weight: 500; justify-self: end;">PDF</a>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showTransactions }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px;">
+          <sc-for list="{{ txnKpis }}" as="k" hint-placeholder-count="4">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 16px 20px;">
+              <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">{{ k.label }}</div>
+              <div style="font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 6px; color: {{ k.color }};">{{ k.value }}</div>
+              <div style="font-size: 11.5px; color: #a29fb8; margin-top: 2px;">{{ k.hint }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px;">
+          <sc-for list="{{ txnTabs }}" as="tt" hint-placeholder-count="4">
+            <button onClick="{{ tt.select }}" style="padding: 7px 15px; border: 1px solid {{ tt.border }}; border-radius: 99px; background: {{ tt.bg }}; color: {{ tt.color }}; font-family: Geist, sans-serif; font-size: 12px; font-weight: {{ tt.weight }}; cursor: pointer;">{{ tt.name }}</button>
+          </sc-for>
+        </div>
+        <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 1fr 1.4fr 0.9fr 0.9fr 0.9fr 0.9fr; gap: 12px; padding: 11px 20px; border-bottom: 1px solid #2b2740; background: #1f1b30;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Txn</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Account</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Gateway</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; text-align: right;">Amount</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Status</span>
+            <span></span>
+          </div>
+          <sc-for list="{{ transactions }}" as="tx" hint-placeholder-count="7">
+            <div style="display: grid; grid-template-columns: 1fr 1.4fr 0.9fr 0.9fr 0.9fr 0.9fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #221e35;" style-hover="background: #1f1b30;">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #6b6880;">{{ tx.id }}</span>
+              <span style="font-size: 12.5px;">{{ tx.account }}</span>
+              <span style="font-size: 11.5px; color: #a29fb8;">{{ tx.gateway }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; text-align: right;">{{ tx.amount }}</span>
+              <span style="justify-self: start; padding: 2px 10px; border-radius: 99px; background: {{ tx.statusBg }}; color: {{ tx.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ tx.status }}</span>
+              <sc-if value="{{ tx.canRefund }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ tx.refund }}" style="justify-self: end; padding: 5px 12px; border: 1px solid #3d2323; border-radius: 9px; background: #1a1729; color: #e58c7f; font-family: Geist, sans-serif; font-size: 11px; font-weight: 500; cursor: pointer;">{{ tx.refundLabel }}</button>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showEmail }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: 300px 1fr; gap: 14px; align-items: start;">
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 16px 18px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                <span style="font-size: 14px; font-weight: 600;">Templates</span>
+                <button style="padding: 4px 10px; border: 1px solid #3d3564; border-radius: 8px; background: #2c2452; color: #b3a9ff; font-family: Geist, sans-serif; font-size: 11px; font-weight: 500; cursor: pointer;">+ New</button>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <sc-for list="{{ emailTemplates }}" as="et" hint-placeholder-count="6">
+                  <button onClick="{{ et.select }}" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 11px; border: none; border-radius: 9px; background: {{ et.bg }}; cursor: pointer; text-align: left; font-family: Geist, sans-serif;" style-hover="background: #241f38;">
+                    <span style="width: 8px; height: 8px; flex-shrink: 0; border-radius: 99px; background: {{ et.dot }};"></span>
+                    <div style="flex: 1; min-width: 0;">
+                      <div style="font-size: 12.5px; font-weight: {{ et.weight }}; color: {{ et.color }};">{{ et.name }}</div>
+                      <div style="font-family: 'Geist Mono', monospace; font-size: 9px; color: #6b6880;">{{ et.trigger }}</div>
+                    </div>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+          <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; overflow: hidden;">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid #2b2740;">
+              <div style="flex: 1;">
+                <div style="font-size: 14px; font-weight: 600;">{{ activeEmail.name }}</div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #6b6880; margin-top: 1px;">{{ activeEmail.trigger }} · last edited {{ activeEmail.edited }}</div>
+              </div>
+              <span style="padding: 2px 10px; border-radius: 99px; background: {{ activeEmail.statusBg }}; color: {{ activeEmail.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ activeEmail.status }}</span>
+              <button onClick="{{ toggleEmailActive }}" style="width: 40px; height: 22px; border: none; border-radius: 99px; background: {{ emailActiveBg }}; cursor: pointer; position: relative;">
+                <span style="position: absolute; top: 3px; left: {{ emailActiveKnob }}; width: 16px; height: 16px; border-radius: 99px; background: #fff; transition: left 0.15s;"></span>
+              </button>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #2b2740;">
+              <div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; margin-bottom: 5px;">Subject line</div>
+                <input value="{{ activeEmail.subject }}" style="width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; font-family: Geist, sans-serif; font-size: 12.5px; color: #edecf4; outline: none;" style-focus="border-color: #6d5efc;">
+              </div>
+              <div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; margin-bottom: 5px;">Send from</div>
+                <input value="no-reply@adgrowly.com" style="width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; font-family: 'Geist Mono', monospace; font-size: 11.5px; color: #a29fb8; outline: none;">
+              </div>
+            </div>
+            <div style="padding: 16px 20px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880;">Body (HTML)</span>
+                <div style="display: flex; gap: 5px;">
+                  <sc-for list="{{ emailVars }}" as="v" hint-placeholder-count="4">
+                    <span style="padding: 2px 8px; border: 1px solid #2b2740; border-radius: 99px; background: #131120; color: #b3a9ff; font-family: 'Geist Mono', monospace; font-size: 10px; cursor: pointer;">{{ v }}</span>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="border: 1px solid #2b2740; border-radius: 12px; overflow: hidden;">
+                <div style="background: #ffffff; padding: 22px 24px;">
+                  <div style="width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, #6d5efc, #8b7bff); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700;">G</div>
+                  <div style="font-size: 18px; font-weight: 700; color: #15131f; margin-top: 16px;">{{ activeEmail.previewHead }}</div>
+                  <div style="font-size: 13px; color: #56536a; line-height: 1.65; margin-top: 10px;">{{ activeEmail.previewBody }}</div>
+                  <div style="margin-top: 18px;"><span style="display: inline-block; padding: 10px 20px; background: #5a4af0; color: #fff; border-radius: 9px; font-size: 13px; font-weight: 600;">{{ activeEmail.previewCta }}</span></div>
+                  <div style="font-size: 11px; color: #8d8aa3; margin-top: 22px; border-top: 1px solid #eee; padding-top: 14px;">Sent by GMB Suite · Adgrowly Inc., Toronto · <span style="color: #5a4af0;">Unsubscribe</span></div>
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px; margin-top: 14px;">
+                <button onClick="{{ saveEmail }}" style="padding: 9px 18px; background: #5a4af0; color: #fff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer;" style-hover="background: #4536d6;">{{ saveEmailLabel }}</button>
+                <button onClick="{{ sendTest }}" style="padding: 9px 16px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; color: #a29fb8; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">{{ sendTestLabel }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showSmtp }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start;">
+          <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 20px 24px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 14px; font-weight: 600;">SMTP configuration</span>
+              <span style="padding: 2px 10px; border-radius: 99px; background: {{ smtpStatusBg }}; color: {{ smtpStatusColor }}; font-size: 10.5px; font-weight: 600;">{{ smtpStatus }}</span>
+            </div>
+            <div style="display: flex; gap: 6px; margin-top: 14px;">
+              <sc-for list="{{ smtpProviders }}" as="sp" hint-placeholder-count="3">
+                <button onClick="{{ sp.select }}" style="flex: 1; padding: 9px; border: 1px solid {{ sp.border }}; border-radius: 10px; background: {{ sp.bg }}; color: {{ sp.color }}; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: {{ sp.weight }}; cursor: pointer;">{{ sp.name }}</button>
+              </sc-for>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px;">
+              <sc-for list="{{ smtpFields }}" as="f" hint-placeholder-count="6">
+                <div style="grid-column: {{ f.span }};">
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; margin-bottom: 5px;">{{ f.label }}</div>
+                  <input value="{{ f.value }}" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; font-family: 'Geist Mono', monospace; font-size: 11.5px; color: {{ f.color }}; outline: none;" style-focus="border-color: #6d5efc;">
+                </div>
+              </sc-for>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 16px;">
+              <button onClick="{{ saveSmtp }}" style="padding: 10px 18px; background: #5a4af0; color: #fff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer;" style-hover="background: #4536d6;">{{ saveSmtpLabel }}</button>
+              <button onClick="{{ testSmtp }}" style="padding: 10px 16px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; color: #a29fb8; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">{{ testSmtpLabel }}</button>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 18px 22px;">
+              <span style="font-size: 14px; font-weight: 600;">Deliverability</span>
+              <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
+                <sc-for list="{{ dnsRecords }}" as="d" hint-placeholder-count="3">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="width: 16px; height: 16px; flex-shrink: 0; border-radius: 99px; background: {{ d.bg }}; color: {{ d.color }}; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700;">{{ d.glyph }}</span>
+                    <span style="flex: 1; font-family: 'Geist Mono', monospace; font-size: 11px;">{{ d.name }}</span>
+                    <span style="font-size: 11px; color: {{ d.color }};">{{ d.status }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="background: #1a1729; border: 1px solid #2b2740; border-radius: 16px; padding: 18px 22px;">
+              <span style="font-size: 14px; font-weight: 600;">Send stats · 30 days</span>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px;">
+                <sc-for list="{{ sendStats }}" as="s" hint-placeholder-count="4">
+                  <div style="border: 1px solid #2b2740; border-radius: 12px; padding: 12px 14px;">
+                    <div style="font-size: 20px; font-weight: 700; color: {{ s.color }};">{{ s.value }}</div>
+                    <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; margin-top: 2px;">{{ s.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </main>
+
+  <sc-if value="{{ ticketOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeTicket }}" style="position: fixed; inset: 0; background: rgba(10,8,18,0.6); z-index: 50;"></div>
+    <div style="position: fixed; top: 0; right: 0; bottom: 0; width: 460px; max-width: 92vw; background: #1a1729; border-left: 1px solid #2b2740; z-index: 51; display: flex; flex-direction: column; box-shadow: -20px 0 60px rgba(0,0,0,0.5);">
+      <div style="padding: 18px 22px; border-bottom: 1px solid #2b2740;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #6b6880;">{{ tk.id }}</span>
+          <span style="padding: 2px 10px; border-radius: 99px; background: {{ tk.priBg }}; color: {{ tk.priColor }}; font-size: 10px; font-weight: 600;">{{ tk.priority }}</span>
+          <span style="padding: 2px 10px; border-radius: 99px; background: {{ tkStatusBg }}; color: {{ tkStatusColor }}; font-size: 10px; font-weight: 600;">{{ tkStatus }}</span>
+          <div style="flex: 1;"></div>
+          <button onClick="{{ closeTicket }}" style="width: 28px; height: 28px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; color: #a29fb8; font-size: 14px; cursor: pointer;">✕</button>
+        </div>
+        <div style="font-size: 15px; font-weight: 600; margin-top: 10px;">{{ tk.subject }}</div>
+        <div style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #6b6880; margin-top: 3px;">{{ tk.who }} · {{ tk.channel }}</div>
+      </div>
+      <div style="flex: 1; overflow-y: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 12px;">
+        <sc-for list="{{ ticketThread }}" as="m" hint-placeholder-count="3">
+          <div style="align-self: {{ m.align }}; max-width: 84%; background: {{ m.bg }}; border: 1px solid {{ m.border }}; border-radius: 12px; padding: 10px 13px;">
+            <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: {{ m.nameColor }};">{{ m.name }} · {{ m.time }}</div>
+            <div style="font-size: 12.5px; line-height: 1.55; margin-top: 4px; color: #edecf4;">{{ m.text }}</div>
+          </div>
+        </sc-for>
+        <sc-if value="{{ ticketReplied }}" hint-placeholder-val="{{ false }}">
+          <div style="align-self: flex-end; max-width: 84%; background: #2c2452; border: 1px solid #3d3564; border-radius: 12px; padding: 10px 13px;">
+            <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: #b3a9ff;">You · just now</div>
+            <div style="font-size: 12.5px; line-height: 1.55; margin-top: 4px;">Thanks for reaching out — I've bumped your Business Profile API quota and re-queued the failed scans. You should see them complete within 10 minutes. Let me know if anything's still stuck!</div>
+          </div>
+        </sc-if>
+      </div>
+      <div style="padding: 14px 22px; border-top: 1px solid #2b2740;">
+        <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+          <sc-for list="{{ cannedReplies }}" as="cr" hint-placeholder-count="3">
+            <span style="padding: 4px 10px; border: 1px solid #2b2740; border-radius: 99px; background: #131120; color: #a29fb8; font-size: 10.5px; cursor: pointer;" style-hover="border-color: #3d3564;">{{ cr }}</span>
+          </sc-for>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <input placeholder="Type a reply…" style="flex: 1; padding: 10px 14px; border: 1px solid #2b2740; border-radius: 10px; background: #131120; font-family: Geist, sans-serif; font-size: 12.5px; color: #edecf4; outline: none;" style-focus="border-color: #6d5efc;">
+          <button onClick="{{ sendReply }}" style="padding: 10px 18px; background: #5a4af0; color: #fff; border: none; border-radius: 10px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer;">{{ replyLabel }}</button>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <button onClick="{{ resolveTicket }}" style="flex: 1; padding: 8px; border: 1px solid #2a4a37; border-radius: 9px; background: #1c3527; color: #7dd8a0; font-family: Geist, sans-serif; font-size: 12px; font-weight: 600; cursor: pointer;">{{ resolveLabel }}</button>
+          <button style="flex: 1; padding: 8px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; color: #a29fb8; font-family: Geist, sans-serif; font-size: 12px; font-weight: 500; cursor: pointer;">Assign to…</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ manageOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeManage }}" style="position: fixed; inset: 0; background: rgba(10,8,18,0.6); z-index: 50;"></div>
+    <div style="position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 90vw; background: #1a1729; border-left: 1px solid #2b2740; z-index: 51; display: flex; flex-direction: column; box-shadow: -20px 0 60px rgba(0,0,0,0.5);">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 18px 22px; border-bottom: 1px solid #2b2740;">
+        <span style="width: 38px; height: 38px; border-radius: 99px; background: #2c2452; color: #b3a9ff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;">{{ mgUser.initials }}</span>
+        <div style="flex: 1;">
+          <div style="font-size: 14px; font-weight: 600;">{{ mgUser.name }}</div>
+          <div style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #6b6880;">{{ mgUser.email }} · {{ mgUser.account }}</div>
+        </div>
+        <button onClick="{{ closeManage }}" style="width: 28px; height: 28px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; color: #a29fb8; font-size: 14px; cursor: pointer;">✕</button>
+      </div>
+      <div style="flex: 1; overflow-y: auto; padding: 20px 22px; display: flex; flex-direction: column; gap: 20px;">
+        <div>
+          <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; margin-bottom: 8px;">Staff role</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <sc-for list="{{ roleOptions }}" as="ro" hint-placeholder-count="4">
+              <button onClick="{{ ro.select }}" style="display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid {{ ro.border }}; border-radius: 11px; background: {{ ro.bg }}; cursor: pointer; text-align: left; font-family: Geist, sans-serif;">
+                <span style="width: 16px; height: 16px; flex-shrink: 0; border-radius: 99px; border: 1.5px solid {{ ro.radioBorder }}; background: {{ ro.radioBg }}; box-sizing: border-box;"></span>
+                <div style="flex: 1;">
+                  <div style="font-size: 12.5px; font-weight: 600; color: #edecf4;">{{ ro.name }}</div>
+                  <div style="font-size: 10.5px; color: #a29fb8; margin-top: 1px;">{{ ro.desc }}</div>
+                </div>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+        <div>
+          <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; margin-bottom: 8px;">Permissions</div>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <sc-for list="{{ permissions }}" as="pm" hint-placeholder-count="5">
+              <div style="display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid #221e35;">
+                <span style="flex: 1; font-size: 12.5px; color: {{ pm.textColor }};">{{ pm.name }}</span>
+                <button onClick="{{ pm.toggle }}" style="width: 36px; height: 21px; flex-shrink: 0; border: none; border-radius: 99px; background: {{ pm.bg }}; cursor: {{ pm.cursor }}; position: relative; opacity: {{ pm.opacity }};">
+                  <span style="position: absolute; top: 3px; left: {{ pm.knob }}; width: 15px; height: 15px; border-radius: 99px; background: #fff; transition: left 0.15s;"></span>
+                </button>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size: 10.5px; color: #6b6880; margin-top: 8px;">{{ permHint }}</div>
+        </div>
+        <div>
+          <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6880; margin-bottom: 8px;">Security</div>
+          <div style="display: flex; align-items: center; gap: 12px; padding: 9px 0;">
+            <div style="flex: 1;">
+              <div style="font-size: 12.5px; color: #edecf4;">Google 2-factor authentication</div>
+              <div style="font-size: 10.5px; color: #6b6880; margin-top: 1px;">{{ mg2faHint }}</div>
+            </div>
+            <button onClick="{{ toggle2fa }}" style="width: 36px; height: 21px; flex-shrink: 0; border: none; border-radius: 99px; background: {{ mg2faBg }}; cursor: pointer; position: relative;">
+              <span style="position: absolute; top: 3px; left: {{ mg2faKnob }}; width: 15px; height: 15px; border-radius: 99px; background: #fff; transition: left 0.15s;"></span>
+            </button>
+          </div>
+          <sc-if value="{{ mg2faOn }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ force2faReset }}" style="width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; color: #a29fb8; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">{{ force2faLabel }}</button>
+          </sc-if>
+        </div>
+      </div>
+      <div style="padding: 16px 22px; border-top: 1px solid #2b2740; display: flex; flex-direction: column; gap: 8px;">
+        <button onClick="{{ saveManage }}" style="padding: 11px; background: #5a4af0; color: #fff; border: none; border-radius: 10px; font-family: Geist, sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;" style-hover="background: #4536d6;">{{ saveLabel }}</button>
+        <div style="display: flex; gap: 8px;">
+          <button style="flex: 1; padding: 9px; border: 1px solid #2b2740; border-radius: 9px; background: #131120; color: #a29fb8; font-family: Geist, sans-serif; font-size: 12px; font-weight: 500; cursor: pointer;">Reset password</button>
+          <button onClick="{{ suspendUser }}" style="flex: 1; padding: 9px; border: 1px solid #3d2323; border-radius: 9px; background: #1a1729; color: #e58c7f; font-family: Geist, sans-serif; font-size: 12px; font-weight: 500; cursor: pointer;" style-hover="background: #3d2323;">{{ suspendLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { screen: "overview", retried: false, payRegion: "All", payOn: {}, riskScanned: false, newKeyShown: false, loggedOut: true, menuOpen: false, aiOn: {}, manageIdx: null, mgRole: null, mgPerms: null, mgSaved: false, mgSuspended: false, ticketFilter: "Open", ticketIdx: null, mg2fa: {}, mg2faForced: {}, ticketReplied: false, ticketResolved: false, emailIdx: 0, emailActive: {}, emailSaved: false, testSent: false, smtpProvider: "SendGrid", smtpSaved: false, smtpTested: false, otpStage: false, txnFilter: "All" };
+
+  extraVals() {
+    const region = this.state.payRegion;
+    const payKpis = [
+      { label: "Processed · July", value: "$28,340", hint: "+8.4% MoM", color: "#edecf4" },
+      { label: "India volume", value: "₹9.4L", hint: "43% of txns", color: "#edecf4" },
+      { label: "Success rate", value: "97.2%", hint: "failed retries auto", color: "#7dd8a0" },
+      { label: "Avg fee", value: "2.1%", hint: "blended all gateways", color: "#edecf4" },
+    ];
+    const payRegionTabs = ["All", "India", "International"].map((name) => {
+      const active = name === region;
+      return {
+        name, select: () => this.setState({ payRegion: name }),
+        bg: active ? "#2c2452" : "transparent", color: active ? "#b3a9ff" : "#a29fb8",
+        border: active ? "#3d3564" : "#2b2740", weight: active ? 600 : 400,
+      };
+    });
+    const rawProviders = [
+      ["Razorpay", "R", "India", "UPI, cards, netbanking", "Live", "2.0%", "₹4.2L", true, true, "#0a2540", "#5b9bff"],
+      ["PayU India", "P", "India", "UPI, cards, EMI", "Live", "2.2%", "₹2.8L", true, false, "#1a3a1a", "#7dd8a0"],
+      ["Cashfree", "C", "India", "UPI, wallets, payout", "Live", "1.9%", "₹1.6L", true, false, "#0e2a3a", "#4fc3d6"],
+      ["Paytm", "P", "India", "Wallet, UPI, cards", "Off", "2.3%", "₹0.8L", false, false, "#0a2540", "#5b9bff"],
+      ["PhonePe", "Pe", "India", "UPI, wallet", "Off", "2.0%", "—", false, false, "#3a1a4a", "#b57edb"],
+      ["Stripe", "S", "International", "Cards, wallets, ACH", "Live", "2.9% + 30¢", "$12.4k", true, true, "#2c2452", "#8b7bff"],
+      ["PayPal", "Pp", "International", "PayPal, cards", "Live", "3.4% + 30¢", "$4.1k", true, false, "#0a2540", "#5b9bff"],
+      ["Adyen", "A", "International", "Global cards, SEPA", "Off", "2.6%", "—", false, false, "#1a3a2a", "#5fd6a0"],
+    ];
+    const payProviders = rawProviders
+      .filter((p) => region === "All" || p[2] === region)
+      .map((p, idx) => {
+        const [name, glyph, reg, methods, defStatus, fee, volume, defOn, isDefault, iconBg, iconColor] = p;
+        const key = name;
+        const on = this.state.payOn[key] !== undefined ? this.state.payOn[key] : defOn;
+        return {
+          name, glyph, region: reg, methods, fee, volume, iconBg, iconColor,
+          status: on ? "Live" : "Off",
+          statusBg: on ? "#1c3527" : "#221e35", statusColor: on ? "#7dd8a0" : "#8d8aa3",
+          cardBorder: isDefault ? "#3d3564" : "#2b2740",
+          toggle: () => this.setState((s) => ({ payOn: { ...s.payOn, [key]: !on } })),
+          btnLabel: on ? "Disable" : "Enable",
+          btnBg: on ? "#1a1729" : "#5a4af0",
+          btnColor: on ? "#e58c7f" : "#ffffff",
+          btnBorder: on ? "#3d2323" : "#5a4af0",
+        };
+      });
+
+    const gq = (used, limit, pct, warn) => ({
+      used, limit, pct,
+      barColor: warn ? "#e3b558" : "#8b7bff",
+      status: warn ? "High" : "Healthy",
+      statusBg: warn ? "#4a4227" : "#1c3527",
+      statusColor: warn ? "#e3b558" : "#7dd8a0",
+      action: "Manage",
+    });
+    const googleApis = [
+      { name: "Business Profile API", id: "mybusiness.googleapis.com", purpose: "Profiles, reviews, posts", ...gq("84%", "quota reset 9d", "84%", true) },
+      { name: "Places API", id: "places.googleapis.com", purpose: "Grid rank lookups", ...gq("61%", "of $2k/mo", "61%", false) },
+      { name: "Maps JavaScript API", id: "maps.googleapis.com", purpose: "Heat-map rendering", ...gq("22%", "of $2k/mo", "22%", false) },
+      { name: "Geocoding API", id: "geocoding.googleapis.com", purpose: "Grid point coordinates", ...gq("38%", "of $2k/mo", "38%", false) },
+      { name: "OAuth 2.0", id: "oauth2.googleapis.com", purpose: "Account sign-in & consent", ...gq("—", "unlimited", "12%", false) },
+      { name: "My Business Q&A API", id: "mybusinessqanda.googleapis.com", purpose: "Profile questions", ...gq("47%", "quota", "47%", false) },
+    ];
+
+    const storageKpis = [
+      { label: "Total stored", value: "1.84 TB", hint: "across 4 buckets", color: "#edecf4" },
+      { label: "Objects", value: "3.2M", hint: "images + thumbs", color: "#edecf4" },
+      { label: "S3 cost · July", value: "$412", hint: "+ $88 CloudFront", color: "#edecf4" },
+      { label: "Egress · 30d", value: "6.1 TB", hint: "94% CDN cache hit", color: "#7dd8a0" },
+    ];
+    const buckets = [
+      ["adgrowly-gmb-media", "ap-south-1", "2.1M", "1.24 TB", "Private", false],
+      ["adgrowly-gmb-thumbs", "ap-south-1", "980k", "182 GB", "CDN", true],
+      ["adgrowly-gmb-uploads", "us-east-1", "142k", "398 GB", "Private", false],
+      ["adgrowly-gmb-exports", "us-east-1", "8.4k", "24 GB", "Private", false],
+    ].map(([name, region, objects, size, access, cdn]) => ({
+      name, region, objects, size, access,
+      accessBg: cdn ? "#1a2a3d" : "#221e35", accessColor: cdn ? "#6ba3e0" : "#8d8aa3",
+    }));
+
+    const roleStyles = { Owner: ["#2c2452", "#b3a9ff"], Admin: ["#1a2a3d", "#6ba3e0"], Editor: ["#221e35", "#a29fb8"], Viewer: ["#221e35", "#8d8aa3"] };
+    const scanned = this.state.riskScanned;
+    const users = [
+      ["Dr. Sana Sharma", "sana@mapledental.ca", "SS", "Maple Dental Studio", "Owner", "Low", "#7dd8a0", "#a29fb8"],
+      ["Marco Ricci", "marco@casanonna.ca", "MR", "Casa Nonna Trattoria", "Owner", "Low", "#7dd8a0", "#a29fb8"],
+      ["Aisha Khan", "aisha@growlabs.agency", "AK", "GrowLabs (partner)", "Admin", "Low", "#7dd8a0", "#a29fb8"],
+      ["temp_contractor", "freelancer@gmail.com", "TC", "Peak Physio", "Editor", scanned ? "Flagged" : "Review", scanned ? "#e58c7f" : "#e3b558", scanned ? "#e58c7f" : "#e3b558"],
+      ["Priya Nair", "priya@lakeviewrealty.ca", "PN", "Lakeview Realty", "Admin", "Low", "#7dd8a0", "#a29fb8"],
+      ["old_admin", "admin@quickcuts.ca", "OA", "QuickCuts Barber", "Admin", scanned ? "Flagged" : "Review", scanned ? "#e58c7f" : "#e3b558", scanned ? "#e58c7f" : "#e3b558"],
+    ].map(([name, email, initials, account, role, risk, riskDot, riskColor], i) => ({
+      name, email, initials, account, role, risk, riskDot, riskColor,
+      avBg: "#2c2452", avColor: "#b3a9ff",
+      roleBg: roleStyles[role][0], roleColor: roleStyles[role][1],
+      manage: () => this.setState({ manageIdx: i, mgRole: role, mgPerms: null, mgSaved: false, mgSuspended: false }),
+    }));
+    this._users = users;
+
+    const aiOn = this.state.aiOn;
+    const aiModels = [
+      ["Image generation", "G", "Generates Google Post images & AI photo enhancements", "gemini-2.5-flash-image", "AIza••••img7", "4,120", "$318", true, "#3a1a4a", "#b57edb"],
+      ["Auto-reply to reviews", "R", "Drafts and (if enabled) posts review replies in the owner's voice", "claude-sonnet-4", "sk-ant-••••rW2d", "38,410", "$462", true, "#1a2a3d", "#6ba3e0"],
+      ["Q&A auto-answer", "Q", "Answers profile questions from the knowledge base", "claude-haiku-3.5", "sk-ant-••••rW2d", "9,240", "$88", true, "#1a3a2a", "#5fd6a0"],
+      ["Advisor & insights", "A", "Weekly ranking to-do list and trend summaries", "claude-sonnet-4", "sk-ant-••••rW2d", "5,610", "$214", true, "#2c2452", "#b3a9ff"],
+      ["Review sentiment", "S", "Classifies incoming reviews for the sentiment donut", "gemini-2.5-flash", "AIza••••snt3", "41,200", "$62", true, "#4a3d14", "#e3b558"],
+    ].map(([feature, glyph, desc, model, key, calls, cost, defOn, iconBg, iconColor]) => {
+      const on = aiOn[feature] !== undefined ? aiOn[feature] : defOn;
+      return {
+        feature, glyph, desc, model, key, calls, cost, iconBg, iconColor,
+        onBg: on ? "#5a4af0" : "#2b2740", knob: on ? "21px" : "3px",
+        toggle: () => this.setState((s) => ({ aiOn: { ...s.aiOn, [feature]: !on } })),
+      };
+    });
+
+    const tagStyles = { security: ["#3d2323", "#e58c7f"], billing: ["#4a4227", "#e3b558"], config: ["#1a2a3d", "#6ba3e0"], access: ["#1c3527", "#7dd8a0"], ai: ["#2c2452", "#b3a9ff"] };
+    const audit = [
+      ["09:44 today", "s.kumar@adgrowly.com", "rotated key", "S3_SECRET_KEY", "security"],
+      ["09:20 today", "s.kumar@adgrowly.com", "changed role Editor→Viewer", "temp_contractor @ Peak Physio", "access"],
+      ["08:58 today", "system", "auto-disabled AI feature over budget", "image_generation (soft cap)", "ai"],
+      ["08:31 today", "a.wong@adgrowly.com", "enabled payment gateway", "Cashfree (India)", "billing"],
+      ["Yesterday 18:04", "system", "suspended account non-payment", "gmb_31k7 · QuickCuts", "billing"],
+      ["Yesterday 15:22", "a.wong@adgrowly.com", "requested quota increase", "Business Profile API", "config"],
+      ["Yesterday 11:10", "s.kumar@adgrowly.com", "created API key", "Mobile app (read, write)", "access"],
+      ["Jul 19 09:02", "system", "flagged anomalous login", "old_admin @ QuickCuts", "security"],
+    ].map(([time, actor, action, target, tag]) => ({
+      time, actor, action, target, tag,
+      tagBg: tagStyles[tag][0], tagColor: tagStyles[tag][1],
+    }));
+
+    const healthKpis = [
+      { label: "Uptime · 30d", value: "99.98%", hint: "SLA 99.9%", color: "#7dd8a0" },
+      { label: "API p95", value: "142ms", hint: "all endpoints", color: "#edecf4" },
+      { label: "Error rate", value: "0.04%", hint: "5xx last 24h", color: "#edecf4" },
+      { label: "Open incidents", value: "0", hint: "last: Jun 30", color: "#7dd8a0" },
+    ];
+    const svcOk = ["#1c3527", "#7dd8a0"], svcWarn = ["#4a4227", "#e3b558"];
+    const services = [
+      ["API gateway", "142ms", "99.99%", "Operational", true],
+      ["Scan workers (DataForSEO)", "3.8s", "99.2%", "Degraded", false],
+      ["AI service (Anthropic)", "1.9s", "99.97%", "Operational", true],
+      ["Image pipeline (S3 + CDN)", "88ms", "100%", "Operational", true],
+      ["Postgres primary", "6ms", "99.99%", "Operational", true],
+      ["Stripe webhooks", "210ms", "99.95%", "Operational", true],
+    ].map(([name, latency, uptime, status, ok]) => ({
+      name, latency, uptime, status,
+      dot: ok ? "#7dd8a0" : "#e3b558",
+      statusBg: ok ? svcOk[0] : svcWarn[0], statusColor: ok ? svcOk[1] : svcWarn[1],
+    }));
+
+    const keyStatus = { Active: ["#1c3527", "#7dd8a0"], Revoked: ["#3d2323", "#e58c7f"], Expiring: ["#4a4227", "#e3b558"] };
+    const apiKeys = [
+      ["GrowLabs integration", "agw_live_••••4f2c", "read, write", "84.2k", "Active", "Created Nov 12, 2025"],
+      ["Zapier connector", "agw_live_••••9d81", "read", "12.6k", "Active", "Created Feb 3, 2026"],
+      ["Reporting export", "agw_live_••••2k55", "read", "3.1k", "Expiring", "Created Jan 8, 2026"],
+      ["Legacy webhook", "agw_live_••••7h30", "write", "0", "Revoked", "Created Aug 1, 2025"],
+      ["Mobile app", "agw_live_••••1p44", "read, write", "203k", "Active", "Created Mar 19, 2026"],
+    ].map(([name, key, scopes, calls, status, created]) => ({
+      name, key, scopes, calls, status, created,
+      statusBg: keyStatus[status][0], statusColor: keyStatus[status][1],
+    }));
+
+    return {
+      payKpis, payRegionTabs, payProviders, defaultGateway: region === "India" ? "Razorpay" : "Stripe",
+      googleApis, googleQuotaNote: "Business Profile API at 84% — request increase",
+      storageKpis, buckets, users, apiKeys,
+      aiRiskSummary: scanned ? "2 users flagged: 'temp_contractor' inactive 60d with write access · 'old_admin' logs in from new geo" : "Continuously scans for over-privileged, dormant, or anomalous accounts.",
+      riskScanLabel: scanned ? "2 flagged — review" : "Run risk scan",
+      runRiskScan: () => this.setState({ riskScanned: true }),
+      newKeyShown: this.state.newKeyShown,
+      createKey: () => this.setState({ newKeyShown: true }),
+      createKeyLabel: this.state.newKeyShown ? "Key created ✓" : "+ Create API key",
+      aiModels, audit, healthKpis, services,
+      ...this.supportVals(),
+      ...this.emailVals(),
+      ...this.billingVals(),
+    };
+  }
+
+  billingVals() {
+    this._showTemplate = this._showTemplate ?? false;
+    const invStatus = { Paid: ["#1c3527", "#7dd8a0"], Overdue: ["#3d2323", "#e58c7f"], Pending: ["#4a4227", "#e3b558"] };
+    const invoices = [
+      ["#INV-4821", "Maple Dental Studio", "$199.00", "Paid", "Jul 1, 2026"],
+      ["#INV-4820", "Lakeview Realty Group", "$399.00", "Paid", "Jul 1, 2026"],
+      ["#INV-4819", "Casa Nonna Trattoria", "$199.00", "Paid", "Jul 1, 2026"],
+      ["#INV-4812", "QuickCuts Barber", "$79.00", "Overdue", "Jun 1, 2026"],
+      ["#INV-4805", "FitFirst Gym", "$79.00", "Pending", "Jul 15, 2026"],
+      ["#INV-4790", "Harbour Seafood Co.", "$399.00", "Paid", "Jun 1, 2026"],
+    ].map(([id, account, amount, status, date]) => ({
+      id, account, amount, status, date,
+      statusBg: invStatus[status][0], statusColor: invStatus[status][1],
+    }));
+
+    const filter = this.state.txnFilter;
+    const txStatus = { Success: ["#1c3527", "#7dd8a0"], Failed: ["#3d2323", "#e58c7f"], Refunded: ["#4a4227", "#e3b558"] };
+    const refunded = this.state.txnRefunded || {};
+    const rawTx = [
+      ["#TX-9042", "Maple Dental Studio", "Razorpay", "₹16,600", "Success", false],
+      ["#TX-9041", "Lakeview Realty Group", "Stripe", "$399.00", "Success", false],
+      ["#TX-9040", "Casa Nonna Trattoria", "Cashfree", "₹16,600", "Success", true],
+      ["#TX-9038", "QuickCuts Barber", "Razorpay", "₹6,584", "Failed", false],
+      ["#TX-9035", "Sunrise Bakery", "PayU India", "₹1,580", "Failed", false],
+      ["#TX-9031", "FitFirst Gym", "Stripe", "$79.00", "Success", false],
+      ["#TX-9020", "Sparkle Auto Detailing", "PayPal", "$149.00", "Success", true],
+    ];
+    const transactions = rawTx.map(([id, account, gateway, amount, status0, canRefundDefault], i) => {
+      const status = refunded[i] ? "Refunded" : status0;
+      const canRefund = status === "Success" && !refunded[i];
+      return {
+        id, account, gateway, amount, status,
+        statusBg: txStatus[status][0], statusColor: txStatus[status][1],
+        canRefund, refundLabel: "Refund",
+        refund: () => this.setState({ txnRefunded: { ...refunded, [i]: true } }),
+      };
+    });
+    const filtered = filter === "All" ? transactions : transactions.filter((t) => t.status === filter);
+    const txnTabs = ["All", "Success", "Failed", "Refunded"].map((name) => {
+      const active = name === filter;
+      return {
+        name, select: () => this.setState({ txnFilter: name }),
+        bg: active ? "#2c2452" : "transparent", color: active ? "#b3a9ff" : "#a29fb8",
+        border: active ? "#3d3564" : "#2b2740", weight: active ? 600 : 400,
+      };
+    });
+    const successCount = transactions.filter((t) => t.status === "Success").length;
+    const failCount = transactions.filter((t) => t.status === "Failed").length;
+    const txnKpis = [
+      { label: "Success rate", value: Math.round((successCount / transactions.length) * 100) + "%", hint: successCount + " of " + transactions.length + " txns", color: "#7dd8a0" },
+      { label: "Failed", value: String(failCount), hint: "mostly insufficient funds", color: "#e58c7f" },
+      { label: "Refunded · 30d", value: "$612", hint: "3 refunds issued", color: "#e3b558" },
+      { label: "Processed · 30d", value: "$28,340", hint: "+8.4% MoM", color: "#edecf4" },
+    ];
+
+    return {
+      invoices, invoiceOverdue: "1",
+      showInvoiceTemplate: this._showTemplate,
+      toggleTemplate: () => { this._showTemplate = !this._showTemplate; this.forceUpdate(); },
+      templateBtnLabel: this._showTemplate ? "Hide template" : "Invoice template",
+      saveTemplate: () => this.forceUpdate(),
+      saveTemplateLabel: "Save template",
+      txnKpis, txnTabs, transactions: filtered,
+    };
+  }
+
+  emailVals() {
+    const tpls = [
+      ["Welcome / onboarding", "on signup", "Active", "Welcome to GMB Suite, {{business}} 👋", "Your first scan is ready", "We've scanned 49 points around {{business}} for '{{keyword}}'. See exactly where you rank and the 3 moves that'll lift you fastest.", "View my scan"],
+      ["Weekly Advisor digest", "every Monday 9am", "Active", "{{business}}: 3 moves to rank higher this week", "This week's ranking moves", "Your visibility score is {{score}}. Knock out these 3 tasks and you're on track to reach the top of the map.", "Open Advisor"],
+      ["New review alert", "on review received", "Active", "New {{stars}}★ review for {{business}}", "You have a new review", "{{reviewer}} just left a {{stars}}-star review. We've drafted a reply in your voice — approve it in one tap.", "Reply now"],
+      ["Password reset", "on request", "Active", "Reset your GMB Suite password", "Reset your password", "Someone requested a password reset for your account. This link expires in 30 minutes. If this wasn't you, ignore this email.", "Reset password"],
+      ["Payment failed", "on failed charge", "Active", "Action needed: payment failed for {{business}}", "Your payment didn't go through", "We couldn't process your {{plan}} subscription. Update your payment method within 3 days to avoid interruption.", "Update payment"],
+      ["Trial ending", "3 days before trial end", "Paused", "Your GMB Suite trial ends in 3 days", "Keep your rankings climbing", "Your trial ends soon. Upgrade to keep weekly scans, AI replies, and your Advisor running without a break.", "Choose a plan"],
+    ];
+    const statusStyles = { Active: ["#1c3527", "#7dd8a0"], Paused: ["#4a4227", "#e3b558"] };
+    const emailTemplates = tpls.map(([name, trigger, status, subject, previewHead, previewBody, previewCta], i) => {
+      const on = i === this.state.emailIdx;
+      return {
+        name, trigger, status, subject, previewHead, previewBody, previewCta,
+        edited: "Jul " + (12 + i),
+        statusBg: statusStyles[status][0], statusColor: statusStyles[status][1],
+        select: () => this.setState({ emailIdx: i, emailSaved: false, testSent: false }),
+        bg: on ? "#2c2452" : "transparent", color: on ? "#edecf4" : "#a29fb8",
+        weight: on ? 600 : 500, dot: status === "Active" ? "#7dd8a0" : "#e3b558",
+      };
+    });
+    const active = emailTemplates[this.state.emailIdx];
+    const emailActiveOn = this.state.emailActive[this.state.emailIdx] !== undefined ? this.state.emailActive[this.state.emailIdx] : active.status === "Active";
+
+    const smtpProv = this.state.smtpProvider;
+    const smtpProviders = ["SendGrid", "Amazon SES", "Postmark"].map((name) => {
+      const on = name === smtpProv;
+      return {
+        name, select: () => this.setState({ smtpProvider: name, smtpSaved: false, smtpTested: false }),
+        bg: on ? "#2c2452" : "#131120", border: on ? "#3d3564" : "#2b2740",
+        color: on ? "#b3a9ff" : "#a29fb8", weight: on ? 600 : 400,
+      };
+    });
+    const hosts = { SendGrid: "smtp.sendgrid.net", "Amazon SES": "email-smtp.us-east-1.amazonaws.com", Postmark: "smtp.postmarkapp.com" };
+    const smtpFields = [
+      { label: "Host", value: hosts[smtpProv], color: "#edecf4", span: "span 1" },
+      { label: "Port", value: "587 (STARTTLS)", color: "#edecf4", span: "span 1" },
+      { label: "Username", value: "apikey", color: "#a29fb8", span: "span 1" },
+      { label: "Password / API key", value: "••••••••••••••••K8d2", color: "#6b6880", span: "span 1" },
+      { label: "From address", value: "no-reply@adgrowly.com", color: "#edecf4", span: "span 1" },
+      { label: "Reply-to", value: "support@adgrowly.com", color: "#edecf4", span: "span 1" },
+    ];
+    const dnsRecords = [
+      { name: "SPF", status: "Verified", ok: true },
+      { name: "DKIM", status: "Verified", ok: true },
+      { name: "DMARC", status: "p=quarantine", ok: true },
+    ].map((d) => ({ name: d.name, status: d.status, glyph: "✓", bg: "#1c3527", color: "#7dd8a0" }));
+    const sendStats = [
+      { value: "48,210", label: "Sent", color: "#edecf4" },
+      { value: "99.1%", label: "Delivered", color: "#7dd8a0" },
+      { value: "42.8%", label: "Open rate", color: "#b3a9ff" },
+      { value: "0.2%", label: "Bounce", color: "#edecf4" },
+    ];
+
+    return {
+      emailTemplates, activeEmail: active, emailVars: ["{{business}}", "{{keyword}}", "{{score}}", "{{reviewer}}"],
+      toggleEmailActive: () => this.setState((s) => ({ emailActive: { ...s.emailActive, [s.emailIdx]: !emailActiveOn } })),
+      emailActiveBg: emailActiveOn ? "#5a4af0" : "#2b2740", emailActiveKnob: emailActiveOn ? "21px" : "3px",
+      saveEmail: () => this.setState({ emailSaved: true }),
+      saveEmailLabel: this.state.emailSaved ? "Saved ✓" : "Save template",
+      sendTest: () => this.setState({ testSent: true }),
+      sendTestLabel: this.state.testSent ? "Test sent ✓" : "Send test",
+      smtpProviders, smtpFields, dnsRecords, sendStats,
+      smtpStatus: "Connected", smtpStatusBg: "#1c3527", smtpStatusColor: "#7dd8a0",
+      saveSmtp: () => this.setState({ smtpSaved: true }),
+      saveSmtpLabel: this.state.smtpSaved ? "Saved ✓" : "Save configuration",
+      testSmtp: () => this.setState({ smtpTested: true }),
+      testSmtpLabel: this.state.smtpTested ? "Test email sent ✓" : "Send test email",
+    };
+  }
+
+  supportVals() {
+    const filter = this.state.ticketFilter;
+    const supportKpis = [
+      { label: "Open tickets", value: "4", hint: "2 high priority", color: "#e3b558" },
+      { label: "Avg first response", value: "38m", hint: "SLA 2h", color: "#7dd8a0" },
+      { label: "Resolved · 7d", value: "61", hint: "94% CSAT", color: "#edecf4" },
+      { label: "Backlog > 24h", value: "1", hint: "needs attention", color: "#e58c7f" },
+    ];
+    const priStyles = { Urgent: ["#3d2323", "#e58c7f"], High: ["#4a4227", "#e3b558"], Normal: ["#221e35", "#a29fb8"] };
+    const stStyles = { Open: ["#4a4227", "#e3b558"], Pending: ["#1a2a3d", "#6ba3e0"], Resolved: ["#1c3527", "#7dd8a0"] };
+    const raw = [
+      ["#T-4821", "Grid scans stuck 'queued' for 3 hours", "None of my Vancouver keywords updated…", "Peak Physio Vancouver", "In-app · Dominate", "Urgent", "Open"],
+      ["#T-4820", "How do I turn off auto-reply for 3-star reviews?", "I want to approve those myself before…", "Maple Dental Studio", "Email · Grow", "Normal", "Open"],
+      ["#T-4819", "Billing: charged twice this month", "Razorpay shows two ₹349 charges on…", "Casa Nonna Trattoria", "In-app · Grow", "High", "Open"],
+      ["#T-4818", "Partner white-label domain not verifying", "DNS has been set for 24h but still…", "GrowLabs (partner)", "Partner portal", "High", "Open"],
+      ["#T-4816", "Can I add a second location?", "We just opened a Leaside branch…", "Maple Dental Studio", "Email · Grow", "Normal", "Pending"],
+      ["#T-4810", "Photos not showing on profile", "Uploaded 6 images yesterday, none…", "Sunrise Bakery", "In-app · Scan", "Normal", "Resolved"],
+    ].map(([id, subject, preview, who, channel, priority, status], i) => ({
+      id, subject, preview, who, channel, priority, status,
+      priBg: priStyles[priority][0], priColor: priStyles[priority][1],
+      statusBg: stStyles[status][0], statusColor: stStyles[status][1],
+      open: () => this.setState({ ticketIdx: i, ticketReplied: false, ticketResolved: false }),
+    }));
+    this._tickets = raw;
+    const tickets = filter === "All" ? raw : raw.filter((t) => t.status === filter);
+
+    const ticketTabs = ["Open", "Pending", "Resolved", "All"].map((name) => {
+      const active = name === filter;
+      return {
+        name, select: () => this.setState({ ticketFilter: name }),
+        bg: active ? "#2c2452" : "transparent", color: active ? "#b3a9ff" : "#a29fb8",
+        border: active ? "#3d3564" : "#2b2740", weight: active ? 600 : 400,
+      };
+    });
+
+    const idx = this.state.ticketIdx;
+    if (idx === null) {
+      return { supportKpis, ticketTabs, tickets, ticketOpen: false, tk: {}, ticketThread: [], cannedReplies: [], ticketReplied: false };
+    }
+    const tk = raw[idx];
+    const resolved = this.state.ticketResolved;
+    const stStyles2 = { Open: ["#4a4227", "#e3b558"], Pending: ["#1a2a3d", "#6ba3e0"], Resolved: ["#1c3527", "#7dd8a0"] };
+    const shownStatus = resolved ? "Resolved" : tk.status;
+    const ticketThread = [
+      { name: tk.who, time: "2h ago", text: tk.preview + " It's blocking our Monday report. Can someone look?", out: false },
+      { name: "System", time: "2h ago", text: "Auto-triage: matched to 'scan queue' — routed to Platform team.", out: false, sys: true },
+    ].map((m) => ({
+      ...m, align: m.out ? "flex-end" : "flex-start",
+      bg: m.sys ? "#131120" : "#221e35", border: m.sys ? "#2b2740" : "#2b2740",
+      nameColor: m.sys ? "#6b6880" : "#a29fb8",
+    }));
+    return {
+      supportKpis, ticketTabs, tickets,
+      ticketOpen: true, tk, ticketThread,
+      tkStatus: shownStatus, tkStatusBg: stStyles2[shownStatus][0], tkStatusColor: stStyles2[shownStatus][1],
+      cannedReplies: ["Quota bumped", "Ask for screenshot", "Escalate to eng"],
+      ticketReplied: this.state.ticketReplied,
+      closeTicket: () => this.setState({ ticketIdx: null }),
+      sendReply: () => this.setState({ ticketReplied: true }),
+      replyLabel: this.state.ticketReplied ? "Sent ✓" : "Send",
+      resolveTicket: () => this.setState({ ticketResolved: true }),
+      resolveLabel: resolved ? "Resolved ✓" : "Mark resolved",
+    };
+  }
+
+  manageVals() {
+    const idx = this.state.manageIdx;
+    if (idx === null || !this._users) return { manageOpen: false, mgUser: {}, roleOptions: [], permissions: [], permHint: "", saveLabel: "Save changes", suspendLabel: "Suspend user" };
+    const u = this._users[idx];
+    const role = this.state.mgRole || u.role;
+    const roleDefs = [
+      ["Owner", "Full access · billing, users, delete account"],
+      ["Admin", "Everything except billing and account deletion"],
+      ["Editor", "Reply to reviews, post, edit profile — no settings"],
+      ["Viewer", "Read-only dashboards and reports"],
+    ];
+    const roleOptions = roleDefs.map(([name, desc]) => {
+      const active = name === role;
+      return {
+        name, desc, select: () => this.setState({ mgRole: name, mgPerms: null, mgSaved: false }),
+        bg: active ? "#2c2452" : "#131120", border: active ? "#3d3564" : "#2b2740",
+        radioBorder: active ? "#8b7bff" : "#3d3564", radioBg: active ? "#8b7bff" : "transparent",
+      };
+    });
+    const permDefaults = {
+      Owner: [true, true, true, true, true],
+      Admin: [true, true, true, true, false],
+      Editor: [true, true, true, false, false],
+      Viewer: [true, false, false, false, false],
+    };
+    const permNames = ["View dashboards & reports", "Reply to reviews & Q&A", "Publish posts & edit profile", "Manage team & roles", "Access billing & payments"];
+    const base = permDefaults[role];
+    const custom = this.state.mgPerms;
+    const perms = custom || base;
+    const permissions = permNames.map((name, i) => {
+      const locked = role === "Owner";
+      return {
+        name, textColor: perms[i] ? "#edecf4" : "#6b6880",
+        bg: perms[i] ? "#5a4af0" : "#2b2740",
+        knob: perms[i] ? "18px" : "3px",
+        cursor: locked ? "not-allowed" : "pointer",
+        opacity: locked ? "0.6" : "1",
+        toggle: locked ? (() => {}) : (() => {
+          const next = (custom || base).slice();
+          next[i] = !next[i];
+          this.setState({ mgPerms: next, mgSaved: false });
+        }),
+      };
+    });
+    return {
+      manageOpen: true,
+      mgUser: u,
+      roleOptions, permissions,
+      permHint: role === "Owner" ? "Owners always have every permission." : "Toggles above override the role's defaults for this user.",
+      mg2faOn: this.state.mg2fa[idx] !== undefined ? this.state.mg2fa[idx] : true,
+      toggle2fa: () => this.setState((s) => ({ mg2fa: { ...s.mg2fa, [idx]: !(s.mg2fa[idx] !== undefined ? s.mg2fa[idx] : true) } })),
+      mg2faBg: (this.state.mg2fa[idx] !== undefined ? this.state.mg2fa[idx] : true) ? "#5a4af0" : "#2b2740",
+      mg2faKnob: (this.state.mg2fa[idx] !== undefined ? this.state.mg2fa[idx] : true) ? "18px" : "3px",
+      mg2faHint: (this.state.mg2fa[idx] !== undefined ? this.state.mg2fa[idx] : true) ? "Enforced via Google Workspace SSO" : "Not enrolled — access is at risk",
+      force2faReset: () => this.setState((s) => ({ mg2faForced: { ...s.mg2faForced, [idx]: true } })),
+      force2faLabel: this.state.mg2faForced[idx] ? "Reset requested ✓" : "Force 2FA re-enrollment",
+      closeManage: () => this.setState({ manageIdx: null }),
+      saveManage: () => this.setState({ mgSaved: true }),
+      saveLabel: this.state.mgSaved ? "Saved ✓" : "Save changes",
+      suspendUser: () => this.setState({ mgSuspended: true }),
+      suspendLabel: this.state.mgSuspended ? "Suspended ✓" : "Suspend user",
+    };
+  }
+
+  renderVals() {
+    const screen = this.state.screen;
+    const setScreen = (s) => () => this.setState({ screen: s });
+    const sections = [
+      { label: "Platform", items: [["Overview", "overview"], ["Accounts", "accounts"], ["Users & AI", "users"], ["Scan queue", "queue", "2"]] },
+      { label: "Billing", items: [["Plans & units", "plans"], ["Payments", "payments"], ["Invoices", "invoices"], ["Transactions", "transactions"]] },
+      { label: "Infrastructure", items: [["Google APIs", "googleapis"], ["Image storage", "storage"], ["AI models", "aimodels"], ["API keys", "apikeys"]] },
+      { label: "System", items: [["Providers & keys", "providers"], ["Audit log", "audit"], ["Health", "health"]] },
+      { label: "Email", items: [["Templates", "email"], ["SMTP & delivery", "smtp"]] },
+      { label: "Support", items: [["Tickets", "support", "4"]] },
+    ];
+    const navSections = sections.map((sec) => ({
+      label: sec.label,
+      items: sec.items.map(([name, key, badge]) => {
+        const active = key === screen;
+        return {
+          name, badge: badge && !this.state.retried ? badge : false,
+          select: key ? setScreen(key) : () => {},
+          bg: active ? "#2c2452" : "transparent",
+          color: active ? "#b3a9ff" : "#a29fb8",
+          weight: active ? 600 : 400,
+        };
+      }),
+    }));
+
+    const kpis = [
+      { label: "Active locations", value: "512", hint: "+21 this month", color: "#edecf4" },
+      { label: "MRR", value: "$28,340", hint: "+8.4% MoM", color: "#edecf4" },
+      { label: "Scans · 30 days", value: "81,204", hint: "97.6% success", color: "#edecf4" },
+      { label: "AI replies posted", value: "6,412", hint: "0 flagged by owners", color: "#b3a9ff" },
+    ];
+    const attention = [
+      { dot: "#e58c7f", title: "2 scan jobs failed 3× — DataForSEO timeout", detail: "Both in Vancouver region · started 06:12 UTC", cta: "Retry" },
+      { dot: "#e58c7f", title: "Google API quota at 84%", detail: "Business Profile API · resets in 9 days · consider quota increase", cta: "Request" },
+      { dot: "#e3b558", title: "3 accounts hit keyword limit", detail: "Grow plan · candidates for Dominate upsell", cta: "View" },
+      { dot: "#e3b558", title: "Review-reply model cost up 12% WoW", detail: "Longer reviews in restaurant vertical driving token growth", cta: "Inspect" },
+    ];
+    const scanBars = [
+      { label: "Mon", n: "2.6k", h: 78 }, { label: "Tue", n: "2.9k", h: 88 }, { label: "Wed", n: "2.7k", h: 82 },
+      { label: "Thu", n: "3.1k", h: 94 }, { label: "Fri", n: "2.8k", h: 85 }, { label: "Sat", n: "3.4k", h: 104 },
+      { label: "Sun", n: "3.9k", h: 118 },
+    ].map((b, i) => ({ ...b, color: i === 6 ? "#8b7bff" : "#3d3564" }));
+
+    const planStyles = { Scan: ["#241f38", "#a29fb8"], Grow: ["#2c2452", "#b3a9ff"], Dominate: ["#4a3d14", "#e3b558"] };
+    const aStatus = { Active: ["#1c3527", "#7dd8a0"], Trial: ["#4a4227", "#e3b558"], Churn_risk: ["#3d2323", "#e58c7f"] };
+    const accounts = [
+      ["Maple Dental Studio", "gmb_84h2", "Toronto", "Grow", "10", "142", "Active"],
+      ["Casa Nonna Trattoria", "gmb_77c3", "Toronto", "Grow", "8", "128", "Active"],
+      ["Peak Physio Vancouver", "gmb_02x9", "Vancouver", "Dominate", "24", "486", "Active"],
+      ["Sunrise Bakery", "gmb_19d5", "Calgary", "Scan", "1", "4", "Trial"],
+      ["Lakeview Realty Group", "gmb_53f8", "Toronto", "Dominate", "31", "512", "Active"],
+      ["QuickCuts Barber", "gmb_31k7", "Ottawa", "Grow", "6", "12", "Churn_risk"],
+      ["FitFirst Gym", "gmb_66m2", "Toronto", "Scan", "1", "4", "Trial"],
+    ].map(([name, id, city, plan, keywords, scans, status]) => ({
+      name, id, city, plan, keywords, scans,
+      status: status === "Churn_risk" ? "Churn risk" : status,
+      planBg: planStyles[plan][0], planColor: planStyles[plan][1],
+      statusBg: aStatus[status][0], statusColor: aStatus[status][1],
+    }));
+
+    const retried = this.state.retried;
+    const queueKpis = [
+      { label: "Queue depth", value: retried ? "5" : "3", hint: "avg wait 41s", color: "#edecf4" },
+      { label: "Failed · 24h", value: retried ? "0" : "2", hint: retried ? "all retried ✓" : "both DataForSEO timeouts", color: retried ? "#7dd8a0" : "#e58c7f" },
+      { label: "Throughput", value: "3.2/s", hint: "peak 6.1/s Sunday 02:00", color: "#edecf4" },
+    ];
+    const jStatus = { Running: ["#2c2452", "#b3a9ff"], Queued: ["#241f38", "#a29fb8"], Failed: ["#3d2323", "#e58c7f"], Retrying: ["#4a4227", "#e3b558"], Done: ["#1c3527", "#7dd8a0"] };
+    const rawJobs = [
+      ["job_9f2c", "Peak Physio Vancouver", "physiotherapist near me", "7×7 · 1km", retried ? "Retrying" : "Failed"],
+      ["job_9f2b", "Peak Physio Vancouver", "sports physio vancouver", "7×7 · 1km", retried ? "Retrying" : "Failed"],
+      ["job_9f31", "Maple Dental Studio", "dentist near me", "7×7 · 1km", "Running"],
+      ["job_9f32", "Casa Nonna Trattoria", "italian restaurant near me", "7×7 · 1km", "Running"],
+      ["job_9f33", "Lakeview Realty Group", "realtor east york", "9×9 · 2km", "Queued"],
+      ["job_9f2a", "Sunrise Bakery", "bakery calgary", "5×5 · 1km", "Done"],
+    ];
+    const queueJobs = rawJobs.map(([id, account, keyword, grid, status]) => ({
+      id, account, keyword, grid, status,
+      statusBg: jStatus[status][0], statusColor: jStatus[status][1],
+    }));
+
+    const ok = ["#1c3527", "#7dd8a0"], warn = ["#4a4227", "#e3b558"];
+    const providers = [
+      { name: "Google Business Profile API", status: "Connected", statusBg: ok[0], statusColor: ok[1], usage: "quota 84% · resets in 9d", fields: [
+        { key: "GOOGLE_OAUTH_CLIENT_ID", value: "812304…apps.googleusercontent.com", valColor: "#edecf4", canReveal: false },
+        { key: "GOOGLE_OAUTH_CLIENT_SECRET", value: "••••••••••••••••7g4k", valColor: "#6b6880", canReveal: true },
+      ]},
+      { name: "DataForSEO (grid scans)", status: "Degraded", statusBg: warn[0], statusColor: warn[1], usage: "$1,204 spent · July", fields: [
+        { key: "DATAFORSEO_LOGIN", value: "ops@adgrowly.com", valColor: "#edecf4", canReveal: false },
+        { key: "DATAFORSEO_PASSWORD", value: "••••••••••••2p8m", valColor: "#6b6880", canReveal: true },
+      ]},
+      { name: "Anthropic (AI replies & advisor)", status: "Connected", statusBg: ok[0], statusColor: ok[1], usage: "$842 spent · July · budget $2k", fields: [
+        { key: "ANTHROPIC_API_KEY", value: "sk-ant-••••••••••••••••wR2d", valColor: "#6b6880", canReveal: true },
+        { key: "REPLY_MODEL", value: "claude-sonnet-4", valColor: "#edecf4", canReveal: false },
+      ]},
+      { name: "Stripe (billing)", status: "Connected", statusBg: ok[0], statusColor: ok[1], usage: "512 active subscriptions", fields: [
+        { key: "STRIPE_SECRET_KEY", value: "sk_live_••••••••••••••••Kd91", valColor: "#6b6880", canReveal: true },
+      ]},
+    ];
+
+    const adminPlans = [
+      { name: "Scan (free)", price: "$0", cadence: "Monthly", keywords: "1", accounts: "203" },
+      { name: "Grow", price: "$49", cadence: "Weekly", keywords: "10", accounts: "244" },
+      { name: "Dominate", price: "$99", cadence: "Daily", keywords: "Unlimited", accounts: "65" },
+    ];
+    const unitCosts = [
+      { label: "Grid scan cost", value: "$0.14", unit: "per 49-pt scan · DataForSEO" },
+      { label: "AI reply cost", value: "$0.011", unit: "per drafted reply" },
+      { label: "Gross margin", value: "87%", unit: "blended · Grow plan" },
+      { label: "CAC payback", value: "2.1 mo", unit: "self-serve signups" },
+    ];
+
+    return {
+      navSections, kpis, attention, scanBars, accounts, queueKpis, queueJobs, providers, adminPlans, unitCosts,
+      queueDepth: retried ? "5" : "3",
+      queueDot: retried ? "#e3b558" : "#7dd8a0",
+      retryFailed: () => this.setState({ retried: true }),
+      retryLabel: retried ? "2 jobs retrying ✓" : "Retry failed jobs",
+      retryBg: retried ? "#1c3527" : "#1a1729",
+      retryColor: retried ? "#7dd8a0" : "#a29fb8",
+      retryBorder: retried ? "#2a4a37" : "#2b2740",
+      ...this.extraVals(),
+      ...this.manageVals(),
+      loggedOut: this.state.loggedOut && !this.state.otpStage, loggedIn: !this.state.loggedOut,
+      otpStage: this.state.otpStage,
+      otpBoxes: ["4", "8", "", "", "", ""].map((v, i) => ({ v, border: i === 2 ? "#6d5efc" : "#2b2740" })),
+      requestOtp: () => this.setState({ otpStage: true }),
+      verifyOtp: () => this.setState({ loggedOut: false, otpStage: false }),
+      login: () => this.setState({ loggedOut: false }),
+      menuOpen: this.state.menuOpen,
+      toggleMenu: () => this.setState((s) => ({ menuOpen: !s.menuOpen })),
+      logout: () => this.setState({ loggedOut: true, menuOpen: false }),
+      screenTitle: { overview: "Overview", accounts: "Accounts", users: "Users & AI", queue: "Scan queue", plans: "Plans & units", payments: "Payments", googleapis: "Google APIs", storage: "Image storage", aimodels: "AI models", apikeys: "API keys", providers: "Providers & keys", audit: "Audit log", health: "Health", support: "Support tickets", email: "Email templates", smtp: "SMTP & delivery", invoices: "Invoices", transactions: "Transactions" }[screen],
+      showOverview: screen === "overview", showAccounts: screen === "accounts",
+      showQueue: screen === "queue", showPlans: screen === "plans", showProviders: screen === "providers",
+      showPayments: screen === "payments", showGoogleApis: screen === "googleapis",
+      showStorage: screen === "storage", showUsers: screen === "users", showApiKeys: screen === "apikeys",
+      showAiModels: screen === "aimodels", showAudit: screen === "audit", showHealth: screen === "health",
+      showSupport: screen === "support",
+      showEmail: screen === "email", showSmtp: screen === "smtp",
+      showInvoices: screen === "invoices", showTransactions: screen === "transactions",
+    };
+  }
+}
+</script>
+</body>
+</html>

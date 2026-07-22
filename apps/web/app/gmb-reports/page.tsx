@@ -1,289 +1,307 @@
 "use client";
 
-// AdGrowly — Reports (planning PDF §3 + §2 AI monthly report). Generate a
-// period report aggregating reviews/ranking/citations/posts with a narrative
-// summary + action plan. Backed by module 8: /api/v1/gmb/reports.
+import { useCallback, useEffect, useState } from "react";
+import { GmbShell } from "../../src/components/gmb/GmbShell";
+import { Card, SectionLabel, Pill, Button, EmptyState, ErrorNote, Skeleton } from "../../src/components/gmb/ui";
+import { api, ApiClientError } from "../../src/lib/api";
+import { resolveApiBase } from "../../src/lib/apiBase";
 
-import { FormEvent, useEffect, useState } from "react";
-import { DashboardShell } from "../../src/components/DashboardShell";
-import { useAuth } from "../../src/hooks/useAuth";
-import { api, ApiClientError, API_BASE, tokenStore } from "../../src/lib/api";
+// Reports — periodic snapshots of the whole profile (reviews, insights,
+// rankings, citations, posts) with a generated summary and action plan.
+//
+// A report is a point-in-time record, so once generated it never changes —
+// the list is history. Generating one runs the same aggregations the dashboard
+// uses, then freezes them, so a report and the live dashboard can differ (and
+// that is correct: the report is what things looked like then).
 
-const TYPES = ["WEEKLY", "MONTHLY", "CUSTOM"] as const;
+type ReportType = "WEEKLY" | "MONTHLY" | "CUSTOM";
 
-interface ActionItem {
-  priority: "high" | "medium" | "low";
-  area: string;
-  task: string;
-}
-
-interface ReportTrend {
-  reviewsCount: number;
-  averageRating: number;
-  totalViews: number;
-  totalActions: number;
-  top3: number;
-  consistentCitations: number;
-  postsCreated: number;
-  momentum: "improving" | "declining" | "steady";
+interface ReportData {
+  reviews?: { count: number; average: number; unanswered: number };
+  insights?: { totalViews: number; totalActions: number; actionRate: number };
+  citations?: { total: number; consistent: number };
+  ranking?: { trackedKeywords?: number; top3?: number };
+  posts?: { created: number };
 }
 
 interface Report {
   id: string;
-  type: string;
+  locationId: string | null;
+  type: ReportType;
   periodStart: string;
   periodEnd: string;
+  data: ReportData;
   summary: string | null;
-  actionPlan: ActionItem[] | null;
-  data?: { trend?: ReportTrend } | null;
+  actionPlan: Array<{ priority?: string; task?: string }> | null;
+  createdAt: string;
 }
 
-const PRIORITY_STYLES: Record<string, string> = {
-  high: "bg-red-50 text-red-700",
-  medium: "bg-amber-50 text-amber-700",
-  low: "bg-slate-100 text-slate-600",
+interface LocationLite {
+  id: string;
+  name: string;
+}
+
+const PRIORITY_TONE: Record<string, "danger" | "warn" | "neutral"> = {
+  high: "danger",
+  medium: "warn",
+  low: "neutral",
 };
 
-const MOMENTUM_STYLES: Record<string, string> = {
-  improving: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  declining: "bg-red-50 text-red-700 border-red-200",
-  steady: "bg-slate-100 text-slate-600 border-slate-200",
-};
-
-const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
-
-const toIso = (d: string) => (d ? new Date(d).toISOString() : undefined);
+function isoRange(days: number): { periodStart: string; periodEnd: string } {
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 86400000);
+  return { periodStart: start.toISOString(), periodEnd: end.toISOString() };
+}
 
 export default function GmbReportsPage() {
-  const { user, features, loading, signOut } = useAuth({ required: true });
-  const [items, setItems] = useState<Report[]>([]);
-  const [err, setErr] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const [type, setType] = useState<string>("MONTHLY");
-  const [periodStart, setPeriodStart] = useState("");
-  const [periodEnd, setPeriodEnd] = useState("");
+  const [locations, setLocations] = useState<LocationLite[]>([]);
   const [locationId, setLocationId] = useState("");
-
-  const [schedule, setSchedule] = useState<{ enabled: boolean; frequency: string; lastRunAt: string | null } | null>(null);
-  const [savingSchedule, setSavingSchedule] = useState(false);
-
-  async function refresh() {
-    try {
-      setErr(null);
-      const q = locationId.trim() ? `?locationId=${encodeURIComponent(locationId.trim())}` : "";
-      setItems(await api.get<Report[]>(`/api/v1/gmb/reports${q}`));
-    } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to load reports.");
-    }
-  }
-
-  async function loadSchedule() {
-    try {
-      setSchedule(await api.get("/api/v1/gmb/report-schedule"));
-    } catch {
-      /* non-fatal */
-    }
-  }
-
-  async function saveSchedule(next: { enabled: boolean; frequency: string }) {
-    setSavingSchedule(true);
-    setErr(null);
-    setNotice(null);
-    try {
-      setSchedule(await api.put("/api/v1/gmb/report-schedule", next));
-      setNotice(next.enabled ? `Automatic ${next.frequency.toLowerCase()} reports on.` : "Automatic reports off.");
-    } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to update the schedule.");
-    } finally {
-      setSavingSchedule(false);
-    }
-  }
+  const [reports, setReports] = useState<Report[] | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [type, setType] = useState<ReportType>("MONTHLY");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) {
-      void refresh();
-      void loadSchedule();
-    }
-  }, [user]);
+    void api
+      .get<LocationLite[]>("/api/v1/gmb/locations")
+      .then((rows) => {
+        setLocations(rows ?? []);
+        const saved = window.localStorage.getItem("gmb_active_location");
+        setLocationId(rows?.some((r) => r.id === saved) ? saved! : (rows?.[0]?.id ?? ""));
+      })
+      .catch(() => undefined);
+  }, []);
 
-  async function generate(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setErr(null);
-    setNotice(null);
+  const load = useCallback(async () => {
+    setError(null);
     try {
-      await api.post("/api/v1/gmb/reports/generate", {
+      const qs = locationId ? `?locationId=${locationId}` : "";
+      const rows = await api.get<Report[]>(`/api/v1/gmb/reports${qs}`);
+      setReports(rows ?? []);
+      setOpenId((cur) => cur ?? rows?.[0]?.id ?? null);
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not load reports.");
+      setReports([]);
+    }
+  }, [locationId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function generate() {
+    setBusy("generate");
+    setError(null);
+    try {
+      const range = isoRange(type === "WEEKLY" ? 7 : 30);
+      const created = await api.post<Report>("/api/v1/gmb/reports/generate", {
+        ...(locationId ? { locationId } : {}),
         type,
-        periodStart: toIso(periodStart),
-        periodEnd: toIso(periodEnd),
-        locationId: locationId.trim() || undefined,
+        ...range,
       });
-      setNotice("Report generated.");
-      await refresh();
+      setOpenId(created.id);
+      await load();
     } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to generate report.");
+      setError(e instanceof ApiClientError ? e.message : "Could not generate the report.");
+    } finally {
+      setBusy(null);
     }
   }
 
-  async function shareWhatsApp(id: string) {
-    const to = window.prompt("Send this report to which WhatsApp number? (E.164, e.g. +9198…)");
-    if (!to?.trim()) return;
-    setErr(null);
-    setNotice(null);
+  // The PDF endpoint sits behind the same auth as everything else, so a bare
+  // <a href> would 401. Fetch it with the token, then open the blob.
+  async function openPdf(id: string) {
+    setBusy(`pdf-${id}`);
+    setError(null);
     try {
-      await api.post(`/api/v1/gmb/reports/${id}/share-whatsapp`, { to: to.trim() });
-      setNotice(`Report sent to ${to.trim()} on WhatsApp.`);
-    } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to share the report.");
-    }
-  }
-
-  async function downloadPdf(id: string) {
-    setErr(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/gmb/reports/${id}/pdf`, {
-        headers: { Authorization: `Bearer ${tokenStore.getAccess() ?? ""}` },
+      const token = window.localStorage.getItem("nx_access");
+      const res = await fetch(`${resolveApiBase()}/api/v1/gmb/reports/${id}/pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `gmb-report-${id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      setErr("Unable to download the PDF.");
+      if (!res.ok) throw new Error(`PDF request failed (${res.status})`);
+      const url = URL.createObjectURL(await res.blob());
+      window.open(url, "_blank", "noopener");
+      // Give the new tab a moment to grab the blob before revoking it.
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not open the PDF.");
+    } finally {
+      setBusy(null);
     }
   }
 
   async function remove(id: string) {
-    if (!window.confirm("Delete this report?")) return;
+    setBusy(id);
     try {
       await api.delete(`/api/v1/gmb/reports/${id}`);
-      await refresh();
+      if (openId === id) setOpenId(null);
+      await load();
     } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to delete.");
+      setError(e instanceof ApiClientError ? e.message : "Could not delete the report.");
+    } finally {
+      setBusy(null);
     }
   }
 
-  if (loading || !user) {
-    return <div className="p-8 text-sm text-slate-500">Loading...</div>;
-  }
-
-  const fmt = (s: string) => new Date(s).toLocaleDateString();
+  const open = (reports ?? []).find((r) => r.id === openId) ?? null;
 
   return (
-    <DashboardShell user={user} features={features} signOut={signOut}>
-      <div className="mb-6">
-        <p className="text-sm font-medium text-emerald-700">Google Business</p>
-        <h1 className="text-2xl font-semibold text-slate-950">Reports</h1>
-        <p className="mt-1 max-w-2xl text-sm text-slate-500">
-          Generate a weekly or monthly performance report — reviews, ranking, citations and posts — with a narrative summary and an action plan.
-        </p>
-      </div>
+    <GmbShell title="Reports">
+      {error && <ErrorNote>{error}</ErrorNote>}
 
-      {err && <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>}
-      {notice && <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</div>}
-
-      {schedule && (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <Card className="mb-3.5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-slate-800">Automatic reports</p>
-            <p className="text-xs text-slate-500">
-              {schedule.enabled
-                ? `On — a ${schedule.frequency.toLowerCase()} report generates itself each period.`
-                : "Off — generate reports manually below."}
-              {schedule.lastRunAt && ` Last auto-run ${new Date(schedule.lastRunAt).toLocaleDateString()}.`}
-            </p>
+            <SectionLabel>Generate a report</SectionLabel>
+            <div className="mt-1 text-sm2 text-gmb-ink-muted">
+              A frozen snapshot of reviews, performance, rankings and citations for the period,
+              with a plain-language summary and next steps.
+            </div>
           </div>
           <div className="flex items-center gap-2">
+            {locations.length > 1 && (
+              <select
+                value={locationId}
+                onChange={(e) => setLocationId(e.target.value)}
+                className="rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 outline-none"
+              >
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <select
-              value={schedule.frequency}
-              disabled={savingSchedule}
-              onChange={(e) => void saveSchedule({ enabled: schedule.enabled, frequency: e.target.value })}
-              className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              value={type}
+              onChange={(e) => setType(e.target.value as ReportType)}
+              className="rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 outline-none"
             >
-              <option value="MONTHLY">Monthly</option>
-              <option value="WEEKLY">Weekly</option>
+              <option value="WEEKLY">Last 7 days</option>
+              <option value="MONTHLY">Last 30 days</option>
             </select>
-            <button
-              onClick={() => void saveSchedule({ enabled: !schedule.enabled, frequency: schedule.frequency })}
-              disabled={savingSchedule}
-              className={`rounded-md px-3 py-1.5 text-sm font-semibold disabled:opacity-60 ${
-                schedule.enabled
-                  ? "border border-slate-300 text-slate-700 hover:bg-slate-50"
-                  : "bg-emerald-600 text-white hover:bg-emerald-700"
-              }`}
-            >
-              {schedule.enabled ? "Turn off" : "Turn on"}
-            </button>
+            <Button variant="dark" disabled={busy === "generate"} onClick={() => void generate()}>
+              {busy === "generate" ? "Generating…" : "Generate"}
+            </Button>
           </div>
         </div>
-      )}
+      </Card>
 
-      <div className="grid gap-6 lg:grid-cols-[320px,1fr]">
-        <form onSubmit={generate} className="h-fit rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-base font-semibold text-slate-950">Generate report</h2>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            Type
-            <select value={type} onChange={(e) => setType(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
-              {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            Period start
-            <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} required className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
-          </label>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            Period end
-            <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} required className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
-          </label>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            Location ID (optional)
-            <input value={locationId} onChange={(e) => setLocationId(e.target.value)} placeholder="tenant-wide if blank" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          </label>
-          <button type="submit" className="mt-4 w-full rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Generate</button>
-        </form>
-
-        <div className="space-y-3">
-          {items.length === 0 && <p className="text-sm text-slate-500">No reports yet.</p>}
-          {items.map((r) => (
-            <div key={r.id} className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-800">{r.type} · {fmt(r.periodStart)} – {fmt(r.periodEnd)}</span>
-                <span className="flex items-center gap-3">
-                  <button onClick={() => void shareWhatsApp(r.id)} className="text-xs font-medium text-emerald-700 hover:underline">Share on WhatsApp</button>
-                  <button onClick={() => void downloadPdf(r.id)} className="text-xs font-medium text-sky-700 hover:underline">Download PDF</button>
-                  <button onClick={() => void remove(r.id)} className="text-xs text-slate-400 hover:text-red-600">Delete</button>
-                </span>
-              </div>
-              {r.data?.trend && (
-                <p className="mt-2 text-xs text-slate-500">
-                  <span className={`mr-2 rounded-full border px-2 py-0.5 text-xs font-medium ${MOMENTUM_STYLES[r.data.trend.momentum]}`}>
-                    {r.data.trend.momentum}
+      {reports === null ? (
+        <Skeleton className="h-64" />
+      ) : reports.length === 0 ? (
+        <EmptyState
+          title="No reports yet"
+          body="Generate your first report to capture where the profile stands today — then each new one shows the trend since the last."
+        />
+      ) : (
+        <div className="grid gap-3.5 lg:grid-cols-[280px_1fr] lg:items-start">
+          {/* History list */}
+          <div className="flex flex-col gap-2">
+            {reports.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setOpenId(r.id)}
+                className={`rounded-card border px-4 py-3 text-left transition ${
+                  openId === r.id
+                    ? "border-gmb-brand bg-gmb-brand-wash"
+                    : "border-gmb-line bg-gmb-surface hover:border-gmb-brand-border"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Pill tone="brand">{r.type}</Pill>
+                  <span className="font-geist-mono text-micro text-gmb-ink-subtle">
+                    {new Date(r.createdAt).toLocaleDateString()}
                   </span>
-                  vs last period: {signed(r.data.trend.reviewsCount)} reviews · {signed(r.data.trend.averageRating)}★ ·{" "}
-                  {signed(r.data.trend.totalViews)} views · {signed(r.data.trend.totalActions)} actions · {signed(r.data.trend.top3)} top-3
-                </p>
-              )}
-              {r.summary && <p className="mt-2 text-sm text-slate-600">{r.summary}</p>}
-              {r.actionPlan && r.actionPlan.length > 0 && (
-                <ul className="mt-3 space-y-1">
-                  {r.actionPlan.map((a, i) => (
-                    <li key={i} className="text-sm text-slate-600">
-                      <span className={`mr-2 rounded px-1.5 py-0.5 text-xs font-medium ${PRIORITY_STYLES[a.priority]}`}>{a.priority}</span>
-                      {a.task}
-                    </li>
-                  ))}
-                </ul>
+                </div>
+                <div className="mt-1.5 text-xs2 text-gmb-ink-muted">
+                  {new Date(r.periodStart).toLocaleDateString()} –{" "}
+                  {new Date(r.periodEnd).toLocaleDateString()}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Detail */}
+          {open && (
+            <div className="flex flex-col gap-3.5">
+              <Card>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <SectionLabel>
+                      {open.type} report ·{" "}
+                      {new Date(open.periodStart).toLocaleDateString()} –{" "}
+                      {new Date(open.periodEnd).toLocaleDateString()}
+                    </SectionLabel>
+                    {open.summary && (
+                      <p className="mt-2 max-w-2xl text-sm2 leading-relaxed text-gmb-ink">
+                        {open.summary}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Button
+                      variant="ghost"
+                      disabled={busy === `pdf-${open.id}`}
+                      onClick={() => void openPdf(open.id)}
+                    >
+                      {busy === `pdf-${open.id}` ? "Opening…" : "PDF ↗"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={busy === open.id}
+                      onClick={() => void remove(open.id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Metric grid */}
+              <div className="grid grid-cols-3 gap-3.5">
+                {(
+                  [
+                    ["Reviews", open.data.reviews?.count, open.data.reviews ? `${open.data.reviews.average.toFixed(1)}★ avg` : ""],
+                    ["Profile views", open.data.insights?.totalViews, open.data.insights ? `${((open.data.insights.actionRate ?? 0) * 100).toFixed(1)}% acted` : ""],
+                    ["Customer actions", open.data.insights?.totalActions, ""],
+                    ["Keywords in top 3", open.data.ranking?.top3, open.data.ranking?.trackedKeywords ? `of ${open.data.ranking.trackedKeywords} tracked` : ""],
+                    ["Consistent citations", open.data.citations?.consistent, open.data.citations ? `of ${open.data.citations.total}` : ""],
+                    ["Posts published", open.data.posts?.created, ""],
+                  ] as const
+                ).map(([label, value, caption]) => (
+                  <Card key={label}>
+                    <SectionLabel>{label}</SectionLabel>
+                    <div className="mt-1.5 text-2xl font-bold tracking-[-0.02em]">
+                      {typeof value === "number" ? value.toLocaleString() : "—"}
+                    </div>
+                    {caption && <div className="mt-1 text-micro text-gmb-ink-subtle">{caption}</div>}
+                  </Card>
+                ))}
+              </div>
+
+              {/* Action plan */}
+              {open.actionPlan && open.actionPlan.length > 0 && (
+                <Card>
+                  <SectionLabel>Recommended next steps</SectionLabel>
+                  <ol className="mt-3 flex list-none flex-col gap-2 p-0">
+                    {open.actionPlan.map((a, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <Pill tone={PRIORITY_TONE[(a.priority ?? "low").toLowerCase()] ?? "neutral"}>
+                          {a.priority ?? "low"}
+                        </Pill>
+                        <span className="text-sm2 leading-snug text-gmb-ink">{a.task}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </Card>
               )}
             </div>
-          ))}
+          )}
         </div>
-      </div>
-    </DashboardShell>
+      )}
+    </GmbShell>
   );
 }

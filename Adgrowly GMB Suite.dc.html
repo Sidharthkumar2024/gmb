@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #f5f5f8; }
+  a { color: #5a4af0; text-decoration: none; }
+  a:hover { color: #4536d6; text-decoration: underline; }
+  ::placeholder { color: #8d8aa3; }
+</style>
+</helmet>
+<div style="display: flex; height: 100vh; background: #f5f5f8; font-family: Geist, sans-serif; color: #15131f; overflow: hidden;">
+  <aside style="width: 248px; flex-shrink: 0; background: #ffffff; border-right: 1px solid #ececf1; display: flex; flex-direction: column;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 20px 20px 16px;">
+      <div style="width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, #6d5efc, #8b7bff); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;">G</div>
+      <div>
+        <div style="font-size: 16px; font-weight: 700; letter-spacing: -0.01em; line-height: 1;">GMB Suite</div>
+        <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-top: 3px;">by Adgrowly</div>
+      </div>
+    </div>
+    <div style="margin: 4px 12px 12px; position: relative;">
+      <button onClick="{{ toggleLocMenu }}" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #ececf1; border-radius: 9px; background: #f5f5f8; cursor: pointer; width: 100%; font-family: Geist, sans-serif; text-align: left;" style-hover="background: #f0eff5;">
+        <span style="width: 7px; height: 7px; flex-shrink: 0; border-radius: 99px; background: {{ activeLocDot }};"></span>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 12px; font-weight: 600; color: #15131f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ activeLocName }}</div>
+          <div style="font-family: 'Geist Mono', monospace; font-size: 9px; color: #8d8aa3;">{{ activeLocMeta }}</div>
+        </div>
+        <span style="color: #8d8aa3; font-size: 10px;">▾</span>
+      </button>
+      <sc-if value="{{ locMenuOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position: absolute; top: 46px; left: 0; right: 0; background: #ffffff; border: 1px solid #ececf1; border-radius: 12px; box-shadow: 0 12px 32px rgba(21,19,31,0.14); padding: 5px; z-index: 30;">
+          <sc-for list="{{ locOptions }}" as="lo" hint-placeholder-count="3">
+            <button onClick="{{ lo.select }}" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: none; border-radius: 8px; background: {{ lo.bg }}; font-family: Geist, sans-serif; text-align: left; cursor: pointer;" style-hover="background: #f5f5f8;">
+              <span style="width: 7px; height: 7px; flex-shrink: 0; border-radius: 99px; background: {{ lo.dot }};"></span>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 12px; font-weight: {{ lo.weight }}; color: #15131f;">{{ lo.name }}</div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9px; color: #8d8aa3;">{{ lo.meta }}</div>
+              </div>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: {{ lo.scoreColor }};">{{ lo.score }}</span>
+            </button>
+          </sc-for>
+          <button onClick="{{ goLocations }}" style="width: 100%; margin-top: 4px; padding: 8px; border: 1px dashed #ded8ff; border-radius: 8px; background: #f7f5ff; color: #5a4af0; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 600; cursor: pointer;">Manage all locations →</button>
+        </div>
+      </sc-if>
+    </div>
+    <nav style="flex: 1; overflow-y: auto; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 18px;">
+      <sc-for list="{{ navSections }}" as="sec" hint-placeholder-count="3">
+        <div>
+          <div style="padding: 0 10px 7px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">{{ sec.label }}</div>
+          <div style="display: flex; flex-direction: column; gap: 1px;">
+            <sc-for list="{{ sec.items }}" as="item" hint-placeholder-count="4">
+              <button onClick="{{ item.select }}" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border: none; border-radius: 9px; background: {{ item.bg }}; color: {{ item.color }}; font-family: Geist, sans-serif; font-size: 13px; font-weight: {{ item.weight }}; text-align: left; cursor: pointer; width: 100%;" style-hover="background: #f0eff5;">
+                <span>{{ item.name }}</span>
+                <sc-if value="{{ item.badge }}" hint-placeholder-val="{{ false }}">
+                  <span style="background: #ece8ff; color: #5a4af0; border-radius: 99px; font-size: 10.5px; font-weight: 600; padding: 1px 7px;">{{ item.badge }}</span>
+                </sc-if>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </nav>
+    <div style="margin: 12px; padding: 14px; border-radius: 14px; background: linear-gradient(135deg, #6d5efc, #8b7bff); color: #ffffff;">
+      <div style="font-size: 12.5px; font-weight: 600;">Local visibility score</div>
+      <div style="font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px;">78<span style="font-size: 14px; font-weight: 500; opacity: 0.7;">/100</span></div>
+      <div style="font-size: 11px; opacity: 0.85; margin-top: 2px;">+6 since last month</div>
+    </div>
+  </aside>
+  <main style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+    <header style="height: 64px; flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 0 28px; border-bottom: 1px solid #ececf1; background: #f5f5f8;">
+      <h1 style="font-size: 21px; font-weight: 700; letter-spacing: -0.01em; margin: 0; flex-shrink: 0;">{{ screenTitle }}</h1>
+      <div style="flex: 1;"></div>
+      <input placeholder="Search keywords, reviews…" style="width: 220px; padding: 8px 12px; border: 1px solid #ececf1; border-radius: 9px; background: #ffffff; font-family: Geist, sans-serif; font-size: 12.5px; color: #15131f; outline: none;">
+      <button onClick="{{ goBilling }}" style="display: flex; align-items: center; gap: 7px; padding: 6px 12px; border: 1px solid #ececf1; border-radius: 99px; background: #ffffff; cursor: pointer; font-family: Geist, sans-serif;" style-hover="border-color: #ded8ff;">
+        <span style="width: 7px; height: 7px; border-radius: 99px; background: #6d5efc;"></span>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #56536a;">{{ credits }} credits</span>
+      </button>
+      <button onClick="{{ goBilling }}" style="padding: 8px 16px; background: #1a1726; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;" style-hover="background: #2c2839;">Buy credits</button>
+      <div style="position: relative;">
+        <button onClick="{{ toggleMenu }}" style="width: 34px; height: 34px; border: none; border-radius: 99px; background: #5a4af0; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; cursor: pointer;">SS</button>
+        <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position: absolute; top: 42px; right: 0; width: 230px; background: #ffffff; border: 1px solid #ececf1; border-radius: 14px; box-shadow: 0 12px 32px rgba(21,19,31,0.14); padding: 6px; z-index: 20;">
+            <div style="padding: 10px 12px; border-bottom: 1px solid #f0eff5;">
+              <div style="font-size: 13px; font-weight: 600;">Dr. Sana Sharma</div>
+              <div style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #8d8aa3; margin-top: 2px;">sana@mapledental.ca · Owner</div>
+            </div>
+            <button onClick="{{ goSettings }}" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; border-radius: 9px; background: transparent; font-family: Geist, sans-serif; font-size: 12.5px; color: #15131f; text-align: left; cursor: pointer;" style-hover="background: #f5f5f8;">⚙&#xFE0E; Settings</button>
+            <button onClick="{{ goSettings }}" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; border-radius: 9px; background: transparent; font-family: Geist, sans-serif; font-size: 12.5px; color: #15131f; text-align: left; cursor: pointer;" style-hover="background: #f5f5f8;">🔗&#xFE0E; Google connection</button>
+            <button onClick="{{ logout }}" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; border-radius: 9px; background: transparent; font-family: Geist, sans-serif; font-size: 12.5px; color: #d92d20; text-align: left; cursor: pointer; border-top: 1px solid #f0eff5; border-radius: 0 0 9px 9px;" style-hover="background: #fdecea;">↩&#xFE0E; Log out</button>
+          </div>
+        </sc-if>
+      </div>
+    </header>
+    <sc-if value="{{ loggedOut }}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+        <div style="width: 360px; background: #ffffff; border: 1px solid #ececf1; border-radius: 18px; padding: 30px 32px; text-align: center; box-shadow: 0 12px 40px rgba(90,74,240,0.1);">
+          <div style="width: 44px; height: 44px; margin: 0 auto; border-radius: 13px; background: linear-gradient(135deg, #6d5efc, #8b7bff); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700;">G</div>
+          <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin-top: 14px;">You're logged out</div>
+          <div style="font-size: 12.5px; color: #56536a; margin-top: 6px;">Your session ended securely. See you soon!</div>
+          <button onClick="{{ loginAgain }}" style="width: 100%; margin-top: 18px; padding: 11px; background: #5a4af0; color: #ffffff; border: none; border-radius: 10px; font-family: Geist, sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;" style-hover="background: #4536d6;">Log back in</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ loggedIn }}" hint-placeholder-val="{{ true }}">
+    <div style="flex: 1; overflow-y: auto; padding: 24px 28px 40px;">
+
+      <sc-if value="{{ showBilling }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; align-items: start;">
+          <div style="background: linear-gradient(120deg, #1a1726, #2c2452); color: #ffffff; border-radius: 18px; padding: 22px 26px;">
+            <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #b3a9ff;">Credit balance</div>
+            <div style="font-size: 42px; font-weight: 700; letter-spacing: -0.025em; margin-top: 4px;">{{ credits }}</div>
+            <div style="font-size: 12px; color: #a29fb8;">1 credit = one 49-point grid scan · ~{{ creditsWeeks }} weeks left at your pace</div>
+            <sc-if value="{{ creditsBought }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top: 12px; padding: 8px 12px; background: rgba(125,216,160,0.15); border: 1px solid rgba(125,216,160,0.3); border-radius: 9px; font-size: 12px; color: #7dd8a0;">✓ {{ creditsBoughtLabel }} added — receipt emailed.</div>
+            </sc-if>
+          </div>
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 18px; padding: 20px 24px;">
+            <span style="font-size: 14px; font-weight: 600;">Auto-recharge</span>
+            <div style="font-size: 12px; color: #56536a; line-height: 1.6; margin-top: 8px;">Buy 250 credits automatically when the balance drops below 50.</div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-top: 14px;">
+              <button onClick="{{ toggleRecharge }}" style="width: 44px; height: 24px; flex-shrink: 0; border: none; border-radius: 99px; background: {{ rechargeBg }}; cursor: pointer; position: relative;">
+                <span style="position: absolute; top: 3px; left: {{ rechargeKnob }}; width: 18px; height: 18px; border-radius: 99px; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);"></span>
+              </button>
+              <span style="font-size: 12px; color: #56536a;">{{ rechargeLabel }} · Visa ····4242</span>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 14px;">
+          <span style="font-size: 14px; font-weight: 600;">Buy credit packs</span>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 12px;">
+            <sc-for list="{{ creditPacks }}" as="cp" hint-placeholder-count="4">
+              <button onClick="{{ cp.select }}" style="text-align: left; background: #ffffff; border: 1.5px solid {{ cp.border }}; border-radius: 16px; padding: 16px 18px; cursor: pointer; font-family: Geist, sans-serif; position: relative;" style-hover="border-color: #ded8ff;">
+                <sc-if value="{{ cp.popular }}" hint-placeholder-val="{{ false }}"><span style="position: absolute; top: -10px; left: 16px; background: #5a4af0; color: #fff; border-radius: 99px; font-size: 9px; font-weight: 700; padding: 2px 10px; letter-spacing: 0.04em;">BEST VALUE</span></sc-if>
+                <div style="font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">{{ cp.credits }}</div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">credits</div>
+                <div style="font-size: 15px; font-weight: 600; margin-top: 10px;">{{ cp.price }}</div>
+                <div style="font-size: 11px; color: #8d8aa3;">{{ cp.per }}</div>
+              </button>
+            </sc-for>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 14px 18px; background: #fafafc; border: 1px solid #ececf1; border-radius: 14px;">
+            <span style="font-size: 12.5px; color: #56536a;">Selected: <strong style="color: #15131f;">{{ selectedPackLabel }}</strong> · pay with Visa ····4242</span>
+            <div style="flex: 1;"></div>
+            <button onClick="{{ buyCredits }}" style="padding: 9px 20px; background: #5a4af0; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;" style-hover="background: #4536d6;">{{ buyLabel }}</button>
+          </div>
+        </div>
+        <div style="margin-top: 22px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 14px; font-weight: 600;">Your plan</span>
+            <span style="padding: 2px 10px; border-radius: 99px; background: #ece8ff; color: #5a4af0; font-size: 10.5px; font-weight: 600;">Currently on {{ currentPlanName }}</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 12px;">
+            <sc-for list="{{ plans }}" as="pl" hint-placeholder-count="3">
+              <div style="background: #ffffff; border: 1.5px solid {{ pl.border }}; border-radius: 18px; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; position: relative;">
+                <sc-if value="{{ pl.isCurrent }}" hint-placeholder-val="{{ false }}"><span style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: #5a4af0; color: #fff; border-radius: 99px; font-size: 9px; font-weight: 700; padding: 2px 12px; letter-spacing: 0.04em;">CURRENT PLAN</span></sc-if>
+                <div style="font-size: 15px; font-weight: 700;">{{ pl.name }}</div>
+                <div><span style="font-size: 30px; font-weight: 700; letter-spacing: -0.02em;">{{ pl.price }}</span><span style="font-size: 12px; color: #8d8aa3;">/mo</span></div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #5a4af0;">{{ pl.scans }}</div>
+                <div style="display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #f0eff5; padding-top: 12px; flex: 1;">
+                  <sc-for list="{{ pl.features }}" as="pf" hint-placeholder-count="4">
+                    <span style="font-size: 12px; color: #56536a;">· {{ pf }}</span>
+                  </sc-for>
+                </div>
+                <button onClick="{{ pl.select }}" style="padding: 10px; border-radius: 9px; border: {{ pl.btnBorder }}; background: {{ pl.btnBg }}; color: {{ pl.btnColor }}; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 600; cursor: {{ pl.btnCursor }};">{{ pl.btnLabel }}</button>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ planChanged }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; align-items: center; gap: 12px; background: #f6fbf8; border: 1px solid #d3ecd9; border-radius: 14px; padding: 14px 18px; margin-top: 12px;">
+              <span style="width: 30px; height: 30px; border-radius: 99px; background: #16803c; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px;">✓</span>
+              <div style="font-size: 12.5px; color: #15131f;">{{ planChangeMsg }}</div>
+            </div>
+          </sc-if>
+        </div>
+        <div style="margin-top: 22px; background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; overflow: hidden;">
+          <div style="padding: 14px 20px; border-bottom: 1px solid #ececf1; font-size: 14px; font-weight: 600;">Billing history</div>
+          <sc-for list="{{ billingHistory }}" as="bh" hint-placeholder-count="4">
+            <div style="display: grid; grid-template-columns: 1fr 2fr 1fr 0.7fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #f0eff5;">
+              <span style="font-size: 12px; color: #8d8aa3;">{{ bh.date }}</span>
+              <span style="font-size: 12.5px;">{{ bh.desc }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 12px;">{{ bh.amount }}</span>
+              <a href="#" style="font-size: 11.5px; font-weight: 500; justify-self: end;">Receipt</a>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showReviewLink }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start;">
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+              <span style="font-size: 14px; font-weight: 600;">Your public review link</span>
+              <div style="font-size: 12px; color: #56536a; margin-top: 4px;">Built from your location name and your GMB Suite domain — share it anywhere.</div>
+              <div style="display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 12px 14px; background: #fbfaf5; border: 1px solid #e7e2d4; border-radius: 10px;">
+                <span style="flex: 1; font-family: 'Geist Mono', monospace; font-size: 13px; color: #16753c; overflow-wrap: anywhere;">{{ reviewLinkUrl }}</span>
+                <button onClick="{{ copyLink }}" style="padding: 6px 14px; border: 1px solid #cfe3d6; border-radius: 9px; background: #e9f2ec; color: #16753c; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 600; cursor: pointer; flex-shrink: 0;">{{ copyLinkLabel }}</button>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;">
+                <div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Location name (slug)</div>
+                  <input value="{{ locSlug }}" onChange="{{ setLocSlug }}" style="width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #e7e2d4; border-radius: 9px; background: #fbfaf5; font-family: 'Geist Mono', monospace; font-size: 12px; outline: none;">
+                </div>
+                <div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Domain</div>
+                  <input value="gmbsuite.com" disabled style="width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #ece8de; border-radius: 9px; background: #f2efe6; color: #908c7c; font-family: 'Geist Mono', monospace; font-size: 12px; outline: none;">
+                </div>
+              </div>
+            </div>
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+              <span style="font-size: 14px; font-weight: 600;">How the gate works</span>
+              <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;">
+                <div style="display: flex; align-items: flex-start; gap: 10px;">
+                  <span style="width: 22px; height: 22px; flex-shrink: 0; border-radius: 99px; background: #f7ecd4; color: #8a6d1f; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">1</span>
+                  <span style="font-size: 12.5px; color: #56536a; line-height: 1.6;">Customer taps the link or scans the QR and rates 1–5 stars.</span>
+                </div>
+                <div style="display: flex; align-items: flex-start; gap: 10px;">
+                  <span style="width: 22px; height: 22px; flex-shrink: 0; border-radius: 99px; background: #e9f2ec; color: #16753c; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">2</span>
+                  <span style="font-size: 12.5px; color: #56536a; line-height: 1.6;"><strong style="color: #1f1d17;">4–5★</strong> → sent straight to your Google Business Profile to post publicly.</span>
+                </div>
+                <div style="display: flex; align-items: flex-start; gap: 10px;">
+                  <span style="width: 22px; height: 22px; flex-shrink: 0; border-radius: 99px; background: #f9e8e6; color: #a8453a; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">3</span>
+                  <span style="font-size: 12.5px; color: #56536a; line-height: 1.6;"><strong style="color: #1f1d17;">1–3★</strong> → kept private, routed to you as feedback — never published to Google.</span>
+                </div>
+              </div>
+            </div>
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+              <span style="font-size: 14px; font-weight: 600;">Try it — pick a rating</span>
+              <div style="display: flex; gap: 6px; margin-top: 12px;">
+                <sc-for list="{{ starPicks }}" as="sp" hint-placeholder-count="5">
+                  <button onClick="{{ sp.select }}" style="flex: 1; padding: 10px; border: 1px solid {{ sp.border }}; border-radius: 9px; background: {{ sp.bg }}; color: {{ sp.color }}; font-family: 'Geist Mono', monospace; font-size: 13px; font-weight: 600; cursor: pointer;">{{ sp.label }}</button>
+                </sc-for>
+              </div>
+              <sc-if value="{{ demoResult }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: {{ demoBg }}; border: 1px solid {{ demoBorder }};">
+                  <div style="font-size: 12.5px; font-weight: 600; color: {{ demoColor }};">{{ demoTitle }}</div>
+                  <div style="font-size: 12px; color: #56536a; margin-top: 3px;">{{ demoDesc }}</div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 14px;">
+              <div style="width: 220px; height: 220px; border-radius: 16px; background: repeating-conic-gradient(#1f1d17 0deg 90deg, #ffffff 90deg 180deg); background-size: 22px 22px; border: 10px solid #ffffff; box-shadow: 0 0 0 1px #ece8de;"></div>
+              <div style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #908c7c;">{{ reviewLinkUrl }}</div>
+              <div style="display: flex; gap: 8px;">
+                <button style="padding: 8px 16px; background: #1a1726; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12px; font-weight: 500; cursor: pointer;">Download PNG</button>
+                <button style="padding: 8px 16px; border: 1px solid #e7e2d4; border-radius: 9px; background: #ffffff; color: #6b6859; font-family: Geist, sans-serif; font-size: 12px; font-weight: 500; cursor: pointer;">Download SVG</button>
+              </div>
+            </div>
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 18px 22px;">
+              <span style="font-size: 14px; font-weight: 600;">Scans this week</span>
+              <div style="font-family: Newsreader, serif; font-size: 30px; font-weight: 500; letter-spacing: -0.015em; margin-top: 6px;">142</div>
+              <div style="font-size: 11.5px; color: #908c7c; margin-top: 2px;">96 rated 4–5★ · 46 rated 1–3★ (kept private)</div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showWhitelabel }}" hint-placeholder-val="{{ false }}">
+        <sc-if value="{{ wlActivated }}" hint-placeholder-val="{{ false }}">
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 48px 32px; display: flex; flex-direction: column; align-items: center; text-align: center;">
+            <div style="width: 52px; height: 52px; border-radius: 16px; background: #eaf7ef; color: #16803c; display: flex; align-items: center; justify-content: center; font-size: 24px;">✓</div>
+            <div style="font-size: 22px; font-weight: 700; letter-spacing: -0.015em; margin-top: 16px;">{{ wlBrandName }} is live</div>
+            <div style="font-size: 13px; color: #56536a; margin-top: 6px; max-width: 420px;">Your white-label portal is provisioning at <strong>{{ wlDomain }}</strong>. DNS + SSL usually finish within 15 minutes — we'll email you.</div>
+            <div style="display: flex; gap: 10px; margin-top: 22px;">
+              <span style="padding: 8px 16px; border-radius: 9px; background: #f0eff5; color: #56536a; font-family: 'Geist Mono', monospace; font-size: 12px;">Plan: {{ wlPlanName }}</span>
+              <span style="padding: 8px 16px; border-radius: 9px; background: #ece8ff; color: #5a4af0; font-family: 'Geist Mono', monospace; font-size: 12px;">{{ wlPlanPrice }}/mo</span>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ wlForm }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+            <span style="font-size: 13px; color: #56536a;">Resell GMB Suite under your own brand — pick a plan, we handle the infrastructure</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px;">
+            <sc-for list="{{ wlPlans }}" as="wp" hint-placeholder-count="3">
+              <button onClick="{{ wp.select }}" style="text-align: left; background: #ffffff; border: 1.5px solid {{ wp.border }}; border-radius: 16px; padding: 18px 20px; cursor: pointer; font-family: Geist, sans-serif; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <span style="font-size: 13.5px; font-weight: 600;">{{ wp.name }}</span>
+                  <span style="width: 16px; height: 16px; border-radius: 99px; border: 1.5px solid {{ wp.radioBorder }}; background: {{ wp.radioBg }}; box-sizing: border-box;"></span>
+                </div>
+                <div><span style="font-size: 24px; font-weight: 700; letter-spacing: -0.015em;">{{ wp.price }}</span><span style="font-size: 11px; color: #8d8aa3;">/mo · {{ wp.tenants }} tenants</span></div>
+                <div style="font-size: 11px; color: #16753c;">{{ wp.margin }}</div>
+              </button>
+            </sc-for>
+          </div>
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 22px 26px;">
+            <div style="font-size: 14px; font-weight: 600;">Set up {{ wlPlanName }}</div>
+            <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+              <sc-for list="{{ wlPlanFeatures }}" as="wf" hint-placeholder-count="4">
+                <span style="font-size: 12px; color: #56536a;">· {{ wf }}</span>
+              </sc-for>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #f0eff5;">
+              <div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Brand / agency name</div>
+                <input value="{{ wlBrandName }}" onChange="{{ setBrandName }}" placeholder="GrowLabs Agency" style="width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #e7e2d4; border-radius: 9px; background: #fbfaf5; font-family: Geist, sans-serif; font-size: 12.5px; outline: none;">
+              </div>
+              <div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Domain</div>
+                <input value="{{ wlDomain }}" onChange="{{ setDomain }}" placeholder="app.youragency.com" style="width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #e7e2d4; border-radius: 9px; background: #fbfaf5; font-family: 'Geist Mono', monospace; font-size: 12px; outline: none;">
+              </div>
+              <sc-if value="{{ wlShowMultiDomain }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Account manager email</div>
+                  <input placeholder="you@youragency.com" style="width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #e7e2d4; border-radius: 9px; background: #fbfaf5; font-family: Geist, sans-serif; font-size: 12.5px; outline: none;">
+                </div>
+              </sc-if>
+              <div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Brand color</div>
+                <div style="display: flex; gap: 8px;">
+                  <sc-for list="{{ wlColors }}" as="wc" hint-placeholder-count="5">
+                    <button onClick="{{ wc.select }}" style="width: 28px; height: 28px; border-radius: 99px; background: {{ wc.hex }}; border: 2px solid {{ wc.ring }}; cursor: pointer; box-sizing: border-box; padding: 0;"></button>
+                  </sc-for>
+                </div>
+              </div>
+              <div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; margin-bottom: 5px;">Logo</div>
+                <div style="border: 1px dashed #d8d3c4; border-radius: 9px; padding: 10px; text-align: center; font-size: 11.5px; color: #908c7c; cursor: pointer;">Drop SVG or PNG</div>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f0eff5;">
+              <span style="font-size: 12.5px; color: #56536a;">Total: <strong style="color: #1f1d17;">{{ wlPlanPrice }}/mo</strong>, billed monthly, cancel anytime</span>
+              <div style="flex: 1;"></div>
+              <button onClick="{{ activateWhitelabel }}" style="padding: 10px 20px; background: #1a1726; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;">{{ wlActivateLabel }}</button>
+            </div>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ showSupport }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; color: #56536a;">We usually reply within 2 hours</span>
+          <div style="flex: 1;"></div>
+          <button onClick="{{ toggleNewTicket }}" style="padding: 8px 16px; background: #1a1726; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">{{ newTicketBtnLabel }}</button>
+        </div>
+        <sc-if value="{{ newTicketOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="background: #ffffff; border: 1.5px solid #ded8ff; border-radius: 16px; padding: 20px 24px; margin-bottom: 14px;">
+            <span style="font-size: 14px; font-weight: 600;">New support ticket</span>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
+              <div style="display: flex; gap: 6px;">
+                <sc-for list="{{ ticketCats }}" as="tc" hint-placeholder-count="4">
+                  <button onClick="{{ tc.select }}" style="padding: 6px 13px; border: 1px solid {{ tc.border }}; border-radius: 99px; background: {{ tc.bg }}; color: {{ tc.color }}; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: {{ tc.weight }}; cursor: pointer;">{{ tc.name }}</button>
+                </sc-for>
+              </div>
+              <input placeholder="Subject" style="width: 100%; box-sizing: border-box; padding: 10px 14px; border: 1px solid #ececf1; border-radius: 9px; background: #fbfaf5; font-family: Geist, sans-serif; font-size: 13px; outline: none;" style-focus="border-color: #5a4af0;">
+              <textarea placeholder="Describe the issue…" style="width: 100%; box-sizing: border-box; height: 90px; padding: 10px 14px; border: 1px solid #ececf1; border-radius: 9px; background: #fbfaf5; font-family: Geist, sans-serif; font-size: 13px; outline: none; resize: vertical;"></textarea>
+              <button onClick="{{ submitTicket }}" style="align-self: flex-start; padding: 9px 18px; background: #1a1726; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer;">{{ submitTicketLabel }}</button>
+            </div>
+          </div>
+        </sc-if>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <sc-for list="{{ myTickets }}" as="mt" hint-placeholder-count="3">
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 16px 20px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #8d8aa3;">{{ mt.id }}</span>
+                <span style="flex: 1; font-size: 13.5px; font-weight: 600;">{{ mt.subject }}</span>
+                <span style="padding: 2px 10px; border-radius: 99px; background: {{ mt.statusBg }}; color: {{ mt.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ mt.status }}</span>
+              </div>
+              <div style="font-size: 12px; color: #56536a; margin-top: 8px; line-height: 1.5;">{{ mt.lastMsg }}</div>
+              <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #8d8aa3; margin-top: 8px;">{{ mt.when }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showSettings }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 14px; max-width: 760px;">
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <span style="width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px; background: #ffffff; border: 1px solid #ececf1; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #4285f4;">G</span>
+              <div style="flex: 1;">
+                <div style="font-size: 14px; font-weight: 600;">Google Business Profile connection</div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #8d8aa3; margin-top: 2px;">{{ googleDetail }}</div>
+              </div>
+              <span style="padding: 3px 12px; border-radius: 99px; background: {{ googleStatusBg }}; color: {{ googleStatusColor }}; font-size: 11px; font-weight: 600;">{{ googleStatus }}</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 16px;">
+              <div style="border: 1px solid #f0eff5; border-radius: 12px; padding: 10px 14px;">
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Scopes</div>
+                <div style="font-size: 12px; margin-top: 3px;">Profile, reviews, Q&amp;A, posts</div>
+              </div>
+              <div style="border: 1px solid #f0eff5; border-radius: 12px; padding: 10px 14px;">
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Last sync</div>
+                <div style="font-size: 12px; margin-top: 3px;">{{ lastSync }}</div>
+              </div>
+              <div style="border: 1px solid #f0eff5; border-radius: 12px; padding: 10px 14px;">
+                <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Locations</div>
+                <div style="font-size: 12px; margin-top: 3px;">1 of 1 connected</div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 16px;">
+              <sc-if value="{{ googleConnected }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ syncNow }}" style="padding: 8px 16px; background: #5a4af0; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12px; font-weight: 600; cursor: pointer;" style-hover="background: #4536d6;">{{ syncLabel }}</button>
+                <button onClick="{{ disconnectGoogle }}" style="padding: 8px 16px; border: 1px solid #f3d2ce; border-radius: 9px; background: #ffffff; color: #d92d20; font-family: Geist, sans-serif; font-size: 12px; font-weight: 500; cursor: pointer;" style-hover="background: #fdecea;">Disconnect</button>
+              </sc-if>
+              <sc-if value="{{ googleDisconnected }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ connectGoogle }}" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #4285f4; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12px; font-weight: 600; cursor: pointer;">Reconnect with Google</button>
+              </sc-if>
+            </div>
+          </div>
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+            <span style="font-size: 14px; font-weight: 600;">AI voice &amp; automation</span>
+            <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 12px;">
+              <sc-for list="{{ settingToggles }}" as="tg" hint-placeholder-count="4">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid #f5f4f9;">
+                  <div style="flex: 1;">
+                    <div style="font-size: 13px; font-weight: 500;">{{ tg.name }}</div>
+                    <div style="font-size: 11.5px; color: #8d8aa3; margin-top: 1px;">{{ tg.desc }}</div>
+                  </div>
+                  <button onClick="{{ tg.toggle }}" style="width: 38px; height: 22px; flex-shrink: 0; border: none; border-radius: 99px; background: {{ tg.bg }}; cursor: pointer; position: relative;">
+                    <span style="position: absolute; top: 3px; left: {{ tg.knob }}; width: 16px; height: 16px; border-radius: 99px; background: #ffffff; transition: left 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);"></span>
+                  </button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+            <span style="font-size: 14px; font-weight: 600;">Account</span>
+            <div style="display: flex; align-items: center; gap: 14px; margin-top: 12px;">
+              <span style="width: 38px; height: 38px; border-radius: 99px; background: #5a4af0; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;">SS</span>
+              <div style="flex: 1;">
+                <div style="font-size: 13px; font-weight: 600;">Dr. Sana Sharma</div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #8d8aa3;">sana@mapledental.ca · Grow plan · renews Aug 4</div>
+              </div>
+              <button style="padding: 8px 14px; border: 1px solid #ececf1; border-radius: 9px; background: #ffffff; color: #56536a; font-family: Geist, sans-serif; font-size: 12px; font-weight: 500; cursor: pointer;">Change password</button>
+              <button onClick="{{ logout }}" style="padding: 8px 14px; border: 1px solid #f3d2ce; border-radius: 9px; background: #fdecea; color: #d92d20; font-family: Geist, sans-serif; font-size: 12px; font-weight: 600; cursor: pointer;">Log out</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showDashboard }}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; align-items: center; gap: 16px; background: linear-gradient(120deg, #1a1726 0%, #2c2452 60%, #4536d6 130%); color: #ffffff; border-radius: 20px; padding: 22px 26px; margin-bottom: 14px;">
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; color: #b3a9ff; font-weight: 500;">Good morning, Dr. Rana ☀</div>
+            <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.015em; margin-top: 4px;">You're #3 for "dentist near me" — 2 moves this week get you to the top spot.</div>
+            <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
+              <button onClick="{{ goAdvisor }}" style="padding: 8px 16px; background: #ffffff; color: #241d3f; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12px; font-weight: 600; cursor: pointer;">See this week's moves</button>
+              <button onClick="{{ goRanking }}" style="padding: 8px 16px; background: rgba(255,255,255,0.12); color: #ffffff; border: 1px solid rgba(255,255,255,0.25); border-radius: 9px; font-family: Geist, sans-serif; font-size: 12px; font-weight: 500; cursor: pointer;">Open rank tracker</button>
+            </div>
+          </div>
+          <div style="flex-shrink: 0; text-align: center; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); border-radius: 16px; padding: 14px 22px;">
+            <div style="font-size: 34px; font-weight: 700; letter-spacing: -0.02em; color: #b3a9ff;">78</div>
+            <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #a29fb8; margin-top: 2px;">Visibility score</div>
+            <div style="font-size: 10.5px; color: #7dd8a0; margin-top: 3px;">▲ +6 this month</div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;">
+          <sc-for list="{{ dashKpis }}" as="k" hint-placeholder-count="4">
+            <button onClick="{{ k.go }}" style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 16px 20px; text-align: left; font-family: Geist, sans-serif; cursor: pointer; color: #15131f;" style-hover="border-color: #ded8ff; box-shadow: 0 6px 20px rgba(90,74,240,0.08);">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">{{ k.label }}</span>
+                <span style="width: 22px; height: 22px; border-radius: 7px; background: #ece8ff; color: #5a4af0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700;">{{ k.glyph }}</span>
+              </div>
+              <div style="font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin-top: 6px;">{{ k.value }}</div>
+              <div style="font-size: 11.5px; color: {{ k.deltaColor }}; margin-top: 2px;">{{ k.delta }}</div>
+              <div style="display: flex; align-items: flex-end; gap: 3px; height: 26px; margin-top: 10px;">
+                <sc-for list="{{ k.spark }}" as="sp" hint-placeholder-count="8">
+                  <div style="flex: 1; height: {{ sp.h }}px; background: {{ sp.color }}; border-radius: 2px;"></div>
+                </sc-for>
+              </div>
+            </button>
+          </sc-for>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; margin-top: 14px;">
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <span style="font-size: 14px; font-weight: 600;">Average rank · 6 months</span>
+                <span style="font-size: 11px; color: #8d8aa3; margin-left: 8px;">lower is better</span>
+              </div>
+              <span style="padding: 3px 12px; border-radius: 99px; background: #eaf7ef; color: #16803c; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600;">#6.0 → #4.2</span>
+            </div>
+            <svg viewBox="0 0 520 150" style="width: 100%; height: auto; margin-top: 12px; display: block;">
+              <defs>
+                <linearGradient id="rankFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#6d5efc" stop-opacity="0.28"></stop>
+                  <stop offset="100%" stop-color="#6d5efc" stop-opacity="0"></stop>
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="30" x2="520" y2="30" stroke="#f0eff5" stroke-width="1"></line>
+              <line x1="0" y1="70" x2="520" y2="70" stroke="#f0eff5" stroke-width="1"></line>
+              <line x1="0" y1="110" x2="520" y2="110" stroke="#f0eff5" stroke-width="1"></line>
+              <text x="4" y="26" font-family="Geist Mono, monospace" font-size="9" fill="#c9c6d8">#3</text>
+              <text x="4" y="66" font-family="Geist Mono, monospace" font-size="9" fill="#c9c6d8">#5</text>
+              <text x="4" y="106" font-family="Geist Mono, monospace" font-size="9" fill="#c9c6d8">#7</text>
+              <path d="M30,96 L124,110 L218,92 L312,78 L406,62 L490,54 L490,150 L30,150 Z" fill="url(#rankFill)"></path>
+              <path d="M30,96 L124,110 L218,92 L312,78 L406,62 L490,54" fill="none" stroke="#6d5efc" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+              <circle cx="30" cy="96" r="4" fill="#ffffff" stroke="#6d5efc" stroke-width="2.5"></circle>
+              <circle cx="124" cy="110" r="4" fill="#ffffff" stroke="#6d5efc" stroke-width="2.5"></circle>
+              <circle cx="218" cy="92" r="4" fill="#ffffff" stroke="#6d5efc" stroke-width="2.5"></circle>
+              <circle cx="312" cy="78" r="4" fill="#ffffff" stroke="#6d5efc" stroke-width="2.5"></circle>
+              <circle cx="406" cy="62" r="4" fill="#ffffff" stroke="#6d5efc" stroke-width="2.5"></circle>
+              <circle cx="490" cy="54" r="5.5" fill="#6d5efc" stroke="#ece8ff" stroke-width="3"></circle>
+              <text x="30" y="146" font-family="Geist Mono, monospace" font-size="9" fill="#8d8aa3" text-anchor="middle">Feb</text>
+              <text x="124" y="146" font-family="Geist Mono, monospace" font-size="9" fill="#8d8aa3" text-anchor="middle">Mar</text>
+              <text x="218" y="146" font-family="Geist Mono, monospace" font-size="9" fill="#8d8aa3" text-anchor="middle">Apr</text>
+              <text x="312" y="146" font-family="Geist Mono, monospace" font-size="9" fill="#8d8aa3" text-anchor="middle">May</text>
+              <text x="406" y="146" font-family="Geist Mono, monospace" font-size="9" fill="#8d8aa3" text-anchor="middle">Jun</text>
+              <text x="490" y="146" font-family="Geist Mono, monospace" font-size="9" fill="#5a4af0" font-weight="600" text-anchor="middle">Jul</text>
+            </svg>
+          </div>
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px; display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 14px; font-weight: 600;">Review sentiment</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #8d8aa3;">236 total</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 18px; flex: 1; margin-top: 10px;">
+              <svg viewBox="0 0 120 120" style="width: 110px; height: 110px; flex-shrink: 0;">
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#f0eff5" stroke-width="16"></circle>
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#22c55e" stroke-width="16" stroke-dasharray="217 289" stroke-linecap="round" transform="rotate(-90 60 60)"></circle>
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#f59e0b" stroke-width="16" stroke-dasharray="43 289" stroke-dashoffset="-221" stroke-linecap="round" transform="rotate(-90 60 60)"></circle>
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#f04438" stroke-width="16" stroke-dasharray="17 289" stroke-dashoffset="-268" stroke-linecap="round" transform="rotate(-90 60 60)"></circle>
+                <text x="60" y="57" font-family="Geist, sans-serif" font-size="22" font-weight="700" fill="#15131f" text-anchor="middle">4.8</text>
+                <text x="60" y="74" font-family="Geist Mono, monospace" font-size="8.5" fill="#8d8aa3" text-anchor="middle">AVG RATING</text>
+              </svg>
+              <div style="display: flex; flex-direction: column; gap: 9px; flex: 1;">
+                <div style="display: flex; align-items: center; gap: 7px; font-size: 11.5px;"><span style="width: 9px; height: 9px; border-radius: 3px; background: #22c55e;"></span><span style="flex: 1; color: #56536a;">Positive</span><span style="font-family: 'Geist Mono', monospace; font-weight: 600;">75%</span></div>
+                <div style="display: flex; align-items: center; gap: 7px; font-size: 11.5px;"><span style="width: 9px; height: 9px; border-radius: 3px; background: #f59e0b;"></span><span style="flex: 1; color: #56536a;">Neutral</span><span style="font-family: 'Geist Mono', monospace; font-weight: 600;">15%</span></div>
+                <div style="display: flex; align-items: center; gap: 7px; font-size: 11.5px;"><span style="width: 9px; height: 9px; border-radius: 3px; background: #f04438;"></span><span style="flex: 1; color: #56536a;">Negative</span><span style="font-family: 'Geist Mono', monospace; font-weight: 600;">10%</span></div>
+              </div>
+            </div>
+            <button onClick="{{ goReputation }}" style="width: 100%; margin-top: 10px; padding: 8px; border: 1px solid #ececf1; border-radius: 9px; background: #ffffff; color: #5a4af0; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 600; cursor: pointer;" style-hover="background: #f7f5ff; border-color: #ded8ff;">3 reviews need a reply →</button>
+          </div>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px; margin-top: 14px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 14px; font-weight: 600;">Customer actions · last 6 months</span>
+            <div style="display: flex; gap: 14px;">
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #56536a;"><span style="width: 9px; height: 9px; border-radius: 3px; background: #6d5efc;"></span>Calls</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #56536a;"><span style="width: 9px; height: 9px; border-radius: 3px; background: #22c55e;"></span>Bookings</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #56536a;"><span style="width: 9px; height: 9px; border-radius: 3px; background: #f59e0b;"></span>Directions</span>
+            </div>
+          </div>
+          <div style="display: flex; align-items: flex-end; gap: 18px; height: 130px; margin-top: 16px;">
+            <sc-for list="{{ actionBars }}" as="ab" hint-placeholder-count="6">
+              <button onClick="{{ goInsights }}" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; align-self: stretch; justify-content: flex-end; border: none; background: transparent; padding: 0; cursor: pointer; font-family: Geist, sans-serif;">
+                <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #8d8aa3;">{{ ab.total }}</span>
+                <div style="width: 100%; max-width: 46px; display: flex; flex-direction: column; gap: 2px;">
+                  <div style="height: {{ ab.directions }}px; background: #f59e0b; border-radius: 5px 5px 2px 2px; opacity: {{ ab.opacity }};"></div>
+                  <div style="height: {{ ab.bookings }}px; background: #22c55e; opacity: {{ ab.opacity }};"></div>
+                  <div style="height: {{ ab.calls }}px; background: #6d5efc; border-radius: 2px 2px 5px 5px; opacity: {{ ab.opacity }};"></div>
+                </div>
+                <span style="font-family: 'Geist Mono', monospace; font-size: 9px; color: {{ ab.labelColor }};">{{ ab.label }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; margin-top: 14px;">
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 14px; font-weight: 600;">Advisor — this week's moves</span>
+              <button onClick="{{ goAdvisor }}" style="padding: 4px 12px; border: 1px solid #ded8ff; border-radius: 99px; background: #ece8ff; color: #5a4af0; font-family: Geist, sans-serif; font-size: 10.5px; font-weight: 600; cursor: pointer;">View all 5 →</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+              <sc-for list="{{ advisor }}" as="ad" hint-placeholder-count="3">
+                <div style="display: flex; align-items: flex-start; gap: 12px; padding: 11px 12px; border: 1px solid #ececf1; border-radius: 12px;" style-hover="background: #f5f5f8;">
+                  <span style="width: 24px; height: 24px; flex-shrink: 0; border-radius: 99px; background: {{ ad.dotBg }}; color: {{ ad.dotColor }}; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">{{ ad.pri }}</span>
+                  <div style="flex: 1;">
+                    <div style="font-size: 13px; font-weight: 600;">{{ ad.title }}</div>
+                    <div style="font-size: 11.5px; color: #56536a; margin-top: 2px; line-height: 1.5;">{{ ad.why }}</div>
+                  </div>
+                  <button onClick="{{ ad.go }}" style="padding: 5px 12px; border: 1px solid #ececf1; border-radius: 9px; background: #ffffff; color: #5a4af0; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer; flex-shrink: 0;" style-hover="background: #f7f5ff; border-color: #ded8ff;">{{ ad.cta }}</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 14px; font-weight: 600;">Rank movement · 7 days</span>
+                <button onClick="{{ goRanking }}" style="padding: 4px 10px; border: none; border-radius: 99px; background: transparent; color: #5a4af0; font-family: Geist, sans-serif; font-size: 10.5px; font-weight: 600; cursor: pointer;">Details →</button>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
+                <sc-for list="{{ rankMoves }}" as="rm" hint-placeholder-count="4">
+                  <button onClick="{{ rm.go }}" style="display: flex; align-items: center; gap: 10px; width: 100%; border: none; background: transparent; padding: 2px 0; font-family: Geist, sans-serif; cursor: pointer; color: #15131f; text-align: left;" style-hover="color: #5a4af0;">
+                    <span style="flex: 1; font-size: 12.5px;">{{ rm.kw }}</span>
+                    <span style="font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 500;">#{{ rm.rank }}</span>
+                    <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: {{ rm.deltaColor }}; width: 32px; text-align: right;">{{ rm.delta }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 18px 22px;">
+              <span style="font-size: 14px; font-weight: 600;">Latest review</span>
+              <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+                <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #b25e09;">★★★★★</span>
+                <span style="font-size: 12px; font-weight: 600;">Karen L.</span>
+                <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #8d8aa3;">2 days ago</span>
+              </div>
+              <div style="font-size: 12px; color: #56536a; line-height: 1.55; margin-top: 6px;">"Dr. Rana is fantastic with nervous patients. Highly recommend!"</div>
+              <button onClick="{{ goReputation }}" style="width: 100%; margin-top: 12px; padding: 8px; border: 1px solid #ded8ff; border-radius: 9px; background: #ece8ff; color: #5a4af0; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 600; cursor: pointer;" style-hover="background: #ded8ff;">Reply with AI draft</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showRanking }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; font-weight: 600;">{{ activeKeyword }}</span>
+          <span style="font-size: 12px; color: #8d8aa3;">7×7 grid · 1 km spacing · {{ scanLabel }}</span>
+          <div style="flex: 1;"></div>
+          <button onClick="{{ rescan }}" style="padding: 8px 16px; background: {{ rescanBg }}; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">{{ rescanLabel }}</button>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px;">
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 14px; font-weight: 600;">Grid heat-map</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #8d8aa3;">avg rank #{{ avgRank }}</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 16px; max-width: 380px;">
+              <sc-for list="{{ heatCells }}" as="hc" hint-placeholder-count="49">
+                <div style="aspect-ratio: 1; border-radius: 99px; background: {{ hc.bg }}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500;">{{ hc.rank }}</div>
+              </sc-for>
+            </div>
+            <div style="display: flex; gap: 14px; margin-top: 16px;">
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #56536a;"><span style="width: 10px; height: 10px; border-radius: 99px; background: #22c55e;"></span>Top 3</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #56536a;"><span style="width: 10px; height: 10px; border-radius: 99px; background: #f59e0b;"></span>4–7</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #56536a;"><span style="width: 10px; height: 10px; border-radius: 99px; background: #f04438;"></span>8+</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #56536a;"><span style="width: 10px; height: 10px; border-radius: 99px; background: #c9c7d4;"></span>Not found</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+              <span style="font-size: 14px; font-weight: 600;">Local leaderboard</span>
+              <div style="display: flex; flex-direction: column; margin-top: 10px;">
+                <sc-for list="{{ leaderboard }}" as="lb" hint-placeholder-count="5">
+                  <div style="display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f0eff5;">
+                    <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8d8aa3; width: 18px;">{{ lb.pos }}</span>
+                    <span style="flex: 1; font-size: 12.5px; font-weight: {{ lb.weight }}; color: {{ lb.color }};">{{ lb.name }}</span>
+                    <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #56536a;">★ {{ lb.stars }}</span>
+                    <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #56536a; width: 44px; text-align: right;">#{{ lb.avg }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+              <span style="font-size: 14px; font-weight: 600;">Tracked keywords</span>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;">
+                <sc-for list="{{ keywords }}" as="kw" hint-placeholder-count="6">
+                  <button onClick="{{ kw.select }}" style="padding: 4px 12px; border-radius: 99px; background: {{ kw.bg }}; color: {{ kw.color }}; border: 1px solid {{ kw.border }}; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">{{ kw.name }} · #{{ kw.rank }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px; margin-top: 14px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 14px; font-weight: 600;">12-week rank trend · {{ activeKeyword }}</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #16803c;">best week #2.6</span>
+          </div>
+          <svg viewBox="0 0 640 150" style="width: 100%; height: auto; margin-top: 12px; display: block;">
+            <defs>
+              <linearGradient id="rtFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#22c55e" stop-opacity="0.22"></stop>
+                <stop offset="100%" stop-color="#22c55e" stop-opacity="0"></stop>
+              </linearGradient>
+            </defs>
+            <line x1="0" y1="35" x2="640" y2="35" stroke="#f0eff5" stroke-width="1"></line>
+            <line x1="0" y1="75" x2="640" y2="75" stroke="#f0eff5" stroke-width="1"></line>
+            <line x1="0" y1="115" x2="640" y2="115" stroke="#f0eff5" stroke-width="1"></line>
+            <path d="{{ trendArea }}" fill="url(#rtFill)"></path>
+            <path d="{{ trendLine }}" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+            <circle cx="610" cy="{{ trendEndY }}" r="5.5" fill="#22c55e" stroke="#eaf7ef" stroke-width="3"></circle>
+          </svg>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; overflow: hidden; margin-top: 14px;">
+          <div style="padding: 14px 20px; border-bottom: 1px solid #ececf1; font-size: 14px; font-weight: 600;">Competitor gap · {{ activeKeyword }}</div>
+          <div style="display: grid; grid-template-columns: 1.8fr 0.9fr 0.9fr 1.4fr; gap: 12px; padding: 11px 20px; border-bottom: 1px solid #ececf1; background: #fafafc;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Business</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; text-align: right;">Avg rank</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; text-align: right;">Reviews</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Why they win</span>
+          </div>
+          <sc-for list="{{ competitors }}" as="cp" hint-placeholder-count="4">
+            <div style="display: grid; grid-template-columns: 1.8fr 0.9fr 0.9fr 1.4fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #f0eff5; background: {{ cp.rowBg }};">
+              <span style="font-size: 12.5px; font-weight: {{ cp.weight }}; color: {{ cp.nameColor }};">{{ cp.name }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; text-align: right;">#{{ cp.rank }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; text-align: right; color: #56536a;">{{ cp.reviews }}</span>
+              <span style="font-size: 11px; color: #8d8aa3;">{{ cp.edge }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showReputation }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; color: #56536a;">4.8 ★ · 236 reviews · 3 awaiting reply</span>
+          <div style="flex: 1;"></div>
+          <div style="display: flex; gap: 4px;">
+            <sc-for list="{{ reviewFilters }}" as="rf" hint-placeholder-count="3">
+              <button onClick="{{ rf.select }}" style="padding: 7px 13px; border: 1px solid {{ rf.border }}; border-radius: 99px; background: {{ rf.bg }}; color: {{ rf.color }}; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: {{ rf.weight }}; cursor: pointer;">{{ rf.name }}</button>
+            </sc-for>
+          </div>
+          <button onClick="{{ toggleRules }}" style="padding: 8px 14px; border: 1px solid #ded8ff; border-radius: 9px; background: {{ rulesBtnBg }}; color: {{ rulesBtnColor }}; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">Auto-reply rules {{ rulesIcon }}</button>
+        </div>
+        <sc-if value="{{ rulesOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="background: #ffffff; border: 1px solid #ded8ff; border-radius: 16px; padding: 18px 22px; margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 14px; font-weight: 600;">Auto-reply rules</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #8d8aa3;">applies to new reviews</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 10px;">
+              <sc-for list="{{ replyRules }}" as="rr" hint-placeholder-count="3">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid #f5f4f9;">
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: {{ rr.starColor }}; width: 66px;">{{ rr.stars }}</span>
+                  <div style="flex: 1;">
+                    <div style="font-size: 12.5px; font-weight: 500;">{{ rr.name }}</div>
+                    <div style="font-size: 11px; color: #8d8aa3; margin-top: 1px;">{{ rr.desc }}</div>
+                  </div>
+                  <button onClick="{{ rr.toggle }}" style="width: 38px; height: 22px; flex-shrink: 0; border: none; border-radius: 99px; background: {{ rr.bg }}; cursor: pointer; position: relative;">
+                    <span style="position: absolute; top: 3px; left: {{ rr.knob }}; width: 16px; height: 16px; border-radius: 99px; background: #ffffff; transition: left 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);"></span>
+                  </button>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-size: 11px; color: #8d8aa3; margin-top: 10px;">Negative reviews always wait for your approval — AI never auto-posts below 4★.</div>
+          </div>
+        </sc-if>
+        <div style="display: flex; align-items: center; gap: 16px; background: linear-gradient(120deg, #1a1726, #2c2452); color: #ffffff; border-radius: 16px; padding: 16px 22px; margin-bottom: 14px;">
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 14px; font-weight: 600;">Ask for reviews over WhatsApp</span>
+              <span style="padding: 1px 8px; border-radius: 99px; background: rgba(179,169,255,0.2); color: #b3a9ff; font-size: 9.5px; font-weight: 700;">3.2× reply rate</span>
+            </div>
+            <div style="font-size: 12px; color: #a29fb8; margin-top: 3px;">Send happy customers a one-tap Google review link right after their visit. {{ reviewReqSent }} sent this month · {{ reviewReqNew }} turned into reviews.</div>
+          </div>
+          <button onClick="{{ sendReviewReq }}" style="padding: 9px 18px; background: #25d366; color: #06331b; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 700; cursor: pointer; flex-shrink: 0;" style-hover="background: #43e07d;">{{ reviewReqLabel }}</button>
+        </div>
+        <sc-if value="{{ reviewReqOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; overflow: hidden; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #ececf1;">
+              <span style="font-size: 14px; font-weight: 600;">Recent review requests</span>
+              <div style="display: flex; gap: 6px;">
+                <sc-for list="{{ reqChannels }}" as="rc" hint-placeholder-count="3">
+                  <span style="padding: 4px 12px; border-radius: 99px; border: 1px solid {{ rc.border }}; background: {{ rc.bg }}; color: {{ rc.color }}; font-size: 11px; font-weight: {{ rc.weight }};">{{ rc.name }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <sc-for list="{{ reviewRequests }}" as="rq" hint-placeholder-count="4">
+              <div style="display: grid; grid-template-columns: 1.4fr 0.8fr 1.4fr 0.9fr; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid #f0eff5;">
+                <div>
+                  <div style="font-size: 12.5px; font-weight: 500;">{{ rq.name }}</div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #8d8aa3;">{{ rq.phone }}</div>
+                </div>
+                <span style="justify-self: start; padding: 2px 9px; border-radius: 99px; background: {{ rq.chBg }}; color: {{ rq.chColor }}; font-size: 10px; font-weight: 600;">{{ rq.channel }}</span>
+                <span style="font-size: 11.5px; color: #56536a;">{{ rq.detail }}</span>
+                <span style="justify-self: end; padding: 2px 10px; border-radius: 99px; background: {{ rq.statusBg }}; color: {{ rq.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ rq.status }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <sc-for list="{{ reviews }}" as="rv" hint-placeholder-count="3">
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 18px 22px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="width: 32px; height: 32px; border-radius: 99px; background: #ece8ff; color: #5a4af0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">{{ rv.initials }}</span>
+                <div>
+                  <div style="font-size: 13px; font-weight: 600;">{{ rv.name }}</div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #8d8aa3;">{{ rv.when }}</div>
+                </div>
+                <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: {{ rv.starColor }};">{{ rv.stars }}</span>
+                <div style="flex: 1;"></div>
+                <sc-if value="{{ rv.replied }}" hint-placeholder-val="{{ false }}"><span style="padding: 2px 10px; border-radius: 99px; background: #eaf7ef; color: #16803c; font-size: 10.5px; font-weight: 600;">Replied</span></sc-if>
+              </div>
+              <div style="font-size: 13px; line-height: 1.6; margin-top: 10px; color: #15131f;">{{ rv.text }}</div>
+              <sc-if value="{{ rv.posted }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top: 12px; background: #f6fbf8; border: 1px solid #d3ecd9; border-radius: 12px; padding: 12px 14px;">
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #16803c;">Your reply · posted just now ✓</span>
+                  <div style="font-size: 12.5px; line-height: 1.6; color: #15131f; margin-top: 6px;">{{ rv.draft }}</div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ rv.showDraft }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top: 12px; background: #f7f5ff; border: 1px solid #ded8ff; border-radius: 12px; padding: 12px 14px;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #5a4af0;">AI draft reply</span>
+                  </div>
+                  <div style="font-size: 12.5px; line-height: 1.6; color: #15131f; margin-top: 6px;">{{ rv.draft }}</div>
+                  <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button onClick="{{ rv.post }}" style="padding: 6px 14px; background: #5a4af0; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;" style-hover="background: #4536d6;">Post reply</button>
+                    <button style="padding: 6px 14px; border: 1px solid #ded8ff; border-radius: 9px; background: #ffffff; color: #5a4af0; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">Regenerate</button>
+                    <button style="padding: 6px 14px; border: 1px solid #ececf1; border-radius: 9px; background: #ffffff; color: #56536a; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">Edit</button>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showQa }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; color: #56536a;">{{ qaSummary }}</span>
+          <div style="flex: 1;"></div>
+          <button onClick="{{ postAllAnswers }}" style="padding: 8px 14px; border: 1px solid {{ qaBtnBorder }}; border-radius: 9px; background: {{ qaBtnBg }}; color: {{ qaBtnColor }}; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">{{ qaBtnLabel }}</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <sc-for list="{{ questions }}" as="q" hint-placeholder-count="3">
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 18px 22px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="width: 28px; height: 28px; border-radius: 99px; background: #f0eff5; color: #56536a; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;">Q</span>
+                <div style="flex: 1;">
+                  <div style="font-size: 13px; font-weight: 600;">{{ q.text }}</div>
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #8d8aa3; margin-top: 2px;">{{ q.who }}</div>
+                </div>
+                <span style="padding: 2px 10px; border-radius: 99px; background: {{ q.statusBg }}; color: {{ q.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ q.status }}</span>
+              </div>
+              <sc-if value="{{ q.answer }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top: 12px; background: #f7f5ff; border: 1px solid #ded8ff; border-radius: 12px; padding: 12px 14px;">
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #5a4af0;">{{ q.answerLabel }}</span>
+                  <div style="font-size: 12.5px; line-height: 1.6; margin-top: 6px;">{{ q.answer }}</div>
+                  <sc-if value="{{ q.isDraft }}" hint-placeholder-val="{{ false }}">
+                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                      <button onClick="{{ q.post }}" style="padding: 6px 14px; background: #5a4af0; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;" style-hover="background: #4536d6;">Post answer</button>
+                      <button style="padding: 6px 14px; border: 1px solid #ececf1; border-radius: 9px; background: #ffffff; color: #56536a; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">Edit</button>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showPosts }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; color: #56536a;">Google Business posts</span>
+          <div style="flex: 1;"></div>
+          <button onClick="{{ genPost }}" style="padding: 8px 14px; border: 1px solid #ded8ff; border-radius: 9px; background: {{ genBtnBg }}; color: {{ genBtnColor }}; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">{{ genBtnLabel }}</button>
+          <button style="padding: 8px 16px; background: #1a1726; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">+ New post</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px; background: linear-gradient(120deg, #f7f5ff, #ece8ff); border: 1px solid #ded8ff; border-radius: 16px; padding: 14px 20px; margin-bottom: 14px;">
+          <div style="flex: 1;">
+            <div style="font-size: 13.5px; font-weight: 600; color: #241d3f;">Auto-post on a schedule</div>
+            <div style="font-size: 12px; color: #56536a; margin-top: 2px;">{{ autoPostDesc }}</div>
+          </div>
+          <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #5a4af0;">{{ autoPostNext }}</span>
+          <button onClick="{{ toggleAutoPost }}" style="width: 44px; height: 24px; flex-shrink: 0; border: none; border-radius: 99px; background: {{ autoPostBg }}; cursor: pointer; position: relative;">
+            <span style="position: absolute; top: 3px; left: {{ autoPostKnob }}; width: 18px; height: 18px; border-radius: 99px; background: #ffffff; transition: left 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);"></span>
+          </button>
+        </div>
+        <sc-if value="{{ genOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="background: #ffffff; border: 1.5px solid #ded8ff; border-radius: 16px; padding: 18px 22px; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #5a4af0;">AI-generated post</span>
+              <span style="padding: 1px 8px; border-radius: 99px; background: #f0eff5; color: #56536a; font-size: 10px;">Offer</span>
+            </div>
+            <div style="display: flex; gap: 14px; margin-top: 12px;">
+              <div style="width: 130px; height: 100px; flex-shrink: 0; border-radius: 12px; background: repeating-linear-gradient(45deg, #eceaf3, #eceaf3 8px, #f4f2fa 8px, #f4f2fa 16px); display: flex; align-items: center; justify-content: center; font-family: 'Geist Mono', monospace; font-size: 8.5px; color: #8d8aa3;">AI image</div>
+              <div style="flex: 1;">
+                <div style="font-size: 13px; line-height: 1.6; color: #15131f;">✨ Summer smile season is here! Professional whitening is $99 (reg. $149) through Aug 15. Saturday slots are open — tap Book to grab yours before they fill up.</div>
+                <div style="display: flex; gap: 6px; margin-top: 8px;">
+                  <span style="padding: 1px 8px; border-radius: 99px; background: #ece8ff; color: #5a4af0; font-size: 10px;">#whitening</span>
+                  <span style="padding: 1px 8px; border-radius: 99px; background: #ece8ff; color: #5a4af0; font-size: 10px;">Book action</span>
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #f0eff5;">
+              <span style="font-size: 12px; color: #56536a;">Schedule:</span>
+              <sc-for list="{{ scheduleOpts }}" as="so" hint-placeholder-count="3">
+                <button onClick="{{ so.select }}" style="padding: 6px 12px; border: 1px solid {{ so.border }}; border-radius: 9px; background: {{ so.bg }}; color: {{ so.color }}; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: {{ so.weight }}; cursor: pointer;">{{ so.name }}</button>
+              </sc-for>
+              <div style="flex: 1;"></div>
+              <button onClick="{{ regen }}" style="padding: 7px 14px; border: 1px solid #ded8ff; border-radius: 9px; background: #ffffff; color: #5a4af0; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">Regenerate</button>
+              <button onClick="{{ schedulePost }}" style="padding: 7px 16px; background: #5a4af0; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 600; cursor: pointer;" style-hover="background: #4536d6;">{{ scheduleCta }}</button>
+            </div>
+          </div>
+        </sc-if>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px;">
+          <sc-for list="{{ posts }}" as="po" hint-placeholder-count="4">
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column;">
+              <div style="height: 120px; background: repeating-linear-gradient(45deg, #eceaf3, #eceaf3 10px, #f4f2fa 10px, #f4f2fa 20px); display: flex; align-items: center; justify-content: center;">
+                <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.08em; color: #8d8aa3; background: #ffffff; padding: 3px 10px; border-radius: 99px;">{{ po.img }}</span>
+              </div>
+              <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <span style="padding: 1px 8px; border-radius: 99px; background: #f0eff5; color: #56536a; font-size: 10px; font-weight: 500;">{{ po.type }}</span>
+                  <span style="padding: 1px 8px; border-radius: 99px; background: {{ po.statusBg }}; color: {{ po.statusColor }}; font-size: 10px; font-weight: 600;">{{ po.status }}</span>
+                </div>
+                <div style="font-size: 12.5px; line-height: 1.5; flex: 1;">{{ po.text }}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #8d8aa3;">{{ po.when }}</span>
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #56536a;">{{ po.views }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showInsights }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px;">
+          <sc-for list="{{ insightKpis }}" as="k" hint-placeholder-count="4">
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 16px 20px;">
+              <div style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">{{ k.label }}</div>
+              <div style="font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin-top: 6px;">{{ k.value }}</div>
+              <div style="font-size: 11.5px; color: {{ k.deltaColor }}; margin-top: 2px;">{{ k.delta }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+          <span style="font-size: 14px; font-weight: 600;">Profile actions · last 6 months</span>
+          <div style="display: flex; align-items: flex-end; gap: 12px; height: 170px; margin-top: 18px;">
+            <sc-for list="{{ insightBars }}" as="b" hint-placeholder-count="6">
+              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; align-self: stretch; justify-content: flex-end;">
+                <div style="width: 100%; display: flex; gap: 3px; align-items: flex-end; justify-content: center;">
+                  <div style="width: 30%; height: {{ b.calls }}px; background: #6d5efc; border-radius: 5px 5px 2px 2px;"></div>
+                  <div style="width: 30%; height: {{ b.directions }}px; background: #b3a9ff; border-radius: 5px 5px 2px 2px;"></div>
+                  <div style="width: 30%; height: {{ b.clicks }}px; background: #ded8ff; border-radius: 5px 5px 2px 2px;"></div>
+                </div>
+                <span style="font-family: 'Geist Mono', monospace; font-size: 9px; color: #8d8aa3;">{{ b.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: flex; gap: 16px; margin-top: 14px;">
+            <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #56536a;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #6d5efc;"></span>Calls</span>
+            <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #56536a;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #b3a9ff;"></span>Directions</span>
+            <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #56536a;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #ded8ff;"></span>Website clicks</span>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; margin-top: 14px;">
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 14px; font-weight: 600;">Top search terms</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #8d8aa3;">how people found you</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+              <sc-for list="{{ searchTerms }}" as="st" hint-placeholder-count="5">
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                    <span style="color: #15131f;">{{ st.term }}</span>
+                    <span style="font-family: 'Geist Mono', monospace; color: #56536a;">{{ st.count }} <span style="color: {{ st.deltaColor }};">{{ st.delta }}</span></span>
+                  </div>
+                  <div style="height: 7px; background: #f0eff5; border-radius: 99px; overflow: hidden;"><div style="height: 100%; width: {{ st.w }}; background: linear-gradient(90deg, #6d5efc, #8b7bff); border-radius: 99px;"></div></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+            <span style="font-size: 14px; font-weight: 600;">Discovery vs direct</span>
+            <div style="display: flex; align-items: center; gap: 18px; margin-top: 14px;">
+              <svg viewBox="0 0 120 120" style="width: 104px; height: 104px; flex-shrink: 0;">
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#ded8ff" stroke-width="16"></circle>
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#6d5efc" stroke-width="16" stroke-dasharray="182 289" stroke-linecap="round" transform="rotate(-90 60 60)"></circle>
+                <text x="60" y="57" font-family="Geist, sans-serif" font-size="19" font-weight="700" fill="#15131f" text-anchor="middle">63%</text>
+                <text x="60" y="73" font-family="Geist Mono, monospace" font-size="8" fill="#8d8aa3" text-anchor="middle">DISCOVERY</text>
+              </svg>
+              <div style="display: flex; flex-direction: column; gap: 10px; flex: 1;">
+                <div style="font-size: 11.5px;"><span style="display:inline-block; width:9px; height:9px; border-radius:3px; background:#6d5efc; margin-right:6px;"></span>Discovery <strong>63%</strong><div style="font-size: 10.5px; color: #8d8aa3; margin-top: 1px;">Found via a category or service search</div></div>
+                <div style="font-size: 11.5px;"><span style="display:inline-block; width:9px; height:9px; border-radius:3px; background:#ded8ff; margin-right:6px;"></span>Direct <strong>37%</strong><div style="font-size: 10.5px; color: #8d8aa3; margin-top: 1px;">Searched your business name</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showCitations }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; color: #56536a;">{{ citationSummary }}</span>
+          <div style="flex: 1;"></div>
+          <button onClick="{{ fixAll }}" style="padding: 8px 16px; background: {{ fixAllBg }}; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">{{ fixAllLabel }}</button>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 1.4fr 1.6fr 1fr 0.9fr; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #ececf1; background: #fafafc;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Directory</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Listing</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Status</span>
+            <span></span>
+          </div>
+          <sc-for list="{{ citations }}" as="ct" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 1.4fr 1.6fr 1fr 0.9fr; gap: 12px; align-items: center; padding: 13px 20px; border-bottom: 1px solid #f0eff5;" style-hover="background: #fafafc;">
+              <span style="font-size: 13px; font-weight: 500;">{{ ct.name }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #56536a;">{{ ct.listing }}</span>
+              <span style="justify-self: start; padding: 2px 10px; border-radius: 99px; background: {{ ct.statusBg }}; color: {{ ct.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ ct.status }}</span>
+              <a href="#" style="font-size: 12px; font-weight: 500; justify-self: end;">{{ ct.action }}</a>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showAdvisor }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 20px; background: linear-gradient(120deg, #1a1726 0%, #2c2452 55%, #4536d6 130%); color: #ffffff; border-radius: 20px; padding: 22px 26px; margin-bottom: 16px;">
+          <div style="position: relative; flex-shrink: 0;">
+            <svg viewBox="0 0 120 120" style="width: 96px; height: 96px; transform: rotate(-90deg);">
+              <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="11"></circle>
+              <circle cx="60" cy="60" r="50" fill="none" stroke="#7dd8a0" stroke-width="11" stroke-linecap="round" stroke-dasharray="{{ advisorDash }}"></circle>
+            </svg>
+            <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+              <span style="font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">{{ advisorDoneCount }}/5</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: #b3a9ff;">done</span>
+            </div>
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; color: #b3a9ff; font-weight: 500;">Your weekly game plan · Week of Jul 20</div>
+            <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.015em; margin-top: 4px; text-wrap: balance;">{{ advisorHeadline }}</div>
+            <div style="display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;">
+              <div style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 9px 14px;"><span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #a29fb8;">Projected impact</span><div style="font-size: 15px; font-weight: 700; color: #7dd8a0; white-space: nowrap;">↑ +0.6 avg rank</div></div>
+              <div style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 9px 14px;"><span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #a29fb8;">Time needed</span><div style="font-size: 15px; font-weight: 700; white-space: nowrap;">~15 min</div></div>
+              <div style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 9px 14px;"><span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #a29fb8;">Streak</span><div style="font-size: 15px; font-weight: 700; white-space: nowrap;">🔥 3 weeks</div></div>
+            </div>
+          </div>
+        </div>
+        <div style="height: 8px; background: #ece8ff; border-radius: 99px; overflow: hidden; margin-bottom: 16px;"><div style="height: 100%; width: {{ advisorPct }}; background: linear-gradient(90deg, #6d5efc, #7dd8a0); border-radius: 99px; transition: width 0.3s;"></div></div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <sc-for list="{{ advisorTasks }}" as="at" hint-placeholder-count="5">
+            <div style="display: flex; align-items: flex-start; gap: 14px; background: {{ at.cardBg }}; border: 1px solid {{ at.border }}; border-left: 3px solid {{ at.accent }}; border-radius: 14px; padding: 16px 20px; transition: opacity 0.2s;">
+              <button onClick="{{ at.toggle }}" style="width: 26px; height: 26px; flex-shrink: 0; border: 2px solid {{ at.checkBorder }}; border-radius: 99px; background: {{ at.checkBg }}; color: #ffffff; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-top: 1px;" style-hover="border-color: #5a4af0;">{{ at.checkGlyph }}</button>
+              <div style="flex: 1; opacity: {{ at.opacity }};">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <span style="width: 22px; height: 22px; border-radius: 7px; background: {{ at.iconBg }}; color: {{ at.iconColor }}; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">{{ at.glyph }}</span>
+                  <span style="font-size: 13.5px; font-weight: 600; text-decoration: {{ at.deco }};">{{ at.title }}</span>
+                  <span style="padding: 1px 8px; border-radius: 99px; background: {{ at.impactBg }}; color: {{ at.impactColor }}; font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em;">{{ at.impact }}</span>
+                </div>
+                <div style="font-size: 12px; color: #56536a; line-height: 1.6; margin-top: 5px;">{{ at.why }}</div>
+                <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #8d8aa3;">⏱ {{ at.time }}</span>
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #16803c;">↗ {{ at.lift }}</span>
+                </div>
+              </div>
+              <button onClick="{{ at.go }}" style="padding: 7px 14px; border: 1px solid #ded8ff; border-radius: 9px; background: {{ at.ctaBg }}; color: {{ at.ctaColor }}; font-family: Geist, sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0; margin-top: 2px;" style-hover="background: #5a4af0; color: #ffffff;">{{ at.cta }}</button>
+            </div>
+          </sc-for>
+        </div>
+        <sc-if value="{{ advisorAllDone }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; align-items: center; gap: 12px; background: #f6fbf8; border: 1px solid #d3ecd9; border-radius: 14px; padding: 16px 20px; margin-top: 12px;">
+            <span style="width: 34px; height: 34px; border-radius: 99px; background: #16803c; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 16px;">🎉</span>
+            <div><div style="font-size: 13.5px; font-weight: 600; color: #16803c;">All 5 done — nice work!</div><div style="font-size: 12px; color: #56536a;">Your streak is now 4 weeks. Next plan drops Monday.</div></div>
+          </div>
+        </sc-if>
+        <div style="margin-top: 14px; background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 18px 22px;">
+          <span style="font-size: 14px; font-weight: 600;">Past weeks</span>
+          <div style="display: flex; flex-direction: column; margin-top: 8px;">
+            <sc-for list="{{ advisorHistory }}" as="ah" hint-placeholder-count="3">
+              <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f0eff5; font-size: 12.5px;">
+                <span style="width: 90px; color: #8d8aa3; font-family: 'Geist Mono', monospace; font-size: 10.5px;">{{ ah.week }}</span>
+                <span style="width: 54px; flex-shrink: 0;"><span style="padding: 1px 8px; border-radius: 99px; background: {{ ah.pillBg }}; color: {{ ah.pillColor }}; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: 600;">{{ ah.score }}</span></span>
+                <span style="flex: 1; color: #56536a;">{{ ah.summary }}</span>
+                <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: {{ ah.deltaColor }};">{{ ah.delta }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showImages }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; color: #56536a;">24 photos on your profile · viewed 12,840 times last month</span>
+          <div style="flex: 1;"></div>
+          <button style="padding: 8px 14px; border: 1px solid #ded8ff; border-radius: 9px; background: #ece8ff; color: #5a4af0; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">Generate captions</button>
+          <button style="padding: 8px 16px; background: #1a1726; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">Upload photos</button>
+        </div>
+        <div style="display: flex; gap: 6px; margin-bottom: 14px;">
+          <sc-for list="{{ imageTabs }}" as="imt" hint-placeholder-count="5">
+            <span style="padding: 5px 13px; border-radius: 99px; border: 1px solid {{ imt.border }}; background: {{ imt.bg }}; color: {{ imt.color }}; font-size: 11.5px; font-weight: {{ imt.weight }}; cursor: pointer;">{{ imt.name }}</span>
+          </sc-for>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;">
+          <div style="aspect-ratio: 4/3; border: 1.5px dashed #c9c4e8; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer; color: #5a4af0;" style-hover="background: #f7f5ff;">
+            <span style="font-size: 22px; font-weight: 300;">+</span>
+            <span style="font-size: 11.5px; font-weight: 500;">Add photos</span>
+          </div>
+          <sc-for list="{{ images }}" as="im" hint-placeholder-count="7">
+            <div style="border: 1px solid #ececf1; border-radius: 14px; overflow: hidden; background: #ffffff;">
+              <div style="aspect-ratio: 4/3; background: repeating-linear-gradient(45deg, #eceaf3, #eceaf3 10px, #f4f2fa 10px, #f4f2fa 20px); display: flex; align-items: center; justify-content: center;">
+                <span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.06em; color: #8d8aa3; background: #ffffff; padding: 3px 9px; border-radius: 99px;">{{ im.label }}</span>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px;">
+                <span style="font-size: 10.5px; color: #56536a;">{{ im.cat }}</span>
+                <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #8d8aa3;">{{ im.views }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showReports }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: 1fr 300px; gap: 14px; align-items: start;">
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; overflow: hidden;">
+            <div style="padding: 14px 20px; border-bottom: 1px solid #ececf1; font-size: 14px; font-weight: 600;">Monthly reports</div>
+            <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr 0.9fr; gap: 12px; padding: 11px 20px; border-bottom: 1px solid #ececf1; background: #fafafc;">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Period</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Avg rank</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Profile actions</span>
+              <span></span>
+            </div>
+            <sc-for list="{{ monthlyReports }}" as="mr" hint-placeholder-count="5">
+              <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr 0.9fr; gap: 12px; align-items: center; padding: 13px 20px; border-bottom: 1px solid #f0eff5;" style-hover="background: #fafafc;">
+                <span style="font-size: 13px; font-weight: 500;">{{ mr.period }}</span>
+                <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px;">#{{ mr.rank }} <span style="color: {{ mr.deltaColor }};">{{ mr.delta }}</span></span>
+                <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; color: #56536a;">{{ mr.actions }}</span>
+                <a href="#" style="font-size: 12px; font-weight: 500; justify-self: end;">Download PDF</a>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+            <span style="font-size: 14px; font-weight: 600;">Auto-send</span>
+            <div style="font-size: 12px; color: #56536a; line-height: 1.6; margin-top: 8px;">A branded PDF report goes out on the 1st of each month.</div>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;"><span style="color: #8d8aa3;">Recipients</span><span>2 emails</span></div>
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;"><span style="color: #8d8aa3;">Branding</span><span>Maple Dental logo</span></div>
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;"><span style="color: #8d8aa3;">Status</span><span style="padding: 1px 9px; border-radius: 99px; background: #eaf7ef; color: #16803c; font-size: 10.5px; font-weight: 600;">Active</span></div>
+            </div>
+            <button style="width: 100%; margin-top: 16px; padding: 9px; border: 1px solid #ececf1; border-radius: 9px; background: #ffffff; color: #56536a; font-family: Geist, sans-serif; font-size: 12px; font-weight: 500; cursor: pointer;">Edit schedule</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showActions }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; color: #56536a;">Buttons shown on your Google profile — booking, ordering, quotes</span>
+          <div style="flex: 1;"></div>
+          <button style="padding: 8px 16px; background: #1a1726; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">+ Add action</button>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 1.2fr 1.8fr 0.9fr 0.9fr 0.8fr; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #ececf1; background: #fafafc;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Action</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">URL</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; text-align: right;">Clicks 30d</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Status</span>
+            <span></span>
+          </div>
+          <sc-for list="{{ placeActions }}" as="pa" hint-placeholder-count="4">
+            <div style="display: grid; grid-template-columns: 1.2fr 1.8fr 0.9fr 0.9fr 0.8fr; gap: 12px; align-items: center; padding: 13px 20px; border-bottom: 1px solid #f0eff5;" style-hover="background: #fafafc;">
+              <span style="font-size: 13px; font-weight: 500;">{{ pa.name }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #56536a;">{{ pa.url }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; color: #56536a; text-align: right;">{{ pa.clicks }}</span>
+              <span style="justify-self: start; padding: 2px 10px; border-radius: 99px; background: {{ pa.statusBg }}; color: {{ pa.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ pa.status }}</span>
+              <a href="#" style="font-size: 12px; font-weight: 500; justify-self: end;">{{ pa.cta }}</a>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 12px 16px; background: #ece8ff; border: 1px solid #ded8ff; border-radius: 14px; font-size: 12.5px; color: #4536d6;">
+          <strong style="font-weight: 600;">Tip:</strong> Your online booking link gets 3.4× more clicks than the quote form — consider making it the primary action.
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showVerifications }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <sc-for list="{{ verifications }}" as="vf" hint-placeholder-count="3">
+            <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 18px 22px;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px; background: {{ vf.iconBg }}; color: {{ vf.iconColor }}; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;">{{ vf.glyph }}</span>
+                <div style="flex: 1;">
+                  <div style="font-size: 13.5px; font-weight: 600;">{{ vf.title }}</div>
+                  <div style="font-size: 12px; color: #56536a; margin-top: 2px; line-height: 1.5;">{{ vf.detail }}</div>
+                </div>
+                <span style="padding: 3px 12px; border-radius: 99px; background: {{ vf.statusBg }}; color: {{ vf.statusColor }}; font-size: 11px; font-weight: 600; flex-shrink: 0;">{{ vf.status }}</span>
+                <sc-if value="{{ vf.cta }}" hint-placeholder-val="{{ false }}">
+                  <button style="padding: 7px 14px; border: none; border-radius: 9px; background: #5a4af0; color: #ffffff; font-family: Geist, sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; flex-shrink: 0;" style-hover="background: #4536d6;">{{ vf.cta }}</button>
+                </sc-if>
+              </div>
+              <sc-if value="{{ vf.steps }}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #f0eff5;">
+                  <sc-for list="{{ vf.steps }}" as="st" hint-placeholder-count="3">
+                    <div style="flex: 1; border: 1px solid {{ st.border }}; background: {{ st.bg }}; border-radius: 12px; padding: 10px 12px;">
+                      <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="width: 16px; height: 16px; border-radius: 99px; background: {{ st.dotBg }}; color: {{ st.dotColor }}; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700;">{{ st.glyph }}</span>
+                        <span style="font-size: 11.5px; font-weight: 600;">{{ st.name }}</span>
+                      </div>
+                      <div style="font-size: 10.5px; color: #56536a; margin-top: 4px;">{{ st.hint }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showLocations }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <span style="font-size: 13px; color: #56536a;">3 locations · Grow plan covers all</span>
+          <div style="flex: 1;"></div>
+          <button style="padding: 8px 14px; border: 1px solid #ded8ff; border-radius: 9px; background: #ece8ff; color: #5a4af0; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">Compare locations</button>
+          <button style="padding: 8px 16px; background: #1a1726; color: #ffffff; border: none; border-radius: 9px; font-family: Geist, sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer;">+ Add location</button>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; overflow: hidden; margin-bottom: 14px;">
+          <div style="display: grid; grid-template-columns: 1.8fr 1fr 0.8fr 0.9fr 0.9fr 0.9fr 0.9fr; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #ececf1; background: #fafafc;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Location</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">Status</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; text-align: right;">Score</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; text-align: right;">Avg rank</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; text-align: right;">Rating</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3; text-align: right;">To-dos</span>
+            <span></span>
+          </div>
+          <sc-for list="{{ locationRows }}" as="lr" hint-placeholder-count="3">
+            <div style="display: grid; grid-template-columns: 1.8fr 1fr 0.8fr 0.9fr 0.9fr 0.9fr 0.9fr; gap: 12px; align-items: center; padding: 13px 20px; border-bottom: 1px solid #f0eff5; background: {{ lr.rowBg }};" style-hover="background: #fafafc;">
+              <div>
+                <div style="font-size: 13px; font-weight: 600;">{{ lr.name }} <sc-if value="{{ lr.isActive }}" hint-placeholder-val="{{ false }}"><span style="padding: 1px 8px; border-radius: 99px; background: #ece8ff; color: #5a4af0; font-size: 9px; font-weight: 700; letter-spacing: 0.04em;">VIEWING</span></sc-if></div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #8d8aa3; margin-top: 1px;">{{ lr.address }}</div>
+              </div>
+              <span style="justify-self: start; padding: 2px 10px; border-radius: 99px; background: {{ lr.statusBg }}; color: {{ lr.statusColor }}; font-size: 10.5px; font-weight: 600;">{{ lr.status }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; text-align: right; color: {{ lr.scoreColor }}; font-weight: 600;">{{ lr.score }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; text-align: right;">#{{ lr.rank }}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; text-align: right;">{{ lr.rating }}★</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; text-align: right; color: {{ lr.todoColor }};">{{ lr.todos }}</span>
+              <button onClick="{{ lr.switchTo }}" style="justify-self: end; padding: 6px 14px; border: 1px solid {{ lr.btnBorder }}; border-radius: 9px; background: {{ lr.btnBg }}; color: {{ lr.btnColor }}; font-family: Geist, sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;">{{ lr.btnLabel }}</button>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); gap: 14px; align-items: start;">
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 22px 26px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div style="width: 56px; height: 56px; border-radius: 14px; background: repeating-linear-gradient(45deg, #eceaf3, #eceaf3 6px, #f4f2fa 6px, #f4f2fa 12px); display: flex; align-items: center; justify-content: center; font-family: 'Geist Mono', monospace; font-size: 8px; color: #8d8aa3;">logo</div>
+              <div style="flex: 1;">
+                <div style="font-size: 17px; font-weight: 700;">{{ activeLocName }}</div>
+                <div style="font-size: 12px; color: #56536a; margin-top: 2px;">Dentist · {{ activeLocAddress }}</div>
+              </div>
+              <span style="padding: 3px 12px; border-radius: 99px; background: {{ activeLocStatusBg }}; color: {{ activeLocStatusColor }}; font-size: 11px; font-weight: 600;">{{ activeLocStatus }}</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px;">
+              <sc-for list="{{ profileFields }}" as="pf" hint-placeholder-count="6">
+                <div style="border: 1px solid #ececf1; border-radius: 12px; padding: 11px 14px;">
+                  <div style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8aa3;">{{ pf.label }}</div>
+                  <div style="font-size: 12.5px; margin-top: 4px;">{{ pf.value }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background: #ffffff; border: 1px solid #ececf1; border-radius: 16px; padding: 20px 24px;">
+            <span style="font-size: 14px; font-weight: 600;">Profile completeness</span>
+            <div style="font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin-top: 8px; color: #5a4af0;">86%</div>
+            <div style="height: 8px; background: #f0eff5; border-radius: 99px; overflow: hidden; margin-top: 8px;"><div style="height: 100%; width: 86%; background: linear-gradient(90deg, #6d5efc, #8b7bff); border-radius: 99px;"></div></div>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
+              <sc-for list="{{ completeness }}" as="cp" hint-placeholder-count="4">
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                  <span style="width: 16px; height: 16px; flex-shrink: 0; border-radius: 99px; background: {{ cp.bg }}; color: {{ cp.color }}; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700;">{{ cp.glyph }}</span>
+                  <span style="color: {{ cp.textColor }};">{{ cp.item }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { screen: "dashboard", keyword: "dentist near me", scanning: false, scanned: false, reviewFilter: "All", advisorDone: [false, false, false, false, false], citationsFixed: false, menuOpen: false, locMenuOpen: false, activeLoc: 0, loggedOut: false, googleConnected: true, syncing: false, synced: false, toggles: [true, true, false, true], rulesOpen: false, replyRules: [true, true, false], postedReviews: [], postedQa: [], genOpen: false, autoPostOn: true, scheduleIdx: 1, postScheduled: false, reviewReqOpen: false, reviewReqCount: 42, credits: 412, packIdx: 1, creditsBought: false, boughtAmt: 0, recharge: true, plan: "Grow", planChanged: false, planMsg: "" };
+
+  componentWillUnmount() { clearTimeout(this._scanT); clearTimeout(this._syncT); }
+
+  billingVals() {
+    const packs = [
+      { credits: "100", price: "$29", per: "$0.29 / scan", n: 100, amt: "$29" },
+      { credits: "250", price: "$59", per: "$0.24 / scan", n: 250, amt: "$59", popular: true },
+      { credits: "600", price: "$119", per: "$0.20 / scan", n: 600, amt: "$119" },
+      { credits: "1,500", price: "$249", per: "$0.17 / scan", n: 1500, amt: "$249" },
+    ];
+    const pi = this.state.packIdx;
+    const creditPacks = packs.map((p, i) => ({
+      ...p, popular: p.popular || false,
+      select: () => this.setState({ packIdx: i, creditsBought: false }),
+      border: i === pi ? "#5a4af0" : "#ececf1",
+    }));
+    const order = { Scan: 0, Grow: 1, Dominate: 2 };
+    const cur = this.state.plan;
+    const planData = [
+      { name: "Scan", price: "$0", scans: "Monthly · 1 keyword", features: ["49-point monthly scan", "Visibility score", "Email report"] },
+      { name: "Grow", price: "$49", scans: "Weekly · 10 keywords", features: ["Everything in Scan", "AI review replies + Q&A", "Posts & scheduling", "Citation monitoring"] },
+      { name: "Dominate", price: "$99", scans: "Daily · unlimited keywords", features: ["Everything in Grow", "Competitor tracking", "Citation auto-fix", "Multi-location + API"] },
+    ];
+    const plans = planData.map((p) => {
+      const isCurrent = p.name === cur;
+      const isUp = order[p.name] > order[cur];
+      return {
+        ...p, isCurrent,
+        border: isCurrent ? "#5a4af0" : "#ececf1",
+        select: isCurrent ? () => {} : () => this.setState({ plan: p.name, planChanged: true, planMsg: (isUp ? "Upgraded to " : "Downgraded to ") + p.name + " — " + (isUp ? "new features unlocked now, prorated $" + (p.name === "Dominate" ? "50" : "49") + " today." : "takes effect at your next renewal, Aug 4.") }),
+        btnLabel: isCurrent ? "Current plan" : isUp ? "Upgrade →" : "Downgrade",
+        btnBg: isCurrent ? "#f0eff5" : isUp ? "#5a4af0" : "#ffffff",
+        btnColor: isCurrent ? "#8d8aa3" : isUp ? "#ffffff" : "#5a4af0",
+        btnBorder: isCurrent ? "1px solid #ececf1" : isUp ? "none" : "1px solid #ded8ff",
+        btnCursor: isCurrent ? "default" : "pointer",
+      };
+    });
+    return {
+      credits: this.state.credits.toLocaleString(),
+      creditsWeeks: Math.round(this.state.credits / 40),
+      creditPacks, plans,
+      selectedPackLabel: packs[pi].credits + " credits · " + packs[pi].price,
+      buyLabel: "Buy " + packs[pi].credits + " credits",
+      buyCredits: () => this.setState((s) => ({ credits: s.credits + packs[pi].n, creditsBought: true, boughtAmt: packs[pi].n })),
+      creditsBought: this.state.creditsBought,
+      creditsBoughtLabel: this.state.boughtAmt.toLocaleString() + " credits",
+      toggleRecharge: () => this.setState((s) => ({ recharge: !s.recharge })),
+      rechargeBg: this.state.recharge ? "#5a4af0" : "#d5d2e2",
+      rechargeKnob: this.state.recharge ? "23px" : "3px",
+      rechargeLabel: this.state.recharge ? "On" : "Off",
+      currentPlanName: cur,
+      planChanged: this.state.planChanged,
+      planChangeMsg: this.state.planMsg,
+      billingHistory: [
+        { date: "Jul 12", desc: "250 credit pack", amount: "$59.00" },
+        { date: "Jul 1", desc: "Grow plan · monthly", amount: "$49.00" },
+        { date: "Jun 1", desc: "Grow plan · monthly", amount: "$49.00" },
+        { date: "May 18", desc: "600 credit pack", amount: "$119.00" },
+      ],
+      showBilling: this.state.screen === "billing",
+    };
+  }
+
+  trendVals() {
+    const seed = { "dentist near me": 6.4, "invisalign toronto": 7.2, "teeth whitening toronto": 8.0, "emergency dentist": 13.0, "kids dentist danforth": 4.2, "dental implants east york": 9.5 };
+    const start = seed[this.state.keyword] ?? 6.4;
+    const pts = [];
+    for (let i = 0; i < 12; i++) {
+      const t = i / 11;
+      const rank = start - (start - Math.max(2.6, start * 0.42)) * t + Math.sin(i * 1.3) * 0.5;
+      const x = i * (610 / 11);
+      const y = 15 + ((Math.max(1, rank) - 1) / 14) * 120;
+      pts.push([Math.round(x), Math.round(Math.min(140, Math.max(12, y)))]);
+    }
+    const line = pts.map((p, i) => (i === 0 ? "M" : "L") + p[0] + "," + p[1]).join(" ");
+    const area = line + " L610,150 L0,150 Z";
+    return { trendLine: line, trendArea: area, trendEndY: pts[11][1] };
+  }
+
+  reviewLinkVals() {
+    const slug = this.state.locSlug ?? "maple-dental-danforth";
+    const url = "saloon.gmbsuite.com/r/" + slug;
+    const starPicks = [1, 2, 3, 4, 5].map((n) => {
+      const on = this.state.demoStars === n;
+      return {
+        label: n + "★", select: () => this.setState({ demoStars: n }),
+        border: on ? "#5a4af0" : "#e7e2d4", bg: on ? "#ece8ff" : "#ffffff", color: on ? "#5a4af0" : "#1f1d17",
+      };
+    });
+    const stars = this.state.demoStars;
+    const good = stars >= 4;
+    return {
+      reviewLinkUrl: url,
+      locSlug: slug, setLocSlug: (e) => this.setState({ locSlug: e.target.value }),
+      copyLink: () => this.setState({ linkCopied: true }),
+      copyLinkLabel: this.state.linkCopied ? "Copied ✓" : "Copy link",
+      starPicks,
+      demoResult: !!stars,
+      demoTitle: stars ? (good ? "✓ Sent to Google Business Profile" : "🔒 Kept private — sent to you as feedback") : "",
+      demoDesc: stars ? (good ? "This " + stars + "★ rating publishes publicly on your Google profile." : "This " + stars + "★ rating never reaches Google — you'll see it in Reputation as private feedback.") : "",
+      demoBg: good ? "#e9f2ec" : "#f9e8e6", demoBorder: good ? "#cfe3d6" : "#eecfc9", demoColor: good ? "#16753c" : "#a8453a",
+    };
+  }
+
+  whitelabelVals() {
+    const planDefs = [
+      { name: "Reseller", price: "$29", tenants: "10", margin: "40-60% typical margin", features: ["Up to 10 tenant accounts", "White-label branding", "Shared domain (yoursub.adgrowly.app)", "Standard support"] },
+      { name: "Agency", price: "$79", tenants: "50", margin: "50-70% typical margin", features: ["Up to 50 tenant accounts", "Buy & connect your own domain", "Custom brand color + logo", "Priority support + Slack channel"] },
+      { name: "Enterprise", price: "Custom", tenants: "unlimited", margin: "60-75% typical margin", features: ["Unlimited tenants", "Multiple domains", "Dedicated account manager", "API + custom integrations"] },
+    ];
+    const pIdx = this.state.wlPlanIdx ?? 1;
+    const wlPlans = planDefs.map((p, i) => {
+      const on = i === pIdx;
+      return {
+        ...p, select: () => this.setState({ wlPlanIdx: i, wlActivated: false }),
+        border: on ? "#5a4af0" : "#e7e2d4",
+        radioBorder: on ? "#5a4af0" : "#d8d3c4", radioBg: on ? "#5a4af0" : "#ffffff",
+      };
+    });
+    const active = planDefs[pIdx];
+    const colorDefs = [{ hex: "#16753c" }, { hex: "#5a4af0" }, { hex: "#d97706" }, { hex: "#0e7490" }, { hex: "#be185d" }];
+    const cIdx = this.state.wlColorIdx ?? 0;
+    const wlColors = colorDefs.map((c, i) => ({
+      hex: c.hex, ring: i === cIdx ? "#1f1d17" : "transparent",
+      select: () => this.setState({ wlColorIdx: i }),
+    }));
+    return {
+      wlPlans, wlPlanName: active.name, wlPlanPrice: active.price, wlPlanFeatures: active.features,
+      wlShowMultiDomain: pIdx > 0,
+      wlColors,
+      wlBrandName: this.state.wlBrandName ?? "",
+      setBrandName: (e) => this.setState({ wlBrandName: e.target.value }),
+      wlDomain: this.state.wlDomain ?? "",
+      setDomain: (e) => this.setState({ wlDomain: e.target.value }),
+      wlActivateLabel: "Activate white-label portal",
+      activateWhitelabel: () => this.setState((s) => ({
+        wlActivated: true,
+        wlBrandName: s.wlBrandName || "Your Agency",
+        wlDomain: s.wlDomain || "app.youragency.com",
+      })),
+      wlActivated: !!this.state.wlActivated,
+      wlForm: !this.state.wlActivated,
+    };
+  }
+
+  myTicketVals() {
+    const cat = this.state.ticketCat || "Billing";
+    const ticketCats = ["Billing", "Technical", "Feature request", "Other"].map((name) => {
+      const on = name === cat;
+      return {
+        name, select: () => this.setState({ ticketCat: name }),
+        bg: on ? "#ece8ff" : "#ffffff", color: on ? "#5a4af0" : "#56536a",
+        border: on ? "#ded8ff" : "#ececf1", weight: on ? 600 : 400,
+      };
+    });
+    const submitted = this.state.ticketSubmitted;
+    const stStyles = { Open: ["#fef3e2", "#b25e09"], "Awaiting you": ["#e8effa", "#3b5b8f"], Resolved: ["#eaf7ef", "#16803c"] };
+    const base = [
+      { id: "#T-4820", subject: "How do I turn off auto-reply for 3-star reviews?", lastMsg: "Support: You can toggle this under Settings → AI voice & automation.", status: "Awaiting you", when: "2h ago" },
+      { id: "#T-4790", subject: "Photos not showing on profile", lastMsg: "Support: Fixed — Google's cache took a day to refresh. Let us know if it recurs!", status: "Resolved", when: "1 week ago" },
+    ];
+    const myTickets = submitted
+      ? [{ id: "#T-4822", subject: "New ticket", lastMsg: "We've received your request and will reply within 2 hours.", status: "Open", when: "Just now" }].concat(base)
+      : base;
+    return {
+      ticketCats,
+      newTicketOpen: this.state.newTicketOpen,
+      toggleNewTicket: () => this.setState((s) => ({ newTicketOpen: !s.newTicketOpen, ticketSubmitted: false })),
+      newTicketBtnLabel: this.state.newTicketOpen ? "Cancel" : "+ New ticket",
+      submitTicket: () => this.setState({ ticketSubmitted: true, newTicketOpen: false }),
+      submitTicketLabel: "Submit ticket",
+      myTickets: myTickets.map((t) => ({ ...t, statusBg: stStyles[t.status][0], statusColor: stStyles[t.status][1] })),
+    };
+  }
+
+  locationVals() {
+    const locs = [
+      { name: "Maple Dental Studio — Danforth", address: "482 Maple Ave, Toronto, ON M4K 1R2", city: "Toronto", status: "Verified", score: "78", rank: "4.2", rating: "4.8", todos: "2", dot: "#22c55e" },
+      { name: "Maple Dental — Leaside", address: "1204 Bayview Ave, Toronto, ON M4G 3A1", city: "Toronto", status: "Verified", score: "64", rank: "6.8", rating: "4.6", todos: "5", dot: "#22c55e" },
+      { name: "Maple Dental — Scarborough", address: "88 Kennedy Rd, Scarborough, ON M1K 2A1", city: "Scarborough", status: "Pending", score: "41", rank: "11.4", rating: "4.4", todos: "8", dot: "#f59e0b" },
+    ];
+    const ai = this.state.activeLoc;
+    const active = locs[ai];
+    const stStyles = { Verified: ["#eaf7ef", "#16803c"], Pending: ["#fef3e2", "#b25e09"] };
+    const scoreColor = (s) => (Number(s) >= 70 ? "#16803c" : Number(s) >= 50 ? "#b25e09" : "#d92d20");
+    const pick = (i) => () => this.setState({ activeLoc: i, locMenuOpen: false, scanned: false });
+    return {
+      activeLocName: active.name,
+      activeLocMeta: active.city + " · " + active.status.toLowerCase(),
+      activeLocAddress: active.address,
+      activeLocDot: active.dot,
+      activeLocStatus: active.status,
+      activeLocStatusBg: stStyles[active.status][0],
+      activeLocStatusColor: stStyles[active.status][1],
+      locMenuOpen: this.state.locMenuOpen,
+      toggleLocMenu: () => this.setState((s) => ({ locMenuOpen: !s.locMenuOpen })),
+      goLocations: () => this.setState({ screen: "locations", locMenuOpen: false }),
+      locOptions: locs.map((l, i) => ({
+        name: l.name, meta: l.city + " · " + l.status.toLowerCase(),
+        select: pick(i), dot: l.dot,
+        bg: i === ai ? "#f7f5ff" : "transparent",
+        weight: i === ai ? 700 : 500,
+        score: l.score, scoreColor: scoreColor(l.score),
+      })),
+      locationRows: locs.map((l, i) => ({
+        ...l, isActive: i === ai,
+        rowBg: i === ai ? "#fbfaff" : "transparent",
+        statusBg: stStyles[l.status][0], statusColor: stStyles[l.status][1],
+        scoreColor: scoreColor(l.score),
+        todoColor: Number(l.todos) > 4 ? "#d92d20" : "#56536a",
+        switchTo: pick(i),
+        btnLabel: i === ai ? "Viewing" : "Switch to",
+        btnBg: i === ai ? "#ece8ff" : "#ffffff",
+        btnColor: i === ai ? "#5a4af0" : "#56536a",
+        btnBorder: i === ai ? "#ded8ff" : "#ececf1",
+      })),
+    };
+  }
+
+  renderVals() {
+    const screen = this.state.screen;
+    const setScreen = (s) => () => this.setState({ screen: s });
+
+    const sections = [
+      { label: "Overview", items: [["Dashboard", "dashboard"], ["Advisor", "advisor", "5"]] },
+      { label: "Visibility", items: [["Rank tracker", "ranking"], ["Insights", "insights"], ["Citations", "citations", "3"]] },
+      { label: "Engage", items: [["Reputation", "reputation", "3"], ["Q&A", "qa", "2"], ["Posts", "posts"]] },
+      { label: "Support", items: [["My tickets", "support", "1"]] },
+      { label: "Grow", items: [["Go white-label", "whitelabel"], ["Review link & QR", "reviewlink"]] },
+      { label: "Profile", items: [["Locations", "locations"], ["Place actions", "actions"], ["Verifications", "verifications", "1"], ["Images", "images"], ["Reports", "reports"], ["Billing & plan", "billing"], ["Settings", "settings"]] },
+    ];
+    const navSections = sections.map((sec) => ({
+      label: sec.label,
+      items: sec.items.map(([name, key, badge]) => {
+        const active = key === screen;
+        return {
+          name, badge: badge || false,
+          select: key ? setScreen(key) : () => {},
+          bg: active ? "#ece8ff" : "transparent",
+          color: active ? "#5a4af0" : "#56536a",
+          weight: active ? 600 : 400,
+        };
+      }),
+    }));
+
+    const up = "#16803c", down = "#d92d20";
+    const mkSpark = (vals, color) => vals.map((v, i) => ({
+      h: Math.max(3, v), color: i === vals.length - 1 ? color : "#e6e3f2",
+    }));
+    const dashKpis = [
+      { label: "Avg rank · tracked", value: "#4.2", delta: "▲ 1.3 this month", deltaColor: up, glyph: "R", go: setScreen("ranking"), spark: mkSpark([8, 10, 9, 13, 15, 17, 20, 24], "#5a4af0") },
+      { label: "Profile views · 30d", value: "8,412", delta: "+18% vs prior", deltaColor: up, glyph: "V", go: setScreen("insights"), spark: mkSpark([10, 12, 11, 15, 14, 18, 21, 26], "#5a4af0") },
+      { label: "Calls from profile", value: "146", delta: "+11% vs prior", deltaColor: up, glyph: "C", go: setScreen("insights"), spark: mkSpark([9, 11, 13, 12, 16, 15, 19, 23], "#5a4af0") },
+      { label: "Review rating", value: "4.8 ★", delta: "236 reviews · +14 new", deltaColor: up, glyph: "★", go: setScreen("reputation"), spark: mkSpark([14, 14, 15, 16, 16, 18, 19, 22], "#5a4af0") },
+    ];
+    const advisor = [
+      { pri: "1", title: "Reply to 3 waiting reviews", why: "Profiles that reply within 48h rank measurably higher in the local pack.", cta: "Open", dotBg: "#fdecea", dotColor: "#d92d20", go: setScreen("reputation") },
+      { pri: "2", title: "Add 'emergency dentist' to services", why: "You rank #12 for it but competitors with the service listed average #5.", cta: "Add", dotBg: "#fef3e2", dotColor: "#b25e09", go: setScreen("locations") },
+      { pri: "3", title: "Post weekly — last post was 12 days ago", why: "Fresh posts correlate with +9% profile actions for your category.", cta: "Draft", dotBg: "#ece8ff", dotColor: "#5a4af0", go: setScreen("posts") },
+    ];
+    const pickKw = (kw) => () => this.setState({ screen: "ranking", keyword: kw, scanned: false });
+    const rankMoves = [
+      { kw: "dentist near me", rank: "3", delta: "+2", deltaColor: up, go: pickKw("dentist near me") },
+      { kw: "invisalign toronto", rank: "5", delta: "+1", deltaColor: up, go: pickKw("invisalign toronto") },
+      { kw: "teeth whitening toronto", rank: "7", delta: "0", deltaColor: "#8d8aa3", go: pickKw("teeth whitening toronto") },
+      { kw: "emergency dentist", rank: "12", delta: "-3", deltaColor: down, go: pickKw("emergency dentist") },
+      { kw: "kids dentist danforth", rank: "2", delta: "+1", deltaColor: up, go: pickKw("kids dentist danforth") },
+    ];
+
+    const baseRanks = [
+      9,7,5,4,5,8,0,
+      7,4,3,2,3,6,9,
+      5,3,1,1,2,5,8,
+      4,2,1,1,1,4,7,
+      5,3,2,1,2,5,9,
+      8,5,4,3,4,7,0,
+      0,9,7,6,8,0,0,
+    ];
+    const kwOffsets = { "dentist near me": 0, "invisalign toronto": 2, "teeth whitening toronto": 4, "emergency dentist": 9, "kids dentist danforth": -1, "dental implants east york": 6 };
+    const off = kwOffsets[this.state.keyword] ?? 0;
+    const improve = this.state.scanned ? -1 : 0;
+    const ranks = baseRanks.map((r) => (r === 0 ? (off >= 6 ? 0 : 0) : Math.min(20, Math.max(1, r + off + improve))));
+    const found = ranks.filter((r) => r > 0);
+    const avgRank = (found.reduce((a, b) => a + b, 0) / found.length).toFixed(1);
+    const heatCells = ranks.map((r) => ({
+      rank: r === 0 ? "–" : String(r),
+      bg: r === 0 ? "#c9c7d4" : r <= 3 ? "#22c55e" : r <= 7 ? "#f59e0b" : "#f04438",
+    }));
+    const rescan = () => {
+      if (this.state.scanning) return;
+      this.setState({ scanning: true });
+      this._scanT = setTimeout(() => this.setState({ scanning: false, scanned: true }), 1400);
+    };
+    const leaderboard = [
+      ["1", "Maple Dental Studio", "4.8", "4.2", true],
+      ["2", "Danforth Smiles", "4.7", "4.8", false],
+      ["3", "Bright Bay Dental", "4.5", "5.9", false],
+      ["4", "East York Dental Care", "4.6", "7.1", false],
+      ["5", "Pape Village Dentistry", "4.2", "9.4", false],
+    ].map(([pos, name, stars, avg, me]) => ({
+      pos, name, stars, avg,
+      weight: me ? 700 : 500, color: me ? "#5a4af0" : "#15131f",
+    }));
+    const keywords = [
+      ["dentist near me", 3], ["invisalign toronto", 5], ["teeth whitening toronto", 7],
+      ["emergency dentist", 12], ["kids dentist danforth", 2], ["dental implants east york", 9],
+    ].map(([name, rank]) => {
+      const active = name === this.state.keyword;
+      return {
+        name, rank,
+        select: () => this.setState({ keyword: name, scanned: false }),
+        bg: active ? "#ece8ff" : "#ffffff", color: active ? "#5a4af0" : "#56536a",
+        border: active ? "#ded8ff" : "#ececf1",
+      };
+    });
+
+    const reviewFilters = ["All", "5 stars", "3 and below"].map((name) => {
+      const active = name === this.state.reviewFilter;
+      return {
+        name, select: () => this.setState({ reviewFilter: name }),
+        bg: active ? "#ece8ff" : "#ffffff", color: active ? "#5a4af0" : "#56536a",
+        border: active ? "#ded8ff" : "#ececf1", weight: active ? 600 : 400,
+      };
+    });
+    const allReviews = [
+      { initials: "KL", name: "Karen L.", when: "2 days ago · Google", stars: "★★★★★", starColor: "#b25e09", replied: false, text: "Dr. Rana is fantastic with nervous patients. The appointment reminders meant I actually showed up on time for once. Highly recommend!", draft: "Thank you so much, Karen! We're thrilled the reminders helped — Dr. Rana will be delighted to hear this. See you at your next check-up! 🦷" },
+      { initials: "RT", name: "Raj T.", when: "5 days ago · Google", stars: "★★☆☆☆", starColor: "#d92d20", replied: false, text: "Good dentist but I waited 35 minutes past my appointment time. The front desk didn't even acknowledge it.", draft: "Raj, we're sorry about the wait — that's not the experience we aim for. We've reviewed Thursday's schedule to prevent this. Please call us and we'll prioritize your next visit." },
+      { initials: "MW", name: "Maria W.", when: "1 week ago · Google", stars: "★★★★★", starColor: "#b25e09", replied: true, text: "Booked through their website in minutes, confirmation came right away. Whitening results were great.", draft: null },
+    ];
+    const rf = this.state.reviewFilter;
+    const postedR = this.state.postedReviews;
+    const reviews = allReviews
+      .map((r, i) => ({
+        ...r,
+        posted: postedR.includes(i),
+        replied: r.replied || postedR.includes(i),
+        showDraft: !!r.draft && !postedR.includes(i),
+        post: () => this.setState({ postedReviews: this.state.postedReviews.concat(i) }),
+      }))
+      .filter((r) => {
+        const n = (r.stars.match(/★/g) || []).length;
+        return rf === "All" ? true : rf === "5 stars" ? n === 5 : n <= 3;
+      });
+    const rulesOn = this.state.replyRules;
+    const ruleColors = ["#b25e09", "#b25e09", "#d92d20"];
+    const replyRules = [
+      ["★★★★★ / ★★★★", "Auto-post AI reply", "Positive reviews get a warm reply instantly — no approval needed"],
+      ["★★★", "Draft, wait for approval", "Neutral reviews get a draft; you approve before posting"],
+      ["★★ / ★", "Draft + notify me immediately", "Negative reviews page you by email the moment they land"],
+    ].map(([stars, name, desc], i) => ({
+      stars, name, desc, starColor: ruleColors[i],
+      toggle: () => {
+        const rr = this.state.replyRules.slice();
+        rr[i] = !rr[i];
+        this.setState({ replyRules: rr });
+      },
+      bg: rulesOn[i] ? "#5a4af0" : "#d5d2e2",
+      knob: rulesOn[i] ? "19px" : "3px",
+    }));
+
+    const postedQ = this.state.postedQa;
+    const rawQuestions = [
+      { text: "Do you offer direct billing to insurance?", who: "Asked by S. Patel · 3 days ago", answer: "Yes! We direct-bill most major providers including Sun Life, Manulife, and Canada Life. Bring your card to your first visit or call ahead and we'll verify coverage before you come in.", draft: true },
+      { text: "Is there parking nearby?", who: "Asked by J. Kim · 1 week ago", answer: "Yes — free patient parking is available behind the building (entrance off Maple Ave, spots 4–9). Street parking on Danforth is also usually available.", draft: true },
+      { text: "Do you see children?", who: "Asked by A. Rivera · 3 weeks ago", answer: "Absolutely — we see patients of all ages and have two hygienists who specialize in pediatric cleanings.", draft: false },
+    ];
+    const questions = rawQuestions.map((q, i) => {
+      const answered = !q.draft || postedQ.includes(i);
+      return {
+        text: q.text, who: q.who, answer: q.answer,
+        isDraft: q.draft && !answered ? true : false,
+        status: answered ? "Answered" : "Unanswered",
+        statusBg: answered ? "#eaf7ef" : "#fdecea",
+        statusColor: answered ? "#16803c" : "#d92d20",
+        answerLabel: !q.draft ? "Your answer · posted Jul 2" : answered ? "Your answer · posted just now ✓" : "AI draft answer",
+        post: () => this.setState({ postedQa: this.state.postedQa.concat(i) }),
+      };
+    });
+    const qaOpen = rawQuestions.filter((q, i) => q.draft && !postedQ.includes(i)).length;
+
+    const postStatus = { Live: ["#eaf7ef", "#16803c"], Scheduled: ["#fef3e2", "#b25e09"], Draft: ["#f0eff5", "#56536a"] };
+    const posts = [
+      ["clinic photo", "Update", "Now open Saturdays! Book your weekend cleaning — early slots go fast.", "Jul 15", "1,204 views", "Live"],
+      ["offer graphic", "Offer", "Summer whitening: $99 (reg. $149) until Aug 15. Mention this post when booking.", "Jul 10", "2,861 views", "Live"],
+      ["team photo", "Update", "Welcome Dr. Osei to the team — now accepting new patients for restorative care.", "Jul 22", "—", "Scheduled"],
+      ["event photo", "Event", "Invisalign Open House · Jul 30, 5–8pm. Free consults and same-day scans.", "—", "—", "Draft"],
+    ].map(([img, type, text, when, views, status]) => ({
+      img, type, text, when, views, status,
+      statusBg: postStatus[status][0], statusColor: postStatus[status][1],
+    }));
+
+    const insightKpis = [
+      { label: "Profile views", value: "8,412", delta: "+18%", deltaColor: up },
+      { label: "Search appearances", value: "21,940", delta: "+9%", deltaColor: up },
+      { label: "Calls", value: "146", delta: "+11%", deltaColor: up },
+      { label: "Direction requests", value: "318", delta: "-4%", deltaColor: down },
+    ];
+    const insightBars = [
+      { label: "Feb", calls: 62, directions: 88, clicks: 44 },
+      { label: "Mar", calls: 74, directions: 92, clicks: 51 },
+      { label: "Apr", calls: 70, directions: 104, clicks: 58 },
+      { label: "May", calls: 88, directions: 110, clicks: 66 },
+      { label: "Jun", calls: 96, directions: 98, clicks: 72 },
+      { label: "Jul", calls: 118, directions: 94, clicks: 81 },
+    ];
+
+    const fixed = this.state.citationsFixed;
+    const ctStatus = { Live: ["#eaf7ef", "#16803c"], Mismatch: ["#fef3e2", "#b25e09"], Missing: ["#fdecea", "#d92d20"], Queued: ["#ece8ff", "#5a4af0"] };
+    const citations = [
+      ["Google Business Profile", "Maple Dental Studio · 482 Maple Ave", "Live", "View"],
+      ["Apple Maps", "Maple Dental Studio · 482 Maple Ave", "Live", "View"],
+      ["Yelp", "Maple Dental · 482 Maple Avenue", "Mismatch", "Fix name"],
+      ["Bing Places", "Maple Dental Studio · 482 Maple Ave", "Live", "View"],
+      ["Yellow Pages", "old address: 210 Pape Ave", "Mismatch", "Fix address"],
+      ["Foursquare", "—", "Missing", "Create"],
+      ["411.ca", "Maple Dental Studio · 482 Maple Ave", "Live", "View"],
+    ].map(([name, listing, status, action]) => {
+      const isIssue = status !== "Live";
+      const st = fixed && isIssue ? "Queued" : status;
+      return {
+        name, listing: fixed && isIssue ? "Maple Dental Studio · 482 Maple Ave (submitting)" : listing,
+        status: st, action: fixed && isIssue ? "Track" : action,
+        statusBg: ctStatus[st][0], statusColor: ctStatus[st][1],
+      };
+    });
+
+    const done = this.state.advisorDone;
+    const doneN = done.filter(Boolean).length;
+    const impactStyles = { HIGH: ["#fdecea", "#d92d20"], MEDIUM: ["#fef3e2", "#b25e09"], LOW: ["#f0eff5", "#56536a"] };
+    const advisorTasks = [
+      ["R", "Reply to 3 waiting reviews", "Profiles that reply within 48h rank measurably higher in the local pack. Raj T.'s 2-star has been waiting 5 days.", "HIGH", "Open reviews", "5 min", "+0.3 rank", "reputation"],
+      ["S", "Add 'emergency dentist' to your services", "You rank #12 for it, but competitors listing the service average #5. One profile edit.", "HIGH", "Edit profile", "2 min", "+0.2 rank", "locations"],
+      ["P", "Publish this week's post", "Last post was 12 days ago. A drafted 'Saturday openings' update is ready to approve.", "MEDIUM", "Review draft", "3 min", "+9% actions", "posts"],
+      ["Q", "Answer 2 open profile questions", "Insurance and parking questions are unanswered — AI drafts are waiting in Q&A.", "MEDIUM", "Open Q&A", "2 min", "+visibility", "qa"],
+      ["I", "Upload 3 photos of the new operatory", "Profiles with fresh photos in the last 30 days get 42% more direction requests.", "LOW", "Upload", "4 min", "+42% directions", "images"],
+    ].map(([glyph, title, why, impact, cta, time, lift, dest], i) => ({
+      glyph, title, why, impact, cta, time, lift,
+      toggle: () => {
+        const d = this.state.advisorDone.slice();
+        d[i] = !d[i];
+        this.setState({ advisorDone: d });
+      },
+      go: setScreen(dest),
+      checkGlyph: done[i] ? "✓" : "",
+      checkBg: done[i] ? "#16803c" : "#ffffff",
+      checkBorder: done[i] ? "#16803c" : "#d5d2e2",
+      cardBg: done[i] ? "#f6fbf8" : "#ffffff",
+      border: done[i] ? "#d3ecd9" : "#ececf1",
+      accent: done[i] ? "#16803c" : impactStyles[impact][1],
+      opacity: done[i] ? "0.55" : "1",
+      deco: done[i] ? "line-through" : "none",
+      iconBg: done[i] ? "#eaf7ef" : "#ece8ff", iconColor: done[i] ? "#16803c" : "#5a4af0",
+      ctaBg: done[i] ? "#f0eff5" : "#ffffff", ctaColor: done[i] ? "#8d8aa3" : "#5a4af0",
+      impactBg: impactStyles[impact][0], impactColor: impactStyles[impact][1],
+    }));
+    const advisorHistory = [
+      { week: "Jul 13–19", score: "4/5", summary: "Replied to 6 reviews, added 2 services", delta: "+0.4 rank", deltaColor: "#16803c", good: true },
+      { week: "Jul 6–12", score: "5/5", summary: "Citation fixes went live on Yelp", delta: "+0.7 rank", deltaColor: "#16803c", good: true },
+      { week: "Jun 29–Jul 5", score: "2/5", summary: "Missed posts two weeks running", delta: "-0.2 rank", deltaColor: "#d92d20", good: false },
+    ].map((h) => ({ ...h, pillBg: h.good ? "#eaf7ef" : "#fdecea", pillColor: h.good ? "#16803c" : "#d92d20" }));
+    const advisorHeadlines = ["5 moves to reach #1 for your top keyword", "4 to go — you're close to the top spot", "3 left — keep the momentum going", "Almost there — 2 quick wins remain", "One move away from a clean week", "All done — your best week yet 🎉"];
+
+    const imageTabs = ["All 24", "Interior", "Team", "Before / after", "Logo & cover"].map((name, i) => ({
+      name, bg: i === 0 ? "#ece8ff" : "#ffffff", color: i === 0 ? "#5a4af0" : "#56536a",
+      border: i === 0 ? "#ded8ff" : "#ececf1", weight: i === 0 ? 600 : 400,
+    }));
+    const images = [
+      ["reception photo", "Interior", "2,412 views"],
+      ["operatory photo", "Interior", "1,904 views"],
+      ["team photo", "Team", "3,881 views"],
+      ["whitening result", "Before / after", "2,240 views"],
+      ["exterior signage", "Logo & cover", "1,120 views"],
+      ["waiting area", "Interior", "684 views"],
+      ["dr rana portrait", "Team", "412 views"],
+    ].map(([label, cat, views]) => ({ label, cat, views }));
+
+    const monthlyReports = [
+      { period: "June 2026", rank: "4.2", delta: "▲0.6", deltaColor: "#16803c", actions: "1,204" },
+      { period: "May 2026", rank: "4.8", delta: "▲0.3", deltaColor: "#16803c", actions: "1,088" },
+      { period: "April 2026", rank: "5.1", delta: "▲0.9", deltaColor: "#16803c", actions: "961" },
+      { period: "March 2026", rank: "6.0", delta: "▼0.2", deltaColor: "#d92d20", actions: "875" },
+      { period: "February 2026", rank: "5.8", delta: "▲0.4", deltaColor: "#16803c", actions: "902" },
+    ];
+
+    const profileFields = [
+      { label: "Primary category", value: "Dentist" },
+      { label: "Phone", value: "+1 416 555 0100" },
+      { label: "Website", value: "mapledental.ca" },
+      { label: "Hours", value: "Mon–Sat 8–18 · Sun closed" },
+      { label: "Booking link", value: "adgrowly.app/book/maple" },
+      { label: "Attributes", value: "Wheelchair accessible · Wi-Fi" },
+    ];
+    const completeness = [
+      ["✓", "Description, hours, services", true],
+      ["✓", "20+ photos uploaded", true],
+      ["!", "Add products (0 added)", false],
+      ["!", "Enable messaging", false],
+    ].map(([glyph, item, done]) => ({
+      glyph, item,
+      bg: done ? "#eaf7ef" : "#fef3e2", color: done ? "#16803c" : "#b25e09",
+      textColor: done ? "#8d8aa3" : "#15131f",
+    }));
+
+    const paStatus = { Live: ["#eaf7ef", "#16803c"], Pending: ["#fef3e2", "#b25e09"], Disabled: ["#f0eff5", "#56536a"] };
+    const placeActions = [
+      ["Book online", "adgrowly.app/book/maple", "428", "Live", "Edit"],
+      ["Call now", "tel:+14165550100", "1,462", "Live", "Edit"],
+      ["Request a quote", "mapledental.ca/quote", "86", "Live", "Edit"],
+      ["Order products", "shop.mapledental.ca", "—", "Pending", "Check status"],
+    ].map(([name, url, clicks, status, cta]) => ({
+      name, url, clicks, status, cta,
+      statusBg: paStatus[status][0], statusColor: paStatus[status][1],
+    }));
+
+    const stepDone = { border: "#eaf7ef", bg: "#f6fbf8", dotBg: "#16803c", dotColor: "#ffffff", glyph: "✓" };
+    const verifications = [
+      { glyph: "G", title: "Google Business Profile", detail: "482 Maple Ave, Toronto — verified by postcard Nov 2025.", status: "Verified", statusBg: "#eaf7ef", statusColor: "#16803c", iconBg: "#eaf7ef", iconColor: "#16803c", cta: false, steps: false },
+      { glyph: "A", title: "Apple Business Connect", detail: "Verification puts your listing on Apple Maps with photos, hours, and a booking action.", status: "In review", statusBg: "#fef3e2", statusColor: "#b25e09", iconBg: "#fef3e2", iconColor: "#b25e09", cta: "View submission", steps: [
+        { ...stepDone, name: "Business documents", hint: "Articles of incorporation uploaded Jul 8" },
+        { ...stepDone, name: "Domain verified", hint: "mapledental.ca DNS record confirmed" },
+        { border: "#fef3e2", bg: "#fffcf5", dotBg: "#f59e0b", dotColor: "#ffffff", glyph: "…", name: "Apple review", hint: "Typically 3–7 business days · day 5" },
+      ]},
+      { glyph: "B", title: "Bing Places", detail: "Imported from Google — needs a one-time phone verification to go live.", status: "Action needed", statusBg: "#fdecea", statusColor: "#d92d20", iconBg: "#fdecea", iconColor: "#d92d20", cta: "Verify by phone", steps: false },
+    ];
+
+    return {
+      navSections, dashKpis, advisor, rankMoves, heatCells, leaderboard, keywords,
+      placeActions, verifications, reviewFilters, avgRank, rescan,
+      advisorTasks, advisorHistory, imageTabs, images, monthlyReports,
+      goAdvisor: setScreen("advisor"), goRanking: setScreen("ranking"), goReputation: setScreen("reputation"),
+      goInsights: setScreen("insights"),
+      goBilling: () => this.setState({ screen: "billing", menuOpen: false }),
+      ...this.billingVals(),
+      ...this.locationVals(),
+      menuOpen: this.state.menuOpen,
+      toggleMenu: () => this.setState((s) => ({ menuOpen: !s.menuOpen })),
+      goSettings: () => this.setState({ screen: "settings", menuOpen: false }),
+      logout: () => this.setState({ loggedOut: true, menuOpen: false }),
+      loginAgain: () => this.setState({ loggedOut: false, screen: "dashboard" }),
+      loggedOut: this.state.loggedOut,
+      loggedIn: !this.state.loggedOut,
+      googleConnected: this.state.googleConnected,
+      googleDisconnected: !this.state.googleConnected,
+      googleStatus: this.state.googleConnected ? "Connected" : "Disconnected",
+      googleStatusBg: this.state.googleConnected ? "#eaf7ef" : "#fdecea",
+      googleStatusColor: this.state.googleConnected ? "#16803c" : "#d92d20",
+      googleDetail: this.state.googleConnected ? "sana@mapledental.ca · via Google OAuth" : "No account linked — features paused",
+      lastSync: this.state.synced ? "Just now" : "12 minutes ago",
+      syncLabel: this.state.syncing ? "Syncing…" : "Sync now",
+      syncNow: () => {
+        if (this.state.syncing) return;
+        this.setState({ syncing: true });
+        this._syncT = setTimeout(() => this.setState({ syncing: false, synced: true }), 1200);
+      },
+      disconnectGoogle: () => this.setState({ googleConnected: false }),
+      connectGoogle: () => this.setState({ googleConnected: true, synced: false }),
+      settingToggles: [
+        ["Auto-reply to 4–5★ reviews", "AI posts replies without approval for positive reviews"],
+        ["Draft replies for all reviews", "A draft waits in Reputation for every new review"],
+        ["Auto-answer profile questions", "Answers post directly from your knowledge base"],
+        ["Weekly Advisor email", "Monday summary of this week's moves"],
+      ].map(([name, desc], i) => ({
+        name, desc,
+        toggle: () => {
+          const t = this.state.toggles.slice();
+          t[i] = !t[i];
+          this.setState({ toggles: t });
+        },
+        bg: this.state.toggles[i] ? "#5a4af0" : "#d5d2e2",
+        knob: this.state.toggles[i] ? "19px" : "3px",
+      })),
+      showSettings: screen === "settings",
+      showSupport: screen === "support",
+      showWhitelabel: screen === "whitelabel",
+      showReviewLink: screen === "reviewlink",
+      ...this.myTicketVals(),
+      ...this.whitelabelVals(),
+      ...this.reviewLinkVals(),
+      rulesOpen: this.state.rulesOpen,
+      toggleRules: () => this.setState((s) => ({ rulesOpen: !s.rulesOpen })),
+      rulesBtnBg: this.state.rulesOpen ? "#5a4af0" : "#ece8ff",
+      rulesBtnColor: this.state.rulesOpen ? "#ffffff" : "#5a4af0",
+      rulesIcon: this.state.rulesOpen ? "▴" : "▾",
+      replyRules,
+      qaSummary: qaOpen === 0 ? "Questions asked on your Google profile · all answered ✓" : "Questions asked on your Google profile · " + qaOpen + " unanswered",
+      qaBtnLabel: qaOpen === 0 ? "All answered ✓" : "Post all AI answers",
+      qaBtnBg: qaOpen === 0 ? "#eaf7ef" : "#ece8ff",
+      qaBtnColor: qaOpen === 0 ? "#16803c" : "#5a4af0",
+      qaBtnBorder: qaOpen === 0 ? "#d3ecd9" : "#ded8ff",
+      postAllAnswers: () => this.setState({ postedQa: [0, 1, 2] }),
+
+      genOpen: this.state.genOpen,
+      genPost: () => this.setState((s) => ({ genOpen: !s.genOpen, postScheduled: false })),
+      genBtnLabel: this.state.genOpen ? "Hide generator" : "✨ Generate with AI",
+      genBtnBg: this.state.genOpen ? "#5a4af0" : "#ece8ff",
+      genBtnColor: this.state.genOpen ? "#ffffff" : "#5a4af0",
+      regen: () => this.forceUpdate(),
+      scheduleOpts: ["Post now", "This Saturday 9am", "Pick date…"].map((name, i) => ({
+        name, select: () => this.setState({ scheduleIdx: i }),
+        bg: this.state.scheduleIdx === i ? "#ece8ff" : "#ffffff",
+        color: this.state.scheduleIdx === i ? "#5a4af0" : "#56536a",
+        border: this.state.scheduleIdx === i ? "#ded8ff" : "#ececf1",
+        weight: this.state.scheduleIdx === i ? 600 : 400,
+      })),
+      scheduleCta: this.state.postScheduled ? "Scheduled ✓" : (this.state.scheduleIdx === 0 ? "Publish now" : "Schedule post"),
+      schedulePost: () => this.setState({ postScheduled: true }),
+      autoPostOn: this.state.autoPostOn,
+      toggleAutoPost: () => this.setState((s) => ({ autoPostOn: !s.autoPostOn })),
+      autoPostBg: this.state.autoPostOn ? "#5a4af0" : "#d5d2e2",
+      autoPostKnob: this.state.autoPostOn ? "23px" : "3px",
+      autoPostDesc: this.state.autoPostOn ? "AI drafts and publishes one post every Monday, 9am — you get an email to review first." : "Turned off — you'll post manually.",
+      autoPostNext: this.state.autoPostOn ? "Next: Mon Jul 27" : "Paused",
+
+      reviewReqOpen: this.state.reviewReqOpen,
+      sendReviewReq: () => this.setState((s) => ({ reviewReqOpen: true, reviewReqCount: s.reviewReqCount + 1 })),
+      reviewReqLabel: this.state.reviewReqOpen ? "Request sent ✓" : "Send review requests",
+      reviewReqSent: String(this.state.reviewReqCount),
+      reviewReqNew: "14",
+      reqChannels: [["WhatsApp", true], ["SMS", false], ["Email", false]].map(([name, active]) => ({
+        name, bg: active ? "#eaf7ef" : "#ffffff", color: active ? "#16803c" : "#56536a",
+        border: active ? "#d3ecd9" : "#ececf1", weight: active ? 600 : 400,
+      })),
+      reviewRequests: [
+        { name: "Priya Sharma", phone: "+1 416 555 0132", channel: "WhatsApp", detail: "Delivered · opened link", status: "Reviewed ★5", statusBg: "#eaf7ef", statusColor: "#16803c" },
+        { name: "Marcus Chen", phone: "+1 647 555 0178", channel: "WhatsApp", detail: "Delivered · 2h ago", status: "Sent", statusBg: "#ece8ff", statusColor: "#5a4af0" },
+        { name: "Sofia Ricci", phone: "+1 416 555 0977", channel: "SMS", detail: "Delivered · opened link", status: "Reviewed ★5", statusBg: "#eaf7ef", statusColor: "#16803c" },
+        { name: "Dave O'Leary", phone: "doleary@rogers.com", channel: "Email", detail: "Opened · not yet reviewed", status: "Pending", statusBg: "#fef3e2", statusColor: "#b25e09" },
+      ].map((r) => ({
+        ...r,
+        chBg: r.channel === "WhatsApp" ? "#eaf7ef" : r.channel === "SMS" ? "#e8effa" : "#f0eff5",
+        chColor: r.channel === "WhatsApp" ? "#16803c" : r.channel === "SMS" ? "#3b5b8f" : "#56536a",
+      })),
+
+      searchTerms: [
+        ["dentist near me", "3,240", "+12%", "#16803c", "100%"],
+        ["invisalign toronto", "1,880", "+8%", "#16803c", "58%"],
+        ["teeth whitening", "1,140", "+3%", "#16803c", "35%"],
+        ["maple dental studio", "980", "0%", "#8d8aa3", "30%"],
+        ["emergency dentist", "612", "-4%", "#d92d20", "19%"],
+      ].map(([term, count, delta, deltaColor, w]) => ({ term, count, delta, deltaColor, w })),
+
+      competitors: [
+        { name: "Maple Dental Studio (you)", rank: avgRank, reviews: "236", edge: "—", isYou: true },
+        { name: "Danforth Smiles", rank: "3.1", reviews: "412", edge: "More reviews, weekly posts" },
+        { name: "Bright Bay Dental", rank: "5.4", reviews: "188", edge: "Lists 'emergency dentist'" },
+        { name: "East York Dental Care", rank: "6.9", reviews: "301", edge: "Older, more citations" },
+      ].map((c) => ({
+        ...c,
+        rowBg: c.isYou ? "#fbfaff" : "transparent",
+        weight: c.isYou ? 700 : 500,
+        nameColor: c.isYou ? "#5a4af0" : "#15131f",
+      })),
+      ...this.trendVals(),
+      actionBars: [
+        { label: "Feb", calls: 24, bookings: 14, directions: 18, total: "204" },
+        { label: "Mar", calls: 28, bookings: 16, directions: 20, total: "231" },
+        { label: "Apr", calls: 27, bookings: 19, directions: 23, total: "248" },
+        { label: "May", calls: 33, bookings: 22, directions: 24, total: "284" },
+        { label: "Jun", calls: 36, bookings: 26, directions: 22, total: "301" },
+        { label: "Jul", calls: 44, bookings: 31, directions: 21, total: "344" },
+      ].map((b, i) => ({ ...b, opacity: i === 5 ? "1" : "0.55", labelColor: i === 5 ? "#5a4af0" : "#8d8aa3" })),
+      advisorDoneCount: doneN,
+      advisorPct: (doneN / 5 * 100) + "%",
+      advisorDash: (doneN / 5 * 314).toFixed(0) + " 314",
+      advisorHeadline: advisorHeadlines[doneN],
+      advisorAllDone: doneN === 5,
+      fixAll: () => this.setState({ citationsFixed: true }),
+      fixAllLabel: fixed ? "3 fixes queued ✓" : "Fix all issues",
+      fixAllBg: fixed ? "#16803c" : "#1a1726",
+      citationSummary: fixed ? "NAP consistency across 24 directories · fixes submitting (1–3 days)" : "NAP consistency across 24 directories · 3 issues",
+      activeKeyword: this.state.keyword,
+      scanLabel: this.state.scanning ? "scanning 49 points…" : this.state.scanned ? "scanned just now" : "scanned 2h ago",
+      rescanLabel: this.state.scanning ? "Scanning…" : "Re-scan now",
+      rescanBg: this.state.scanning ? "#8d8aa3" : "#1a1726",
+      reviews, questions, posts, insightKpis, insightBars, citations, profileFields, completeness,
+      screenTitle: { dashboard: "Dashboard", advisor: "Advisor", ranking: "Rank tracker", reputation: "Reputation", qa: "Questions & answers", posts: "Posts", insights: "Insights", citations: "Citations", locations: "Locations", actions: "Place actions", verifications: "Verifications", images: "Images", reports: "Reports", billing: "Billing & plan", settings: "Settings", whitelabel: "Go white-label", support: "My tickets", reviewlink: "Review link & QR" }[screen],
+      showDashboard: screen === "dashboard", showRanking: screen === "ranking",
+      showReputation: screen === "reputation", showQa: screen === "qa",
+      showPosts: screen === "posts", showInsights: screen === "insights",
+      showCitations: screen === "citations", showLocations: screen === "locations",
+      showActions: screen === "actions", showVerifications: screen === "verifications",
+      showAdvisor: screen === "advisor", showImages: screen === "images", showReports: screen === "reports",
+    };
+  }
+}
+</script>
+</body>
+</html>
