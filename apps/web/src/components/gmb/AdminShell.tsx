@@ -28,6 +28,7 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string }> }
     label: "Operations",
     items: [
       { href: "/admin/google", name: "Google APIs" },
+      { href: "/admin/ai", name: "AI models" },
       { href: "/admin/health", name: "Health" },
       { href: "/admin/audit", name: "Audit log" },
     ],

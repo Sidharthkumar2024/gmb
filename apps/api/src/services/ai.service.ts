@@ -1,7 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
-import { prisma } from "@nexaflow/db";
+import { prisma, AiProviderKey, AiProviderKind, SecretScope } from "@nexaflow/db";
 import { assertCanAffordAi, debitAi } from "./billing.service";
+import { resolveProviderChain } from "./aiProviderHub.service";
+import { resolveSecretValue } from "./secretVault.service";
 
 // AI gateway for the standalone GMB app.
 //
@@ -29,7 +31,7 @@ export interface CallLlmOpts {
   temperature?: number;
 }
 
-let client: Anthropic | null = null;
+let envClient: Anthropic | null = null;
 
 /** A key that is absent or still a placeholder counts as not configured. */
 export function hasConfiguredAiClient(): boolean {
@@ -39,17 +41,51 @@ export function hasConfiguredAiClient(): boolean {
   );
 }
 
-function getClient(): Anthropic {
-  if (client) return client;
+const PLATFORM_CTX = { scope: SecretScope.PLATFORM, tenantId: null } as const;
+
+interface ResolvedTextClient {
+  client: Anthropic;
+  model: string;
+}
+
+/**
+ * Resolve the Anthropic client + model, preferring the platform AI provider
+ * registry (Admin → AI models) over env credentials.
+ *
+ * Only ANTHROPIC entries are usable — this build ships exactly one text SDK —
+ * so the chain walk skips other providers rather than pretending they work.
+ * The DB round-trip per call is noise next to LLM latency, and skipping a
+ * cache means an admin's key rotation or model switch applies immediately.
+ */
+async function resolveTextClient(): Promise<ResolvedTextClient> {
+  try {
+    const chain = await resolveProviderChain(PLATFORM_CTX, AiProviderKind.TEXT);
+    for (const cfg of chain) {
+      if (cfg.provider !== AiProviderKey.ANTHROPIC || !cfg.secretId) continue;
+      const apiKey = await resolveSecretValue(PLATFORM_CTX, cfg.secretId);
+      if (!apiKey) continue;
+      return {
+        client: new Anthropic({
+          apiKey,
+          ...(cfg.baseUrl ? { baseURL: cfg.baseUrl } : {}),
+        }),
+        model: cfg.defaultModel ?? MODEL,
+      };
+    }
+  } catch (err) {
+    // Registry unavailable must not take AI down when env creds exist.
+    console.error("[ai] provider registry lookup failed, trying env", err);
+  }
+
   if (!hasConfiguredAiClient()) {
     throw new ApiError(
       ErrorCodes.BAD_REQUEST,
       400,
-      "ANTHROPIC_API_KEY is not configured. Set a real key in the API .env to enable AI features.",
+      "No AI provider is configured. Add an Anthropic key in Admin → AI models, or set ANTHROPIC_API_KEY in the API .env.",
     );
   }
-  client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-  return client;
+  envClient ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+  return { client: envClient, model: MODEL };
 }
 
 /**
@@ -86,11 +122,11 @@ function extractJson(raw: string): unknown {
  * the caller's result.
  */
 export async function runTenantLlmJson<T>(opts: CallLlmOpts): Promise<T> {
-  const anthropic = getClient();
+  const { client: anthropic, model } = await resolveTextClient();
   await assertCanAffordAi(opts.tenantId, opts.feature);
 
   const response = await anthropic.messages.create({
-    model: MODEL,
+    model,
     max_tokens: opts.maxTokens ?? 800,
     temperature: opts.temperature ?? 0.4,
     system: opts.system,
@@ -111,7 +147,9 @@ export async function runTenantLlmJson<T>(opts: CallLlmOpts): Promise<T> {
     const usage = await prisma.aiUsage.create({
       data: {
         tenantId: opts.tenantId,
-        model: MODEL,
+        // Record the model that actually served the call, which may differ
+        // from the env default when a registry entry supplied it.
+        model,
         feature: opts.feature,
         inputTokens,
         outputTokens,
