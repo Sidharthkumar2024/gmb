@@ -1,13 +1,13 @@
 "use client";
 
-// AdGrowly — Description Optimizer (planning PDF §2). Optimize a business /
-// service / product description against target keywords + a length limit, then
-// save as a generate-then-approve draft. Backed by module 11:
-// /api/v1/gmb/descriptions (+ /optimize).
+// Description optimizer — improve a business/service/product description against
+// target keywords and a length limit, preview the result (AI when configured,
+// a template otherwise), then save it as a generate-then-approve draft.
+// Backed by /api/v1/gmb/descriptions (+ /optimize).
 
-import { FormEvent, useEffect, useState } from "react";
-import { DashboardShell } from "../../src/components/DashboardShell";
-import { useAuth } from "../../src/hooks/useAuth";
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { GmbShell, useActiveLocationId } from "../../src/components/gmb/GmbShell";
+import { Card, SectionLabel, Pill, Button, EmptyState, ErrorNote, Skeleton } from "../../src/components/gmb/ui";
 import { api, ApiClientError } from "../../src/lib/api";
 
 const TARGETS = ["BUSINESS", "SERVICE", "PRODUCT"] as const;
@@ -40,14 +40,18 @@ interface Description {
   analysis: Analysis | null;
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  DRAFT: "bg-amber-50 text-amber-700 border-amber-200",
-  APPROVED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  REJECTED: "bg-slate-100 text-slate-600 border-slate-200",
+const STATUS_TONE: Record<string, "ok" | "warn" | "neutral"> = {
+  APPROVED: "ok",
+  DRAFT: "warn",
+  REJECTED: "neutral",
 };
 
+const inputCls =
+  "w-full rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 text-gmb-ink outline-none placeholder:text-gmb-ink-subtle focus:border-gmb-brand";
+const labelCls = "block text-micro uppercase tracking-wide text-gmb-ink-subtle";
+
 export default function GmbDescriptionsPage() {
-  const { user, features, loading, signOut } = useAuth({ required: true });
+  const locationId = useActiveLocationId();
   const [target, setTarget] = useState<string>("BUSINESS");
   const [label, setLabel] = useState("");
   const [original, setOriginal] = useState("");
@@ -55,14 +59,14 @@ export default function GmbDescriptionsPage() {
   const [maxLength, setMaxLength] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [tone, setTone] = useState<string>("professional");
-  const [locationId, setLocationId] = useState("");
 
   const [preview, setPreview] = useState<OptimizeResult | null>(null);
-  const [drafts, setDrafts] = useState<Description[]>([]);
+  const [drafts, setDrafts] = useState<Description[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
-  function body() {
+  function reqBody() {
     return {
       text: original,
       original,
@@ -72,203 +76,275 @@ export default function GmbDescriptionsPage() {
       maxLength: maxLength ? Number(maxLength) : undefined,
       businessName: businessName.trim() || undefined,
       tone,
-      locationId: locationId.trim() || undefined,
+      // The active location (from the shell switcher) is where saved drafts land.
+      locationId: locationId || undefined,
     };
   }
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
+    setErr(null);
     try {
-      setErr(null);
-      const q = locationId.trim() ? `?locationId=${encodeURIComponent(locationId.trim())}` : "";
-      setDrafts(await api.get<Description[]>(`/api/v1/gmb/descriptions${q}`));
+      const q = locationId ? `?locationId=${encodeURIComponent(locationId)}` : "";
+      setDrafts((await api.get<Description[]>(`/api/v1/gmb/descriptions${q}`)) ?? []);
     } catch (e) {
       setErr(e instanceof ApiClientError ? e.message : "Unable to load descriptions.");
+      setDrafts([]);
     }
-  }
+  }, [locationId]);
 
   useEffect(() => {
-    if (user) void refresh();
-  }, [user]);
+    void refresh();
+  }, [refresh]);
 
   async function runPreview(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErr(null);
     setNotice(null);
+    setBusy("preview");
     try {
-      setPreview(await api.post<OptimizeResult>("/api/v1/gmb/descriptions/optimize", body()));
-    } catch (e) {
-      setErr(e instanceof ApiClientError ? e.message : "Unable to optimize.");
+      setPreview(await api.post<OptimizeResult>("/api/v1/gmb/descriptions/optimize", reqBody()));
+    } catch (e2) {
+      setErr(e2 instanceof ApiClientError ? e2.message : "Unable to optimize.");
+    } finally {
+      setBusy(null);
     }
   }
 
   async function saveDraft() {
     setErr(null);
+    setBusy("save");
     try {
-      await api.post("/api/v1/gmb/descriptions", body());
-      setNotice("Draft saved.");
+      await api.post("/api/v1/gmb/descriptions", reqBody());
+      setNotice("Draft saved for approval.");
       setPreview(null);
       await refresh();
     } catch (e) {
       setErr(e instanceof ApiClientError ? e.message : "Unable to save draft.");
+    } finally {
+      setBusy(null);
     }
   }
 
   async function setStatus(id: string, status: "APPROVED" | "REJECTED") {
+    setBusy(id);
     try {
       await api.patch(`/api/v1/gmb/descriptions/${id}`, { status });
       await refresh();
     } catch (e) {
       setErr(e instanceof ApiClientError ? e.message : "Unable to update status.");
+    } finally {
+      setBusy(null);
     }
   }
 
   async function remove(id: string) {
     if (!window.confirm("Delete this draft?")) return;
+    setBusy(id);
     try {
       await api.delete(`/api/v1/gmb/descriptions/${id}`);
       await refresh();
     } catch (e) {
       setErr(e instanceof ApiClientError ? e.message : "Unable to delete.");
+    } finally {
+      setBusy(null);
     }
   }
 
-  if (loading || !user) {
-    return <div className="p-8 text-sm text-slate-500">Loading...</div>;
-  }
-
   return (
-    <DashboardShell user={user} features={features} signOut={signOut}>
-      <div className="mb-6">
-        <p className="text-sm font-medium text-emerald-700">Google Business</p>
-        <h1 className="text-2xl font-semibold text-slate-950">Description optimizer</h1>
-        <p className="mt-1 max-w-2xl text-sm text-slate-500">
-          Improve a business, service or product description against target keywords and a length limit — preview, then save for approval.
-        </p>
-      </div>
+    <GmbShell title="Descriptions">
+      {err && <ErrorNote>{err}</ErrorNote>}
+      {notice && (
+        <div className="mb-3.5 rounded-control border border-gmb-ok/30 bg-gmb-ok/10 px-3 py-2 text-sm2 text-gmb-ok">
+          {notice}
+        </div>
+      )}
 
-      {err && <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>}
-      {notice && <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</div>}
+      <div className="grid gap-3.5 lg:grid-cols-[380px_1fr] lg:items-start">
+        {/* Optimize form */}
+        <Card>
+          <SectionLabel>Optimize a description</SectionLabel>
+          <p className="mt-1 text-xs2 text-gmb-ink-muted">
+            Preview an improved version against your keywords, then save it for approval — nothing
+            publishes on its own.
+          </p>
+          <form onSubmit={runPreview} className="mt-3 flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <label className={labelCls}>
+                Target
+                <select value={target} onChange={(e) => setTarget(e.target.value)} className={`mt-1 ${inputCls}`}>
+                  {TARGETS.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={labelCls}>
+                Tone
+                <select value={tone} onChange={(e) => setTone(e.target.value)} className={`mt-1 ${inputCls}`}>
+                  {TONES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className={labelCls}>
+              Original description
+              <textarea
+                value={original}
+                onChange={(e) => setOriginal(e.target.value)}
+                required
+                rows={4}
+                className={`mt-1 ${inputCls}`}
+              />
+            </label>
+            <label className={labelCls}>
+              Target keywords (comma-separated)
+              <input value={keywords} onChange={(e) => setKeywords(e.target.value)} className={`mt-1 ${inputCls}`} />
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className={labelCls}>
+                Max length
+                <input
+                  type="number"
+                  min={20}
+                  value={maxLength}
+                  onChange={(e) => setMaxLength(e.target.value)}
+                  placeholder="none"
+                  className={`mt-1 ${inputCls}`}
+                />
+              </label>
+              <label className={labelCls}>
+                Label
+                <input value={label} onChange={(e) => setLabel(e.target.value)} className={`mt-1 ${inputCls}`} />
+              </label>
+            </div>
+            <label className={labelCls}>
+              Business name
+              <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} className={`mt-1 ${inputCls}`} />
+            </label>
+            <div className="mt-1 flex gap-2">
+              <Button type="submit" variant="ghost" disabled={busy === "preview" || !original.trim()}>
+                {busy === "preview" ? "Optimizing…" : "Preview"}
+              </Button>
+              <Button type="button" disabled={busy === "save" || !original.trim()} onClick={() => void saveDraft()}>
+                {busy === "save" ? "Saving…" : "Save draft"}
+              </Button>
+            </div>
+            {!locationId && (
+              <p className="text-micro text-gmb-ink-subtle">
+                Add a location to save drafts against it — you can still preview without one.
+              </p>
+            )}
+          </form>
+        </Card>
 
-      <div className="grid gap-6 lg:grid-cols-[380px,1fr]">
-        <form onSubmit={runPreview} className="h-fit rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-base font-semibold text-slate-950">Optimize</h2>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <label className="block text-sm font-medium text-slate-700">
-              Target
-              <select value={target} onChange={(e) => setTarget(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
-                {TARGETS.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </label>
-            <label className="block text-sm font-medium text-slate-700">
-              Tone
-              <select value={tone} onChange={(e) => setTone(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
-                {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </label>
-          </div>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            Original description
-            <textarea value={original} onChange={(e) => setOriginal(e.target.value)} required rows={4} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          </label>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            Target keywords (comma-separated)
-            <input value={keywords} onChange={(e) => setKeywords(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          </label>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <label className="block text-sm font-medium text-slate-700">
-              Max length
-              <input type="number" min={20} value={maxLength} onChange={(e) => setMaxLength(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
-            </label>
-            <label className="block text-sm font-medium text-slate-700">
-              Label
-              <input value={label} onChange={(e) => setLabel(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
-            </label>
-          </div>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            Business name
-            <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          </label>
-          <label className="mt-3 block text-sm font-medium text-slate-700">
-            Location ID (to save)
-            <input value={locationId} onChange={(e) => setLocationId(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          </label>
-          <div className="mt-4 flex gap-2">
-            <button type="submit" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Preview</button>
-            <button type="button" onClick={() => void saveDraft()} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Save draft</button>
-          </div>
-        </form>
-
-        <div className="space-y-4">
+        {/* Preview + drafts */}
+        <div className="flex flex-col gap-3.5">
           {preview && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50/40 p-4">
+            <Card className="border-gmb-brand-border">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold text-slate-800">Preview</h3>
+                <SectionLabel>Preview</SectionLabel>
                 <span className="flex items-center gap-1.5">
-                {preview.source && (
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${preview.source === "ai" ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600"}`}>
-                    {preview.source === "ai" ? "AI" : "Starter"}
-                  </span>
-                )}
-                {preview.score && (
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      preview.score.score >= 80
-                        ? "bg-emerald-100 text-emerald-700"
-                        : preview.score.score >= 50
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-red-100 text-red-700"
-                    }`}
-                    title={`${Math.round(preview.score.keywordCoverage * 100)}% keyword coverage · ${preview.score.lengthOk ? "length ok" : "length issue"} · ${preview.score.issues} issue(s)`}
-                  >
-                    Quality {preview.score.score}/100
-                  </span>
-                )}
+                  {preview.source && (
+                    <Pill tone={preview.source === "ai" ? "brand" : "neutral"}>
+                      {preview.source === "ai" ? "AI" : "Starter"}
+                    </Pill>
+                  )}
+                  {preview.score && (
+                    <Pill
+                      tone={
+                        preview.score.score >= 80 ? "ok" : preview.score.score >= 50 ? "warn" : "danger"
+                      }
+                    >
+                      Quality {preview.score.score}/100
+                    </Pill>
+                  )}
                 </span>
               </div>
-              <p className="mt-2 whitespace-pre-wrap rounded-md bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">{preview.optimized}</p>
-              <p className="mt-2 text-xs text-slate-500">
-                {preview.analysis.length} chars · {preview.analysis.wordCount} words · {preview.analysis.withinLimit ? "within limit" : "over limit"}
-                {preview.analysis.missingKeywords.length > 0 && ` · missing: ${preview.analysis.missingKeywords.join(", ")}`}
+              <p className="mt-2 whitespace-pre-wrap rounded-control bg-gmb-canvas px-3 py-2 text-sm2 text-gmb-ink">
+                {preview.optimized}
+              </p>
+              <p className="mt-2 text-xs2 text-gmb-ink-muted">
+                {preview.analysis.length} chars · {preview.analysis.wordCount} words ·{" "}
+                {preview.analysis.withinLimit ? "within limit" : "over limit"}
+                {preview.analysis.missingKeywords.length > 0 &&
+                  ` · missing: ${preview.analysis.missingKeywords.join(", ")}`}
               </p>
               {preview.changes.length > 0 && (
-                <ul className="mt-2 list-inside list-disc text-xs text-slate-500">
-                  {preview.changes.map((c, i) => <li key={i}>{c}</li>)}
+                <ul className="mt-2 list-inside list-disc text-xs2 text-gmb-ink-muted">
+                  {preview.changes.map((c, i) => (
+                    <li key={i}>{c}</li>
+                  ))}
                 </ul>
               )}
-            </div>
+              <div className="mt-3">
+                <Button disabled={busy === "save"} onClick={() => void saveDraft()}>
+                  {busy === "save" ? "Saving…" : "Save this draft"}
+                </Button>
+              </div>
+            </Card>
           )}
 
           <div>
-            <h2 className="mb-2 text-base font-semibold text-slate-950">Saved drafts</h2>
-            <div className="space-y-3">
-              {drafts.length === 0 && <p className="text-sm text-slate-500">No drafts yet.</p>}
-              {drafts.map((d) => (
-                <div key={d.id} className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-800">
-                      {d.target}{d.label ? ` · ${d.label}` : ""}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[d.status]}`}>{d.status}</span>
-                      <button onClick={() => void remove(d.id)} className="text-xs text-slate-400 hover:text-red-600">Delete</button>
+            <SectionLabel>Saved drafts</SectionLabel>
+            <div className="mt-2 flex flex-col gap-3">
+              {drafts === null ? (
+                <Skeleton className="h-28" />
+              ) : drafts.length === 0 ? (
+                <EmptyState
+                  title="No drafts yet"
+                  body="Preview an optimized description above and save it here for approval."
+                />
+              ) : (
+                drafts.map((d) => (
+                  <Card key={d.id}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm2 font-semibold text-gmb-ink">
+                        {d.target}
+                        {d.label ? ` · ${d.label}` : ""}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Pill tone={STATUS_TONE[d.status]}>{d.status}</Pill>
+                        <button
+                          type="button"
+                          disabled={busy === d.id}
+                          onClick={() => void remove(d.id)}
+                          className="text-xs2 text-gmb-ink-subtle hover:text-gmb-danger disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  {d.optimized && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{d.optimized}</p>}
-                  {d.analysis && d.analysis.issues.length > 0 && (
-                    <p className="mt-1 text-xs text-amber-700">{d.analysis.issues.join(" · ")}</p>
-                  )}
-                  {d.status === "DRAFT" && (
-                    <div className="mt-3 flex gap-2">
-                      <button onClick={() => void setStatus(d.id, "APPROVED")} className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">Approve</button>
-                      <button onClick={() => void setStatus(d.id, "REJECTED")} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Reject</button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                    {d.optimized && (
+                      <p className="mt-2 whitespace-pre-wrap text-sm2 text-gmb-ink-muted">{d.optimized}</p>
+                    )}
+                    {d.analysis && d.analysis.issues.length > 0 && (
+                      <p className="mt-1 text-xs2 text-[#a9761f]">{d.analysis.issues.join(" · ")}</p>
+                    )}
+                    {d.status === "DRAFT" && (
+                      <div className="mt-3 flex gap-2">
+                        <Button disabled={busy === d.id} onClick={() => void setStatus(d.id, "APPROVED")}>
+                          Approve
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          disabled={busy === d.id}
+                          onClick={() => void setStatus(d.id, "REJECTED")}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
+                ))
+              )}
             </div>
           </div>
         </div>
       </div>
-    </DashboardShell>
+    </GmbShell>
   );
 }
