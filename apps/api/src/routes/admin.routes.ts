@@ -25,10 +25,16 @@ import {
   listSecrets,
   createSecret,
   rotateSecret,
+  updateSecret,
   deleteSecret,
   testSecret,
 } from "../services/secretVault.service";
 import { hasConfiguredAiClient } from "../services/ai.service";
+import {
+  SMTP_VAULT_LABEL,
+  SMTP_NO_AUTH_SENTINEL,
+  sendTestEmail,
+} from "../services/email.service";
 
 // SuperAdmin API (Adgrowly GMB Admin design).
 //
@@ -556,6 +562,165 @@ router.delete("/ai/providers/:id", async (req: RequestWithAuth, res: Response, n
 router.post("/ai/secrets/:id/test", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await testSecret(PLATFORM_CTX, req.params.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Email (SMTP) -----------------------------------------------------------
+//
+// One platform SMTP config, stored as a Secret Vault entry: metadata carries
+// the non-secret fields, ciphertext carries the password (a sentinel for
+// auth-less relays — the vault refuses empty values). Env SMTP_* stays as
+// fallback; email.service resolves admin-first per send.
+
+async function findSmtpEntry() {
+  const entries = await listSecrets(PLATFORM_CTX, { provider: SecretProvider.SMTP });
+  return entries.find((e) => e.label === SMTP_VAULT_LABEL) ?? null;
+}
+
+interface SmtpMeta {
+  host?: string;
+  port?: number;
+  secure?: boolean;
+  user?: string | null;
+  fromEmail?: string;
+  fromName?: string | null;
+  /** Whether the ciphertext is a real password (vs the no-auth sentinel). */
+  hasPassword?: boolean;
+}
+
+router.get("/smtp", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const entry = await findSmtpEntry();
+    const meta = (entry?.metadata ?? {}) as SmtpMeta;
+    const envHost = process.env.SMTP_HOST;
+    res.json({
+      success: true,
+      data: {
+        admin: entry
+          ? {
+              host: meta.host ?? null,
+              port: meta.port ?? 587,
+              secure: meta.secure ?? (meta.port ?? 587) === 465,
+              user: meta.user ?? null,
+              fromEmail: meta.fromEmail ?? null,
+              fromName: meta.fromName ?? null,
+              // The sentinel is not a real credential — show "none", not a mask.
+              passwordLast4: meta.hasPassword ? entry.last4 : null,
+            }
+          : null,
+        env: { configured: Boolean(envHost && !envHost.startsWith("your_")), host: envHost && !envHost.startsWith("your_") ? envHost : null },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const smtpPutSchema = z.object({
+  host: z.string().min(1).max(255),
+  port: z.number().int().min(1).max(65535).default(587),
+  secure: z.boolean().optional(),
+  user: z.string().max(255).optional(),
+  password: z.string().max(500).optional(),
+  fromEmail: z.string().email().max(255),
+  fromName: z.string().max(120).optional(),
+});
+
+router.put("/smtp", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = smtpPutSchema.parse(req.body);
+    const user = input.user?.trim() || null;
+    const existing = await findSmtpEntry();
+
+    // An authenticated relay needs a password — either supplied now or
+    // already stored from a previous save.
+    const hasStoredPassword = Boolean(
+      existing && (existing.metadata as SmtpMeta | null)?.hasPassword,
+    );
+    if (user && !input.password && !hasStoredPassword) {
+      throw new ApiError(
+        ErrorCodes.BAD_REQUEST,
+        400,
+        "A password is required when an SMTP user is set.",
+      );
+    }
+
+    const metadata: SmtpMeta = {
+      host: input.host.trim(),
+      port: input.port,
+      secure: input.secure ?? input.port === 465,
+      user,
+      fromEmail: input.fromEmail.trim(),
+      fromName: input.fromName?.trim() || null,
+      hasPassword: input.password ? true : user ? hasStoredPassword : false,
+    };
+
+    let entryId: string;
+    if (existing) {
+      await updateSecret(PLATFORM_CTX, existing.id, { metadata });
+      // Rotate the stored password when a new one arrives, or drop to the
+      // sentinel when auth was removed entirely.
+      if (input.password) {
+        await rotateSecret(PLATFORM_CTX, existing.id, input.password);
+      } else if (!user && hasStoredPassword) {
+        await rotateSecret(PLATFORM_CTX, existing.id, SMTP_NO_AUTH_SENTINEL);
+      }
+      entryId = existing.id;
+    } else {
+      const created = await createSecret(PLATFORM_CTX, {
+        provider: SecretProvider.SMTP,
+        label: SMTP_VAULT_LABEL,
+        value: input.password || SMTP_NO_AUTH_SENTINEL,
+        metadata,
+        createdByUserId: req.userId,
+      });
+      entryId = created.id;
+    }
+
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: existing ? "UPDATE" : "CREATE",
+      resource: "SmtpConfig",
+      resourceId: entryId,
+      newValues: { host: metadata.host, port: metadata.port, user: metadata.user, fromEmail: metadata.fromEmail, passwordChanged: Boolean(input.password) },
+      ...extractRequestMeta(req),
+    });
+
+    res.json({ success: true, data: { saved: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/smtp", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const existing = await findSmtpEntry();
+    if (!existing) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "No SMTP settings saved.");
+    await deleteSecret(PLATFORM_CTX, existing.id);
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "DELETE",
+      resource: "SmtpConfig",
+      resourceId: existing.id,
+      oldValues: { host: (existing.metadata as SmtpMeta | null)?.host ?? null },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: { deleted: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const smtpTestSchema = z.object({ to: z.string().email() });
+
+router.post("/smtp/test", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { to } = smtpTestSchema.parse(req.body);
+    res.json({ success: true, data: await sendTestEmail(to) });
   } catch (err) {
     next(err);
   }
