@@ -38,6 +38,7 @@ import { draftAutopilotPosts, approvePost, draftPendingReviewReplies } from "../
 import {
   getAutopilotConfig,
   saveAutopilotConfig,
+  getAutopilotStatus,
 } from "../services/gmbAutopilotScheduler.service";
 import {
   createLocation,
@@ -339,6 +340,16 @@ router.get("/autopilot", async (req: RequestWithAuth, res: Response, next: NextF
   }
 });
 
+// Config + derived next-run + the approval backlog autopilot feeds. Backs the
+// user-facing Autopilot page.
+router.get("/autopilot/status", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getAutopilotStatus(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 const autopilotConfigSchema = z.object({
   enabled: z.boolean(),
   businessName: z.string().trim().min(1).max(120),
@@ -385,8 +396,8 @@ router.post("/autopilot/run", async (req: RequestWithAuth, res: Response, next: 
       res.json({ success: true, data: { postsDrafted: posts.length, repliesDrafted: 0, note: "autopilot not enabled — drafted a one-off batch" } });
       return;
     }
-    // Enabled: force this tenant's due work through the shared sweep by clearing
-    // its lastRunAt is overkill; just draft directly for immediate feedback.
+    // Enabled: draft directly for immediate feedback rather than routing through
+    // the shared sweep queue.
     const posts = await draftAutopilotPosts(req.tenantId!, {
       businessName: cfg.businessName,
       niche: cfg.niche,
@@ -401,6 +412,13 @@ router.post("/autopilot/run", async (req: RequestWithAuth, res: Response, next: 
       });
       repliesDrafted = r.drafted;
     }
+    // Stamp lastRunAt so the status page reflects that autopilot just ran and
+    // pushes the next scheduled run a full cadence out — the sweep worker uses
+    // the same field, so a manual run legitimately counts as this cycle's run.
+    await prisma.gmbAutopilotConfig.update({
+      where: { tenantId: req.tenantId! },
+      data: { lastRunAt: new Date() },
+    });
     res.json({ success: true, data: { postsDrafted: posts.length, repliesDrafted } });
   } catch (err) {
     next(err);

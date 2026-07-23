@@ -25,7 +25,11 @@ vi.mock("../lib/queue", () => ({
   trackWorker: () => undefined,
 }));
 
-import { isAutopilotDue, sweepGmbAutopilot } from "./gmbAutopilotScheduler.service";
+import {
+  isAutopilotDue,
+  computeNextRunAt,
+  sweepGmbAutopilot,
+} from "./gmbAutopilotScheduler.service";
 
 const NOW = new Date("2026-07-11T12:00:00.000Z");
 
@@ -40,6 +44,27 @@ describe("isAutopilotDue", () => {
   it("is due once the cadence elapses", () => {
     const twoDaysAgo = new Date(NOW.getTime() - 48 * 60 * 60 * 1000);
     expect(isAutopilotDue(NOW, 24, twoDaysAgo)).toBe(true);
+  });
+});
+
+describe("computeNextRunAt", () => {
+  it("has no next run when disabled", () => {
+    expect(computeNextRunAt(false, 24, null, NOW)).toBeNull();
+    expect(computeNextRunAt(false, 24, new Date(NOW.getTime() - 1000), NOW)).toBeNull();
+  });
+  it("is due now when enabled but never run", () => {
+    expect(computeNextRunAt(true, 168, null, NOW)).toEqual(NOW);
+  });
+  it("schedules one cadence after the last run when that is still future", () => {
+    const sixHoursAgo = new Date(NOW.getTime() - 6 * 60 * 60 * 1000);
+    // cadence 24h → next = lastRun + 24h = 18h from NOW
+    expect(computeNextRunAt(true, 24, sixHoursAgo, NOW)).toEqual(
+      new Date(sixHoursAgo.getTime() + 24 * 60 * 60 * 1000),
+    );
+  });
+  it("clamps an overdue next run to now", () => {
+    const twoDaysAgo = new Date(NOW.getTime() - 48 * 60 * 60 * 1000);
+    expect(computeNextRunAt(true, 24, twoDaysAgo, NOW)).toEqual(NOW);
   });
 });
 

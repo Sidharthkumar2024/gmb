@@ -24,6 +24,7 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string; bad
     label: "Overview",
     items: [
       { href: "/gmb-dashboard", name: "Dashboard" },
+      { href: "/gmb-autopilot", name: "Autopilot" },
       { href: "/gmb-insights", name: "Insights" },
       { href: "/gmb-reports", name: "Reports" },
     ],

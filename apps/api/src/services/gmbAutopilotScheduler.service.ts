@@ -119,6 +119,57 @@ export async function getAutopilotConfig(tenantId: string): Promise<SafeAutopilo
   };
 }
 
+/**
+ * Pure: when the next scheduled run is due. Disabled autopilot has no next run
+ * (null). A never-run enabled config is due now. Kept pure so it can be unit
+ * tested and reused by the status endpoint.
+ */
+export function computeNextRunAt(
+  enabled: boolean,
+  cadenceHours: number,
+  lastRunAt: Date | null,
+  now: Date,
+): Date | null {
+  if (!enabled) return null;
+  if (!lastRunAt) return now;
+  const next = new Date(lastRunAt.getTime() + Math.max(1, cadenceHours) * 60 * 60 * 1000);
+  return next.getTime() < now.getTime() ? now : next;
+}
+
+export interface AutopilotStatus extends SafeAutopilotConfig {
+  /** Derived: when the scheduler would next run this tenant (null if disabled). */
+  nextRunAt: Date | null;
+  isDue: boolean;
+  /** Autopilot output waiting on the operator — the reason this page matters. */
+  pendingPosts: number;
+  pendingReplyDrafts: number;
+}
+
+/**
+ * Config plus derived next-run and the size of the approval backlog autopilot
+ * feeds. Attribution is deliberately conservative: posts have no origin marker,
+ * so pendingPosts counts ALL PENDING_APPROVAL posts (where autopilot drafts
+ * land), and pendingReplyDrafts counts unpublished review replies (NEW status
+ * with drafted text) — not "posts autopilot made", which we cannot prove.
+ */
+export async function getAutopilotStatus(
+  tenantId: string,
+  now: Date = new Date(),
+): Promise<AutopilotStatus> {
+  const config = await getAutopilotConfig(tenantId);
+  const [pendingPosts, pendingReplyDrafts] = await Promise.all([
+    prisma.gmbPost.count({ where: { tenantId, status: "PENDING_APPROVAL" } }),
+    prisma.gmbReview.count({ where: { tenantId, status: "NEW", replyText: { not: null } } }),
+  ]);
+  return {
+    ...config,
+    nextRunAt: computeNextRunAt(config.enabled, config.cadenceHours, config.lastRunAt, now),
+    isDue: config.enabled && isAutopilotDue(now, config.cadenceHours, config.lastRunAt),
+    pendingPosts,
+    pendingReplyDrafts,
+  };
+}
+
 export interface SaveAutopilotInput {
   enabled: boolean;
   businessName: string;
