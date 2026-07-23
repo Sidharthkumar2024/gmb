@@ -33,6 +33,96 @@ const SEVERITY_TONE: Record<string, "danger" | "warn" | "neutral"> = {
   low: "neutral",
 };
 
+// Getting-started checklist for a fresh workspace. Every step's done-state is
+// derived from real dashboard data — nothing is stored or faked — so the panel
+// reflects actual progress and removes itself once the workspace is set up.
+function OnboardingChecklist({ data }: { data: DashboardData }) {
+  const steps = [
+    {
+      done: data.locations.total > 0,
+      title: "Add your first location",
+      body: "Connect Google Business Profile to import your profiles, or add one manually.",
+      href: "/gmb-connect",
+      cta: "Connect Google",
+    },
+    {
+      done: data.advisor !== null,
+      title: "Run your first advisor scan",
+      body: "Get a visibility score and a prioritised list of fixes for your profile.",
+      href: "/gmb-advisor",
+      cta: "Run the advisor",
+    },
+    {
+      done: data.ranking.trackedKeywords > 0,
+      title: "Track a keyword",
+      body: "Watch where you rank on the local map for the searches that matter.",
+      href: "/gmb-ranking",
+      cta: "Add keywords",
+    },
+  ];
+
+  // Once everything is set up, the checklist has served its purpose.
+  if (steps.every((s) => s.done)) return null;
+
+  const completed = steps.filter((s) => s.done).length;
+  // The first unfinished step is the one we nudge toward.
+  const nextIdx = steps.findIndex((s) => !s.done);
+
+  return (
+    <div className="rounded-panel border border-gmb-brand-border bg-gmb-brand-tint p-5">
+      <div className="flex items-center justify-between">
+        <SectionLabel>Getting started</SectionLabel>
+        <span className="font-geist-mono text-micro text-gmb-ink-subtle">
+          {completed} of {steps.length} done
+        </span>
+      </div>
+      <ol className="mt-3 flex list-none flex-col gap-2 p-0">
+        {steps.map((s, i) => (
+          <li
+            key={s.title}
+            className={`flex items-center gap-3 rounded-control border px-3.5 py-3 ${
+              s.done
+                ? "border-gmb-line bg-gmb-surface/60"
+                : i === nextIdx
+                  ? "border-gmb-brand-border bg-gmb-surface"
+                  : "border-gmb-line bg-gmb-surface/60"
+            }`}
+          >
+            <span
+              className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-tiny font-bold ${
+                s.done ? "bg-gmb-ok text-white" : "border border-gmb-line bg-gmb-canvas text-gmb-ink-subtle"
+              }`}
+            >
+              {s.done ? "✓" : i + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div
+                className={`text-sm2 font-semibold ${s.done ? "text-gmb-ink-subtle line-through" : "text-gmb-ink"}`}
+              >
+                {s.title}
+              </div>
+              {!s.done && <div className="mt-0.5 text-xs2 text-gmb-ink-muted">{s.body}</div>}
+            </div>
+            {!s.done && (
+              <Link href={s.href} className="flex-shrink-0 no-underline hover:no-underline">
+                <span
+                  className={`inline-block rounded-control px-3.5 py-1.5 text-xs2 font-semibold ${
+                    i === nextIdx
+                      ? "bg-gmb-brand text-white hover:bg-gmb-brand-hover"
+                      : "border border-gmb-line text-gmb-ink hover:border-gmb-brand-border"
+                  }`}
+                >
+                  {s.cta}
+                </span>
+              </Link>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 export default function GmbDashboardPage() {
   const locationId = useActiveLocationId();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -74,6 +164,8 @@ export default function GmbDashboardPage() {
         </div>
       ) : data ? (
         <div className="flex flex-col gap-3.5">
+          <OnboardingChecklist data={data} />
+
           {/* Hero: score + next actions */}
           <div className="grid grid-cols-[1.3fr_1fr] items-start gap-3.5">
             <div className="rounded-panel bg-gradient-to-br from-gmb-night to-gmb-night-deep p-6 text-white">

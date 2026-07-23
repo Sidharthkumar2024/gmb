@@ -41,22 +41,24 @@ function CallbackContent() {
   }, [loading, user, params]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-      <section className="w-full max-w-md rounded-md border border-slate-200 bg-white p-6 text-center shadow-sm">
+    <main className="flex min-h-screen items-center justify-center bg-gmb-canvas p-6 font-geist">
+      <section className="w-full max-w-md rounded-panel border border-gmb-line bg-gmb-surface p-6 text-center shadow-sm">
         <div
-          className={`mx-auto flex h-10 w-10 items-center justify-center rounded-md text-sm font-bold text-white ${
-            status === "done" ? "bg-emerald-500" : status === "error" ? "bg-red-500" : "bg-slate-900"
+          className={`mx-auto flex h-10 w-10 items-center justify-center rounded-control text-sm font-bold text-white ${
+            status === "done" ? "bg-gmb-ok" : status === "error" ? "bg-gmb-danger" : "bg-gmb-night"
           }`}
         >
           {status === "done" ? "✓" : status === "error" ? "!" : "G"}
         </div>
-        <h1 className="mt-4 text-xl font-semibold text-slate-950">Google Business Profile</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{message}</p>
+        <h1 className="mt-4 text-xl font-semibold tracking-[-0.01em] text-gmb-ink">
+          Google Business Profile
+        </h1>
+        <p className="mt-2 text-sm2 leading-6 text-gmb-ink-muted">{message}</p>
         <Link
-          href="/gmb-locations"
-          className="mt-5 inline-flex rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900"
+          href={status === "done" ? "/gmb-locations" : "/gmb-connect"}
+          className="mt-5 inline-flex rounded-control bg-gmb-night px-4 py-2 text-sm2 font-semibold text-white no-underline hover:bg-gmb-night-soft hover:no-underline"
         >
-          Back to locations
+          {status === "done" ? "Import locations" : "Back to connect"}
         </Link>
       </section>
     </main>
@@ -65,7 +67,7 @@ function CallbackContent() {
 
 export default function GmbConnectCallbackPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-sm text-slate-500">Loading...</div>}>
+    <Suspense fallback={<div className="p-8 font-geist text-sm2 text-gmb-ink-subtle">Loading…</div>}>
       <CallbackContent />
     </Suspense>
   );
