@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { AuthLayout, Field, SubmitButton, AuthError } from "../../src/components/gmb/AuthLayout";
 import { login } from "../../src/lib/api";
 import { ApiClientError } from "../../src/lib/api";
+import { roleHome } from "../../src/hooks/useAuth";
 
 function LoginForm() {
   const router = useRouter();
@@ -20,8 +21,11 @@ function LoginForm() {
     setBusy(true);
     setError(null);
     try {
-      await login(email.trim(), password);
-      router.push("/gmb-dashboard");
+      const result = await login(email.trim(), password);
+      // Route by role: platform staff land on /admin, everyone else on the
+      // GMB dashboard. Hardcoding the dashboard here once sent SUPER_ADMIN to
+      // the wrong home.
+      router.push(roleHome(result.user.role));
     } catch (err) {
       // The API returns one message for unknown-email and wrong-password
       // alike; surface it as-is rather than guessing which it was, so the UI

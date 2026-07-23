@@ -10,6 +10,8 @@ const prisma = new PrismaClient();
 
 const DEMO_EMAIL = process.env.SEED_EMAIL ?? "admin@adgrowly.local";
 const DEMO_PASSWORD = process.env.SEED_PASSWORD ?? "Demo@1234";
+const SUPER_EMAIL = process.env.SEED_SUPER_EMAIL ?? "super@adgrowly.local";
+const SUPER_PASSWORD = process.env.SEED_SUPER_PASSWORD ?? "Super@1234";
 
 async function main() {
   const tenant = await prisma.tenant.upsert({
@@ -37,6 +39,27 @@ async function main() {
     },
   });
   console.log(`✓ user ${user.email}`);
+
+  // The platform operator. Auth requires every user to belong to a tenant, so
+  // the super admin gets its own "platform" workspace — it holds no GMB data
+  // and exists only to satisfy that invariant.
+  const platformTenant = await prisma.tenant.upsert({
+    where: { slug: "platform" },
+    update: {},
+    create: { name: "Adgrowly Platform", slug: "platform" },
+  });
+  const superUser = await prisma.user.upsert({
+    where: { email: SUPER_EMAIL },
+    update: {},
+    create: {
+      tenantId: platformTenant.id,
+      email: SUPER_EMAIL,
+      name: "Platform Admin",
+      password: await bcrypt.hash(SUPER_PASSWORD, 10),
+      role: "SUPER_ADMIN",
+    },
+  });
+  console.log(`✓ super admin ${superUser.email}`);
 
   const existingWallet = await prisma.wallet.findFirst({ where: { tenantId: tenant.id } });
   if (!existingWallet) {

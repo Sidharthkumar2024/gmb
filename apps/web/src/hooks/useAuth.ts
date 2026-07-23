@@ -64,10 +64,10 @@ export function useAuth(opts: { required?: boolean; roles?: RoleName[] } = {}) {
 }
 
 /**
- * Landing route after sign-in. This app is GMB-only, so every role lands on the
- * Local SEO dashboard — the monorepo's /dashboard, /partner/dashboard and
- * /agent/home do not exist here, and returning them would 404 on login.
+ * Landing route after sign-in. Platform staff land on the admin console;
+ * everyone else lands on the Local SEO dashboard — the monorepo's /dashboard,
+ * /partner/dashboard and /agent/home do not exist here and would 404.
  */
-export function roleHome(_role: UserRole): string {
-  return "/gmb-dashboard";
+export function roleHome(role: UserRole): string {
+  return role === "SUPER_ADMIN" ? "/admin" : "/gmb-dashboard";
 }

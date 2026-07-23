@@ -46,6 +46,20 @@ module.exports = {
           "night-soft": "#2c2839",
           "night-deep": "#2c2452",
         },
+        // Admin console (dark) tokens from the GMB Admin design file.
+        adm: {
+          bg: "#131120",
+          panel: "#1a1729",
+          "panel-hover": "#1f1b30",
+          line: "#2b2740",
+          ink: "#edecf4",
+          muted: "#a29fb8",
+          subtle: "#6b6880",
+          accent: "#b3a9ff",
+          "accent-hover": "#d1cbff",
+          ok: "#7dd8a0",
+          hero: "#241d3f",
+        },
         // Nexa design system primary (indigo/violet, Adgrowly panel style).
         // Driven by CSS variables so white-label partners can re-theme at
         // runtime by overriding --nx-primary-* (see globals.css :root).
