@@ -41,6 +41,12 @@ interface LocationLite {
   name: string;
 }
 
+interface ReportSchedule {
+  enabled: boolean;
+  frequency: "WEEKLY" | "MONTHLY" | "CUSTOM";
+  lastRunAt: string | null;
+}
+
 const PRIORITY_TONE: Record<string, "danger" | "warn" | "neutral"> = {
   high: "danger",
   medium: "warn",
@@ -61,6 +67,29 @@ export default function GmbReportsPage() {
   const [type, setType] = useState<ReportType>("MONTHLY");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [schedule, setSchedule] = useState<ReportSchedule | null>(null);
+  const [schedBusy, setSchedBusy] = useState(false);
+
+  useEffect(() => {
+    void api
+      .get<ReportSchedule>("/api/v1/gmb/report-schedule")
+      .then(setSchedule)
+      .catch(() => undefined);
+  }, []);
+
+  // Persist an enable/frequency change immediately — one toggle, one save, so
+  // there is no separate "save schedule" button to forget.
+  async function saveSchedule(next: { enabled: boolean; frequency: "WEEKLY" | "MONTHLY" }) {
+    setSchedBusy(true);
+    setError(null);
+    try {
+      setSchedule(await api.put<ReportSchedule>("/api/v1/gmb/report-schedule", next));
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not update the schedule.");
+    } finally {
+      setSchedBusy(false);
+    }
+  }
 
   useEffect(() => {
     void api
@@ -186,6 +215,69 @@ export default function GmbReportsPage() {
             </Button>
           </div>
         </div>
+      </Card>
+
+      {/* Scheduled reports — the same generation, run automatically on a cadence
+          and (once SMTP is configured) emailed out. Backed by /report-schedule. */}
+      <Card className="mb-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <SectionLabel>Scheduled reports</SectionLabel>
+            <div className="mt-1 text-sm2 text-gmb-ink-muted">
+              {schedule?.enabled
+                ? `A ${schedule.frequency === "WEEKLY" ? "weekly" : "monthly"} report is generated automatically for this workspace.`
+                : "Generate a report automatically on a schedule instead of by hand."}
+            </div>
+            {schedule?.lastRunAt && (
+              <div className="mt-1 font-geist-mono text-micro text-gmb-ink-subtle">
+                Last scheduled run {new Date(schedule.lastRunAt).toLocaleString()}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {schedule === null ? (
+              <Skeleton className="h-9 w-40" />
+            ) : (
+              <>
+                <select
+                  value={schedule.frequency === "WEEKLY" ? "WEEKLY" : "MONTHLY"}
+                  disabled={schedBusy}
+                  onChange={(e) =>
+                    void saveSchedule({
+                      enabled: schedule.enabled,
+                      frequency: e.target.value as "WEEKLY" | "MONTHLY",
+                    })
+                  }
+                  className="rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 outline-none disabled:opacity-50"
+                >
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="MONTHLY">Monthly</option>
+                </select>
+                <Button
+                  variant={schedule.enabled ? "ghost" : "primary"}
+                  disabled={schedBusy}
+                  onClick={() =>
+                    void saveSchedule({
+                      enabled: !schedule.enabled,
+                      frequency: schedule.frequency === "WEEKLY" ? "WEEKLY" : "MONTHLY",
+                    })
+                  }
+                >
+                  {schedBusy ? "Saving…" : schedule.enabled ? "Turn off" : "Turn on"}
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+        {schedule?.enabled && (
+          <div className="mt-3 flex items-center gap-2 border-t border-gmb-line pt-3">
+            <Pill tone="ok">On</Pill>
+            <span className="text-xs2 text-gmb-ink-muted">
+              Reports are saved to the history below. Email delivery is sent when the platform has
+              SMTP configured.
+            </span>
+          </div>
+        )}
       </Card>
 
       {reports === null ? (
