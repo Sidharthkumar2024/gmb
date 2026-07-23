@@ -8,6 +8,8 @@ import {
   AiProviderStatus,
   SecretProvider,
   SecretScope,
+  PlanInterval,
+  PlanStatus,
 } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { requireAuth, type RequestWithAuth } from "../middleware/auth";
@@ -35,6 +37,13 @@ import {
   SMTP_NO_AUTH_SENTINEL,
   sendTestEmail,
 } from "../services/email.service";
+import {
+  listPlans,
+  createPlan,
+  updatePlan,
+  deletePlan,
+  assignPlan,
+} from "../services/plan.service";
 
 // SuperAdmin API (Adgrowly GMB Admin design).
 //
@@ -101,6 +110,7 @@ router.get("/tenants", async (req: RequestWithAuth, res: Response, next: NextFun
       include: {
         _count: { select: { users: true, gmbLocations: true, gmbReviews: true } },
         wallets: { select: { balanceCredits: true }, take: 1 },
+        plan: { select: { id: true, name: true } },
       },
     });
     res.json({
@@ -115,6 +125,8 @@ router.get("/tenants", async (req: RequestWithAuth, res: Response, next: NextFun
         locations: t._count.gmbLocations,
         reviews: t._count.gmbReviews,
         credits: t.wallets[0]?.balanceCredits ?? 0,
+        planId: t.plan?.id ?? null,
+        planName: t.plan?.name ?? null,
         createdAt: t.createdAt,
       })),
     });
@@ -721,6 +733,128 @@ router.post("/smtp/test", async (req: RequestWithAuth, res: Response, next: Next
   try {
     const { to } = smtpTestSchema.parse(req.body);
     res.json({ success: true, data: await sendTestEmail(to) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Plans ------------------------------------------------------------------
+//
+// A plan catalog defines entitlements (limits, credit allotment), not charges —
+// no invoice/payment model ships here, so price is display-only. Limits are
+// enforced at creation points (e.g. locations); a null limit is unlimited.
+
+router.get("/plans", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await listPlans({ includeArchived: true }) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// A limit is a positive integer or null (unlimited); coerce "" / undefined to null.
+const nullableLimit = z
+  .union([z.number().int().min(0), z.null()])
+  .optional()
+  .transform((v) => (v === undefined ? undefined : v));
+
+const planBodySchema = z.object({
+  name: z.string().min(1).max(80),
+  description: z.string().max(500).nullable().optional(),
+  priceCents: z.number().int().min(0).max(100_000_000).optional(),
+  currency: z.string().length(3).optional(),
+  interval: z.nativeEnum(PlanInterval).optional(),
+  monthlyCredits: z.number().int().min(0).max(10_000_000).optional(),
+  maxLocations: nullableLimit,
+  maxKeywords: nullableLimit,
+  maxUsers: nullableLimit,
+  features: z.array(z.string().max(120)).max(20).optional(),
+  isDefault: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(10_000).optional(),
+});
+
+router.post("/plans", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = planBodySchema.parse(req.body);
+    const plan = await createPlan(input);
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "CREATE",
+      resource: "Plan",
+      resourceId: plan.id,
+      newValues: { name: plan.name, priceCents: plan.priceCents, maxLocations: plan.maxLocations },
+      ...extractRequestMeta(req),
+    });
+    res.status(201).json({ success: true, data: plan });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const planPatchSchema = planBodySchema.partial().extend({
+  status: z.nativeEnum(PlanStatus).optional(),
+});
+
+router.patch("/plans/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = planPatchSchema.parse(req.body);
+    const plan = await updatePlan(req.params.id, input);
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "Plan",
+      resourceId: plan.id,
+      newValues: { name: plan.name, status: plan.status, priceCents: plan.priceCents, maxLocations: plan.maxLocations },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: plan });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/plans/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    await deletePlan(req.params.id);
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "DELETE",
+      resource: "Plan",
+      resourceId: req.params.id,
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: { id: req.params.id } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const assignPlanSchema = z.object({ planId: z.string().min(1).nullable() });
+
+router.post("/tenants/:id/plan", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { planId } = assignPlanSchema.parse(req.body);
+    const existing = await prisma.tenant.findUnique({
+      where: { id: req.params.id },
+      select: { planId: true },
+    });
+    if (!existing) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Workspace not found.");
+
+    await assignPlan(req.params.id, planId);
+    await logAudit({
+      tenantId: req.params.id,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "Tenant",
+      resourceId: req.params.id,
+      oldValues: { planId: existing.planId },
+      newValues: { planId },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: { tenantId: req.params.id, planId } });
   } catch (err) {
     next(err);
   }

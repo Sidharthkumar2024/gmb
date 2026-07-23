@@ -20,13 +20,22 @@ interface TenantRow {
   locations: number;
   reviews: number;
   credits: number;
+  planId: string | null;
+  planName: string | null;
   createdAt: string;
+}
+
+interface PlanOption {
+  id: string;
+  name: string;
+  status: "ACTIVE" | "ARCHIVED";
 }
 
 const STATUS_TONE = { ACTIVE: "ok", SUSPENDED: "warn", DELETED: "danger" } as const;
 
 export default function AdminAccountsPage() {
   const [rows, setRows] = useState<TenantRow[] | null>(null);
+  const [plans, setPlans] = useState<PlanOption[]>([]);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +53,26 @@ export default function AdminAccountsPage() {
 
   useEffect(() => {
     void load("");
+    // The plan list feeds the per-row assign dropdown; failure just leaves it
+    // empty (no assignment possible) rather than breaking the accounts table.
+    void api
+      .get<PlanOption[]>("/api/v1/admin/plans")
+      .then((ps) => setPlans((ps ?? []).filter((p) => p.status === "ACTIVE")))
+      .catch(() => setPlans([]));
   }, [load]);
+
+  async function setPlan(t: TenantRow, planId: string | null) {
+    setBusy(t.id);
+    setError(null);
+    try {
+      await api.post(`/api/v1/admin/tenants/${t.id}/plan`, { planId });
+      await load(q);
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not change the plan.");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function setStatus(t: TenantRow, status: "ACTIVE" | "SUSPENDED") {
     const verb = status === "SUSPENDED" ? "Suspend" : "Reactivate";
@@ -106,7 +134,7 @@ export default function AdminAccountsPage() {
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-adm-line">
-                {["Workspace", "Status", "Users", "Locations", "Reviews", "Credits", "Created", ""].map(
+                {["Workspace", "Status", "Plan", "Users", "Locations", "Reviews", "Credits", "Created", ""].map(
                   (h) => (
                     <th
                       key={h}
@@ -130,6 +158,25 @@ export default function AdminAccountsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <AdmPill tone={STATUS_TONE[t.status]}>{t.status}</AdmPill>
+                  </td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={t.planId ?? ""}
+                      disabled={busy === t.id}
+                      onChange={(e) => void setPlan(t, e.target.value || null)}
+                      className="rounded-control border border-adm-line bg-adm-bg px-2 py-1 text-xs2 text-adm-ink outline-none focus:border-gmb-brand disabled:opacity-50"
+                    >
+                      <option value="">No plan</option>
+                      {plans.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                      {/* An assigned-but-archived plan won't be in `plans`; keep it visible. */}
+                      {t.planId && !plans.some((p) => p.id === t.planId) && (
+                        <option value={t.planId}>{t.planName} (archived)</option>
+                      )}
+                    </select>
                   </td>
                   {[t.users, t.locations, t.reviews, t.credits].map((n, i) => (
                     <td key={i} className="px-4 py-3 font-geist-mono text-xs2 text-adm-muted">

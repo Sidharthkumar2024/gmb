@@ -61,6 +61,49 @@ async function main() {
   });
   console.log(`✓ super admin ${superUser.email}`);
 
+  // Example plan catalog. Limits are enforced (see plan.service); price is
+  // display-only until a payment gateway exists. Upserted by slug so re-seeding
+  // is idempotent.
+  const starter = await prisma.plan.upsert({
+    where: { slug: "starter" },
+    update: {},
+    create: {
+      name: "Starter",
+      slug: "starter",
+      description: "For a single location getting set up on Google.",
+      priceCents: 0,
+      monthlyCredits: 100,
+      maxLocations: 1,
+      maxKeywords: 10,
+      features: ["1 location", "10 tracked keywords", "AI drafts with approval", "Email support"],
+      isDefault: true,
+      sortOrder: 10,
+    },
+  });
+  await prisma.plan.upsert({
+    where: { slug: "pro" },
+    update: {},
+    create: {
+      name: "Pro",
+      slug: "pro",
+      description: "For agencies and multi-location brands.",
+      priceCents: 4900,
+      monthlyCredits: 1000,
+      maxLocations: null,
+      maxKeywords: null,
+      features: ["Unlimited locations", "Unlimited keywords", "Priority support", "Autopilot scheduling"],
+      sortOrder: 20,
+    },
+  });
+  console.log("✓ plans seeded (Starter, Pro)");
+
+  // Put the demo workspace on the Starter plan so the billing screen has
+  // something to show; only set it if unassigned, so a manual change sticks.
+  if (!tenant.planId) {
+    await prisma.tenant.update({ where: { id: tenant.id }, data: { planId: starter.id } });
+    console.log("✓ demo workspace assigned to Starter");
+  }
+
   const existingWallet = await prisma.wallet.findFirst({ where: { tenantId: tenant.id } });
   if (!existingWallet) {
     await prisma.wallet.create({

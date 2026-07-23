@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { requireAuth, requireTenantScope, type RequestWithAuth } from "../middleware/auth";
+import { getTenantPlan } from "../services/plan.service";
 
 // Workspace-level endpoints the app shell calls on every page load: language,
 // currency, wallet balance and product access.
@@ -190,6 +191,19 @@ router.get("/customer/wallets", async (req: RequestWithAuth, res: Response, next
           : null,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Plan --------------------------------------------------------------------
+// Read-only view of the workspace's assigned plan for the billing page. Null
+// when no plan is assigned (unlimited, billing off). Entitlements are defined
+// by the admin; this only reports them.
+
+router.get("/customer/plan", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getTenantPlan(req.tenantId!) });
   } catch (err) {
     next(err);
   }

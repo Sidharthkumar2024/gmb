@@ -37,6 +37,52 @@ enum TenantStatus {
   DELETED
 }
 
+enum PlanInterval {
+  MONTH
+  YEAR
+}
+
+enum PlanStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+/// Subscription plan catalog (Admin → Plans).
+///
+/// This defines ENTITLEMENTS, not charges. `priceCents` is display-only until
+/// a payment gateway exists — no invoice or payment model ships in this build,
+/// so nothing here moves money. What IS enforced today are the limit fields
+/// (null = unlimited); `monthlyCredits` is informational until an auto-grant
+/// worker exists (credit top-ups are manual for now).
+model Plan {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  description String?
+
+  priceCents Int          @default(0)
+  currency   String       @default("USD")
+  interval   PlanInterval @default(MONTH)
+
+  monthlyCredits Int  @default(0)
+  maxLocations   Int? // null = unlimited
+  maxKeywords    Int?
+  maxUsers       Int?
+
+  features String[] @default([])
+
+  status    PlanStatus @default(ACTIVE)
+  isDefault Boolean    @default(false)
+  sortOrder Int        @default(100)
+
+  tenants Tenant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
 enum UserRole {
   SUPER_ADMIN
   WHITE_LABEL_ADMIN
@@ -62,6 +108,12 @@ model Tenant {
   // Used by the GMB niche/tone templates.
   industry String?
   timezone String  @default("Asia/Kolkata")
+
+  // Subscription plan (Admin → Plans). Null = no plan assigned (unlimited,
+  // billing off). SetNull on delete so archiving a plan never cascades to
+  // its customers.
+  planId String?
+  plan   Plan?   @relation(fields: [planId], references: [id], onDelete: SetNull)
 
   users              User[]
   wallets            Wallet[]
@@ -100,6 +152,7 @@ model Tenant {
 
   @@index([status])
   @@index([parentTenantId])
+  @@index([planId])
 }
 
 enum UserStatus {

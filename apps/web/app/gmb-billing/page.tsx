@@ -32,6 +32,23 @@ interface Usage {
   byFeature: Array<{ feature: string; calls: number; costInCents: number }>;
   recent: Array<{ id: string; feature: string; model: string; costInCents: number; createdAt: string }>;
 }
+interface Plan {
+  name: string;
+  description: string | null;
+  priceCents: number;
+  currency: string;
+  interval: "MONTH" | "YEAR";
+  monthlyCredits: number;
+  maxLocations: number | null;
+  maxKeywords: number | null;
+  maxUsers: number | null;
+  features: string[];
+  locationsUsed: number;
+}
+
+function limit(n: number | null): string {
+  return n == null ? "Unlimited" : n.toLocaleString();
+}
 
 function featureLabel(feature: string): string {
   return feature.replace(/^gmb_/, "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -41,21 +58,24 @@ export default function GmbBillingPage() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [costs, setCosts] = useState<CreditCost[] | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [plan, setPlan] = useState<Plan | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function loadAll() {
       try {
-        const [w, c, u] = await Promise.all([
+        const [w, c, u, p] = await Promise.all([
           api.get<Wallet>("/api/v1/customer/wallets"),
           api.get<CreditCost[]>("/api/v1/gmb/credit-costs").catch(() => []),
           api.get<Usage>("/api/v1/customer/ai-usage").catch(() => null),
+          api.get<Plan | null>("/api/v1/customer/plan").catch(() => null),
         ]);
         if (cancelled) return;
         setWallet(w);
         setCosts(c);
         setUsage(u);
+        setPlan(p);
       } catch (e) {
         if (!cancelled) setError(e instanceof ApiClientError ? e.message : "Could not load billing.");
       }
@@ -115,6 +135,58 @@ export default function GmbBillingPage() {
           </p>
         </Card>
       </div>
+
+      {/* Current plan — only shown when one is assigned; no plan means
+          unlimited with billing off, which the balance card already conveys. */}
+      {plan && (
+        <Card className="mb-3.5">
+          <div className="flex items-start justify-between">
+            <div>
+              <SectionLabel>Your plan</SectionLabel>
+              <div className="mt-1.5 flex items-baseline gap-2.5">
+                <span className="text-xl font-bold tracking-[-0.01em] text-gmb-ink">{plan.name}</span>
+                <span className="text-sm2 text-gmb-ink-muted">
+                  {plan.priceCents === 0
+                    ? "Free"
+                    : `${new Intl.NumberFormat(undefined, { style: "currency", currency: plan.currency }).format(plan.priceCents / 100)} / ${plan.interval === "MONTH" ? "month" : "year"}`}
+                </span>
+              </div>
+              {plan.description && (
+                <p className="mt-1 text-sm2 text-gmb-ink-muted">{plan.description}</p>
+              )}
+            </div>
+            <Pill tone="neutral">{plan.monthlyCredits.toLocaleString()} credits / mo</Pill>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="rounded-control border border-gmb-line bg-gmb-canvas px-3 py-2.5">
+              <div className="text-micro uppercase tracking-wide text-gmb-ink-subtle">Locations</div>
+              <div className="mt-0.5 text-sm2 font-semibold text-gmb-ink">
+                {plan.locationsUsed} / {limit(plan.maxLocations)}
+              </div>
+            </div>
+            <div className="rounded-control border border-gmb-line bg-gmb-canvas px-3 py-2.5">
+              <div className="text-micro uppercase tracking-wide text-gmb-ink-subtle">Keywords</div>
+              <div className="mt-0.5 text-sm2 font-semibold text-gmb-ink">{limit(plan.maxKeywords)}</div>
+            </div>
+            <div className="rounded-control border border-gmb-line bg-gmb-canvas px-3 py-2.5">
+              <div className="text-micro uppercase tracking-wide text-gmb-ink-subtle">Users</div>
+              <div className="mt-0.5 text-sm2 font-semibold text-gmb-ink">{limit(plan.maxUsers)}</div>
+            </div>
+          </div>
+
+          {plan.features.length > 0 && (
+            <ul className="mt-3 flex list-none flex-wrap gap-x-4 gap-y-1 p-0">
+              {plan.features.map((f) => (
+                <li key={f} className="flex items-center gap-1.5 text-xs2 text-gmb-ink-muted">
+                  <span className="text-gmb-ok">✓</span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
 
       <div className="grid gap-3.5 lg:grid-cols-2 lg:items-start">
         {/* Pricing */}

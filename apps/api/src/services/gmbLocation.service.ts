@@ -1,5 +1,6 @@
 import { prisma, GmbLocationStatus } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
+import { assertWithinLocationLimit } from "./plan.service";
 
 // =====================================================================
 // AdGrowly GMB — Business Profile / location service (planning PDF). The
@@ -108,6 +109,9 @@ export async function createLocation(tenantId: string, input: CreateLocationInpu
   if (!name) {
     throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "A location name is required.");
   }
+  // Plan entitlement: no-op unless the workspace is on a plan that caps
+  // locations. Checked before any write so the limit can't be crossed.
+  await assertWithinLocationLimit(tenantId);
   await assertSecretOwned(tenantId, input.secretId);
   const row = await prisma.gmbLocation.create({
     data: {
