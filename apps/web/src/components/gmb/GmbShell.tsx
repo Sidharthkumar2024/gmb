@@ -33,6 +33,7 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string; bad
     label: "Grow",
     items: [
       { href: "/gmb-reputation", name: "Reviews", badgeKey: "reviews" },
+      { href: "/gmb-reviewlink", name: "Review link" },
       { href: "/gmb-qa", name: "Q&A", badgeKey: "questions" },
       { href: "/gmb", name: "Posts" },
       { href: "/gmb-descriptions", name: "Descriptions" },

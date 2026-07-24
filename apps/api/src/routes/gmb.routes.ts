@@ -794,6 +794,27 @@ router.get("/locations/:id", async (req: RequestWithAuth, res: Response, next: N
   }
 });
 
+// Shareable "leave us a review" link + QR + request text for a location. The
+// URL only exists once the profile has a Google placeId; without one we return
+// url:null so the UI can prompt to connect rather than render a broken QR.
+// getLocation already scopes to the tenant and 404s on a foreign id.
+router.get("/locations/:id/review-link", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const location = await getLocation(req.tenantId!, req.params.id);
+    const url = buildGoogleReviewLink(location.placeId);
+    res.json({
+      success: true,
+      data: {
+        placeId: location.placeId,
+        url,
+        requestText: buildReviewRequestText({ businessName: location.name, link: url }),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.patch("/locations/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     const body = updateLocationSchema.parse(req.body);
