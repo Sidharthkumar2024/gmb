@@ -44,6 +44,13 @@ import {
   deletePlan,
   assignPlan,
 } from "../services/plan.service";
+import {
+  queueDepth,
+  getGmbAutopilotQueue,
+  getGmbAutoSyncQueue,
+  getGmbReportScheduleQueue,
+  getGmbPostPublisherQueue,
+} from "../lib/queue";
 
 // SuperAdmin API (Adgrowly GMB Admin design).
 //
@@ -301,6 +308,57 @@ router.get("/health", async (_req: RequestWithAuth, res: Response, next: NextFun
         node: process.version,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Background queues -------------------------------------------------------
+//
+// Depth of the GMB background queues, read live from BullMQ/Redis. Reading
+// counts needs Redis but NOT running workers, so this reports true backlog even
+// when workers are disabled. If Redis is unreachable the whole screen degrades
+// to redisOk:false rather than 500-ing — an admin monitor must not itself fail.
+
+const GMB_QUEUES: Array<{ label: string; get: () => import("bullmq").Queue }> = [
+  { label: "Autopilot sweeps", get: getGmbAutopilotQueue },
+  { label: "Profile sync", get: getGmbAutoSyncQueue },
+  { label: "Scheduled reports", get: getGmbReportScheduleQueue },
+  { label: "Post publisher", get: getGmbPostPublisherQueue },
+];
+
+router.get("/queues", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const queues = await Promise.all(
+      GMB_QUEUES.map(async ({ label, get }) => {
+        try {
+          const q = get();
+          const d = await queueDepth(q);
+          return { name: q.name, label, ...d, error: null as string | null };
+        } catch (e) {
+          return {
+            name: label,
+            label,
+            waiting: 0,
+            active: 0,
+            delayed: 0,
+            failed: 0,
+            completed: 0,
+            error: (e as Error).message,
+          };
+        }
+      }),
+    );
+    const redisOk = queues.every((q) => q.error === null);
+    const totals = queues.reduce(
+      (acc, q) => ({
+        waiting: acc.waiting + q.waiting,
+        active: acc.active + q.active,
+        failed: acc.failed + q.failed,
+      }),
+      { waiting: 0, active: 0, failed: 0 },
+    );
+    res.json({ success: true, data: { redisOk, totals, queues } });
   } catch (err) {
     next(err);
   }
