@@ -41,6 +41,13 @@ const FILTERS: Array<{ key: "ALL" | ReviewStatus; label: string }> = [
   { key: "FLAGGED", label: "Flagged" },
 ];
 
+// A review that hasn't been replied to but already carries drafted text is a
+// pending draft awaiting approval — this is exactly what autopilot produces.
+// FLAGGED reviews are deliberately excluded: flagging means "don't reply".
+function isPendingDraft(r: { status: ReviewStatus; replyText: string | null }): boolean {
+  return r.status === "NEW" && Boolean(r.replyText && r.replyText.trim());
+}
+
 function Stars({ rating }: { rating: number }) {
   return (
     <span
@@ -91,6 +98,10 @@ export default function GmbReviewsPage() {
     [reviews, filter],
   );
 
+  // How many drafts are approvable in the CURRENT view — the bulk button acts on
+  // exactly what's on screen, so a filter narrows the batch predictably.
+  const pendingDraftCount = useMemo(() => shown.filter(isPendingDraft).length, [shown]);
+
   async function draft(id: string, tone: "warm" | "professional") {
     setBusy((b) => ({ ...b, [id]: "draft" }));
     setError(null);
@@ -126,6 +137,62 @@ export default function GmbReviewsPage() {
       setError(e instanceof ApiClientError ? e.message : "Could not save the reply.");
     } finally {
       setBusy((b) => ({ ...b, [id]: "" }));
+    }
+  }
+
+  // Approve a pending draft (autopilot- or AI-generated) as-is, without opening
+  // the editor. The text sent is whatever the operator is looking at — the
+  // edited draft if one is open, otherwise the stored draft on the review.
+  async function approve(id: string, storedDraft: string) {
+    const text = (drafts[id] ?? storedDraft).trim();
+    if (!text) return;
+    setBusy((b) => ({ ...b, [id]: "send" }));
+    setError(null);
+    try {
+      await api.post(`/api/v1/gmb/reviews/${id}/reply`, { text });
+      setDrafts((s) => {
+        const next = { ...s };
+        delete next[id];
+        return next;
+      });
+      if (openId === id) setOpenId(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not approve the reply.");
+    } finally {
+      setBusy((b) => ({ ...b, [id]: "" }));
+    }
+  }
+
+  // Approve every pending draft in the current view at once. Autopilot fills the
+  // queue with NEW-status reviews that already carry a drafted reply; this
+  // publishes them one request each (sequentially, so one failure stops the run
+  // and is reported rather than firing a burst that half-succeeds silently).
+  async function approveAll() {
+    const targets = shown.filter((r) => isPendingDraft(r));
+    if (targets.length === 0) return;
+    if (!window.confirm(`Approve and post ${targets.length} drafted repl${targets.length === 1 ? "y" : "ies"}?`))
+      return;
+    setBusy((b) => ({ ...b, bulk: "run" }));
+    setError(null);
+    let done = 0;
+    try {
+      for (const r of targets) {
+        const text = (drafts[r.id] ?? r.replyText ?? "").trim();
+        if (!text) continue;
+        await api.post(`/api/v1/gmb/reviews/${r.id}/reply`, { text });
+        done += 1;
+      }
+      await load();
+    } catch (e) {
+      await load();
+      setError(
+        e instanceof ApiClientError
+          ? `Approved ${done} of ${targets.length} before an error: ${e.message}`
+          : `Approved ${done} of ${targets.length} before an error.`,
+      );
+    } finally {
+      setBusy((b) => ({ ...b, bulk: "" }));
     }
   }
 
@@ -194,8 +261,8 @@ export default function GmbReviewsPage() {
         </Card>
       </div>
 
-      {/* Filters */}
-      <div className="mb-3 flex gap-1.5">
+      {/* Filters + bulk approve */}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
         {FILTERS.map((f) => {
           const n =
             f.key === "ALL"
@@ -216,6 +283,21 @@ export default function GmbReviewsPage() {
             </button>
           );
         })}
+
+        {/* Bulk-approve appears only when the current view has drafts waiting —
+            the payoff of autopilot: review once, approve the batch. */}
+        {pendingDraftCount > 0 && (
+          <button
+            type="button"
+            disabled={busy.bulk === "run"}
+            onClick={() => void approveAll()}
+            className="ml-auto rounded-full bg-gmb-brand px-3.5 py-1.5 text-xs2 font-semibold text-white transition hover:bg-gmb-brand-hover disabled:opacity-50"
+          >
+            {busy.bulk === "run"
+              ? "Approving…"
+              : `Approve ${pendingDraftCount} draft${pendingDraftCount === 1 ? "" : "s"}`}
+          </button>
+        )}
       </div>
 
       {/* Queue */}
@@ -259,9 +341,19 @@ export default function GmbReviewsPage() {
                       </p>
                     )}
                     {r.replyText && (
-                      <div className="mt-2.5 rounded-control border-l-2 border-gmb-brand bg-gmb-brand-wash px-3 py-2">
-                        <div className="font-geist-mono text-micro uppercase tracking-wide text-gmb-brand">
-                          Your reply
+                      <div
+                        className={`mt-2.5 rounded-control border-l-2 px-3 py-2 ${
+                          isPendingDraft(r)
+                            ? "border-gmb-warn bg-gmb-warn/10"
+                            : "border-gmb-brand bg-gmb-brand-wash"
+                        }`}
+                      >
+                        <div
+                          className={`font-geist-mono text-micro uppercase tracking-wide ${
+                            isPendingDraft(r) ? "text-[#a9761f]" : "text-gmb-brand"
+                          }`}
+                        >
+                          {isPendingDraft(r) ? "Draft reply · needs your approval" : "Your reply"}
                         </div>
                         <p className="mt-1 whitespace-pre-wrap text-sm2 text-gmb-ink-muted">
                           {r.replyText}
@@ -272,23 +364,46 @@ export default function GmbReviewsPage() {
 
                   {r.status !== "REPLIED" && (
                     <div className="flex flex-shrink-0 gap-1.5">
-                      <Button
-                        variant="ghost"
-                        disabled={Boolean(working)}
-                        onClick={() => void draft(r.id, "warm")}
-                      >
-                        {working === "draft" ? "Drafting…" : "AI draft"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        disabled={Boolean(working)}
-                        onClick={() => {
-                          setOpenId(isOpen ? null : r.id);
-                          setDrafts((s) => ({ ...s, [r.id]: s[r.id] ?? "" }));
-                        }}
-                      >
-                        {isOpen ? "Close" : "Write"}
-                      </Button>
+                      {isPendingDraft(r) ? (
+                        <>
+                          <Button
+                            disabled={Boolean(working)}
+                            onClick={() => void approve(r.id, r.replyText ?? "")}
+                          >
+                            {working === "send" ? "Posting…" : "Approve"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            disabled={Boolean(working)}
+                            onClick={() => {
+                              setOpenId(isOpen ? null : r.id);
+                              setDrafts((s) => ({ ...s, [r.id]: s[r.id] ?? r.replyText ?? "" }));
+                            }}
+                          >
+                            {isOpen ? "Close" : "Edit"}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            variant="ghost"
+                            disabled={Boolean(working)}
+                            onClick={() => void draft(r.id, "warm")}
+                          >
+                            {working === "draft" ? "Drafting…" : "AI draft"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            disabled={Boolean(working)}
+                            onClick={() => {
+                              setOpenId(isOpen ? null : r.id);
+                              setDrafts((s) => ({ ...s, [r.id]: s[r.id] ?? r.replyText ?? "" }));
+                            }}
+                          >
+                            {isOpen ? "Close" : "Write"}
+                          </Button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
