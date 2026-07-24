@@ -36,6 +36,7 @@ import {
   SMTP_VAULT_LABEL,
   SMTP_NO_AUTH_SENTINEL,
   sendTestEmail,
+  resolveSmtpSettings,
 } from "../services/email.service";
 import {
   listPlans,
@@ -306,6 +307,69 @@ router.get("/health", async (_req: RequestWithAuth, res: Response, next: NextFun
         },
         uptime: process.uptime(),
         node: process.version,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Integrations status board (Providers & keys) ---------------------------
+//
+// A consolidated "is the platform wired up?" view of the integrations this
+// build actually uses. NEVER returns secret values — only configured booleans
+// and safe identifiers (masked client id, secret last4, host). Each row links
+// to its dedicated config screen where one exists. Integrations the design
+// mocks but this build doesn't wire (DataForSEO, Stripe) are deliberately
+// omitted rather than shown as fake-connected.
+
+router.get("/integrations", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const [oauth, smtp] = await Promise.all([getSafeGoogleOAuthConfig(), resolveSmtpSettings()]);
+    const placesKey = process.env.GOOGLE_PLACES_API_KEY;
+
+    res.json({
+      success: true,
+      data: {
+        integrations: [
+          {
+            key: "google_business",
+            name: "Google Business Profile",
+            purpose: "Import locations, sync reviews & insights, publish updates",
+            configured: Boolean(oauth.clientId) && oauth.enabled,
+            detail: oauth.clientId ? `Client …${oauth.clientId.slice(-12)}` : "No OAuth client saved",
+            manageHref: "/admin/google",
+          },
+          {
+            key: "google_places",
+            name: "Google Places API",
+            purpose: "Rank-grid geocoding and citation lookups",
+            configured: Boolean(placesKey && !placesKey.startsWith("your_")),
+            detail:
+              placesKey && !placesKey.startsWith("your_")
+                ? "Key set in server env"
+                : "GOOGLE_PLACES_API_KEY not set",
+            manageHref: null,
+          },
+          {
+            key: "anthropic",
+            name: "Anthropic (AI)",
+            purpose: "AI review replies, Q&A answers, advisor & descriptions",
+            configured: hasConfiguredAiClient(),
+            detail: hasConfiguredAiClient()
+              ? `Env key · ${process.env.ANTHROPIC_MODEL ?? "claude-3-5-sonnet-20241022"}`
+              : "No env key — a registry key in AI models also works",
+            manageHref: "/admin/ai",
+          },
+          {
+            key: "smtp",
+            name: "Email (SMTP)",
+            purpose: "Verification, password reset & alert emails",
+            configured: smtp !== null,
+            detail: smtp ? `${smtp.host}:${smtp.port} · ${smtp.source} settings` : "Email is off",
+            manageHref: "/admin/email",
+          },
+        ],
       },
     });
   } catch (err) {
