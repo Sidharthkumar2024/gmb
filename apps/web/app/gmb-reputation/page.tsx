@@ -49,14 +49,18 @@ function isPendingDraft(r: { status: ReviewStatus; replyText: string | null }): 
 }
 
 function Stars({ rating }: { rating: number }) {
+  // Clamp to an integer 0–5. "★".repeat() throws RangeError on a negative
+  // count, so an out-of-range rating (e.g. a bad API value) would otherwise
+  // crash the whole review list render.
+  const filled = Math.max(0, Math.min(5, Math.round(rating)));
   return (
     <span
       className="font-geist-mono text-xs2"
-      style={{ color: rating >= 4 ? "#16803c" : rating >= 3 ? "#b25e09" : "#d92d20" }}
+      style={{ color: filled >= 4 ? "#16803c" : filled >= 3 ? "#b25e09" : "#d92d20" }}
       aria-label={`${rating} out of 5`}
     >
-      {"★".repeat(rating)}
-      <span className="text-gmb-line">{"★".repeat(5 - rating)}</span>
+      {"★".repeat(filled)}
+      <span className="text-gmb-line">{"★".repeat(5 - filled)}</span>
     </span>
   );
 }

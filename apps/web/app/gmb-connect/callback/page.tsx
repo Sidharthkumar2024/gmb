@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api, ApiClientError } from "../../../src/lib/api";
@@ -11,9 +11,15 @@ function CallbackContent() {
   const { loading, user } = useAuth({ required: true });
   const [status, setStatus] = useState<"working" | "done" | "error">("working");
   const [message, setMessage] = useState("Connecting Google Business Profile...");
+  // A Google authorization code is single-use. This effect can run more than
+  // once (StrictMode double-invoke, or a `user` identity change), and a second
+  // exchange of the same code fails — flipping a just-succeeded UI to an error.
+  // Guard so the exchange fires exactly once.
+  const exchanged = useRef(false);
 
   useEffect(() => {
     if (loading || !user || !params) return;
+    if (exchanged.current) return;
     const code = params.get("code");
     const state = params.get("state") ?? undefined;
     const error = params.get("error");
@@ -28,6 +34,7 @@ function CallbackContent() {
       return;
     }
     const redirectUri = `${window.location.origin}/gmb-connect/callback`;
+    exchanged.current = true;
     api
       .post("/api/v1/gmb/google/oauth/exchange", { code, state, redirectUri })
       .then(() => {
