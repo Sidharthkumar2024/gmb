@@ -49,6 +49,7 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string; bad
       { href: "/gmb-locations", name: "Locations" },
       { href: "/gmb-actions", name: "Action links" },
       { href: "/gmb-verifications", name: "Verification" },
+      { href: "/gmb-billing", name: "Billing & plan" },
       { href: "/gmb-settings", name: "Settings" },
     ],
   },
