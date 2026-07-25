@@ -65,6 +65,22 @@ export async function publishDuePosts(tenantId: string, now: Date = new Date()):
   const ids: string[] = [];
 
   for (const post of due) {
+    // Atomically claim the post before any external publish. Two entry points
+    // call publishDuePosts — the 5-minute BullMQ sweep and the manual
+    // "publish due" endpoint — and they can overlap; a crash between the Google
+    // call and the status write also leaves the post SCHEDULED for the next
+    // sweep. Without a claim, both cases republish the same post live, so the
+    // customer's Google Business Profile gets duplicate posts. This CAS flips
+    // SCHEDULED -> PUBLISHED so only one runner wins (count === 1); the catch
+    // below reverts to FAILED on failure so it stays retryable. (A dedicated
+    // PUBLISHING status would also close the crash-between-claim-and-send
+    // window, but that needs a schema migration.)
+    const claim = await prisma.gmbPost.updateMany({
+      where: { id: post.id, tenantId, status: GmbPostStatus.SCHEDULED },
+      data: { status: GmbPostStatus.PUBLISHED },
+    });
+    if (claim.count !== 1) continue; // already claimed by a concurrent run
+
     const location = post.locationLabel
       ? await prisma.gmbLocation.findFirst({
           where: { tenantId, name: post.locationLabel },
