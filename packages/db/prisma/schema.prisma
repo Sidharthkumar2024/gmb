@@ -97,6 +97,22 @@ model SupportTicketMessage {
   @@index([ticketId])
 }
 
+/// Customisable transactional email (Admin → Email templates). `key` names a
+/// known email the platform sends (verification, password reset). When
+/// useCustom is false the built-in default is sent instead — so "editing" an
+/// auth email can never silently break it. Bodies use {{placeholder}} tokens
+/// substituted at send time.
+model EmailTemplate {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  subject         String
+  body            String
+  useCustom       Boolean  @default(false)
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 enum PlanInterval {
   MONTH
   YEAR

@@ -54,6 +54,7 @@ import {
   replyToTicket,
   updateTicket,
 } from "../services/supportTicket.service";
+import { listEmailTemplates, upsertEmailTemplate } from "../services/emailTemplate.service";
 import {
   queueDepth,
   getGmbAutopilotQueue,
@@ -853,6 +854,44 @@ router.delete("/smtp", async (req: RequestWithAuth, res: Response, next: NextFun
       ...extractRequestMeta(req),
     });
     res.json({ success: true, data: { deleted: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Email templates --------------------------------------------------------
+// Customise the transactional emails the platform sends. Overrides are opt-in
+// per template (useCustom); with it off the built-in default is used, so an
+// auth email can't be broken by a bad edit.
+
+router.get("/email-templates", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await listEmailTemplates() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const emailTemplateSchema = z.object({
+  subject: z.string().max(200),
+  body: z.string().max(5000),
+  useCustom: z.boolean(),
+});
+
+router.patch("/email-templates/:key", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = emailTemplateSchema.parse(req.body);
+    const tpl = await upsertEmailTemplate(req.params.key, { ...input, updatedByUserId: req.userId });
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "EmailTemplate",
+      resourceId: req.params.key,
+      newValues: { useCustom: tpl.useCustom },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: tpl });
   } catch (err) {
     next(err);
   }

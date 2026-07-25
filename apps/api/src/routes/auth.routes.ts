@@ -19,6 +19,7 @@ import {
   consumeAuthToken,
 } from "../services/authToken.service";
 import { sendEmail } from "../services/email.service";
+import { renderEmailTemplate } from "../services/emailTemplate.service";
 import { extractRequestMeta } from "../services/audit.service";
 
 const router = Router();
@@ -211,11 +212,12 @@ router.post(
       });
 
       const { token } = await issueAuthToken(user.id, AuthTokenPurpose.EMAIL_VERIFY);
-      await sendEmail({
-        to: normalized,
-        subject: "Verify your email",
-        text: `Welcome to Adgrowly. Verify your email: ${webUrl()}/verify-email?token=${token}`,
-      }).catch((e) => console.error("[auth] verification email failed", e));
+      const verifyMail = await renderEmailTemplate("EMAIL_VERIFICATION", {
+        url: `${webUrl()}/verify-email?token=${token}`,
+      });
+      await sendEmail({ to: normalized, ...verifyMail }).catch((e) =>
+        console.error("[auth] verification email failed", e),
+      );
 
       res.status(201).json({
         success: true,
@@ -322,11 +324,12 @@ router.post(
 
       if (user && !user.emailVerified) {
         const { token } = await issueAuthToken(user.id, AuthTokenPurpose.EMAIL_VERIFY);
-        await sendEmail({
-          to: email,
-          subject: "Verify your email",
-          text: `Verify your email: ${webUrl()}/verify-email?token=${token}`,
-        }).catch((e) => console.error("[auth] verification email failed", e));
+        const mail = await renderEmailTemplate("EMAIL_VERIFICATION", {
+          url: `${webUrl()}/verify-email?token=${token}`,
+        });
+        await sendEmail({ to: email, ...mail }).catch((e) =>
+          console.error("[auth] verification email failed", e),
+        );
       }
 
       // Unconditional success — see request-password-reset.
@@ -352,11 +355,12 @@ router.post(
 
       if (user && user.isActive) {
         const { token } = await issueAuthToken(user.id, AuthTokenPurpose.PASSWORD_RESET);
-        await sendEmail({
-          to: email,
-          subject: "Reset your password",
-          text: `Reset your password: ${webUrl()}/reset-password?token=${token}\n\nIf you didn't request this, ignore this email.`,
-        }).catch((e) => console.error("[auth] reset email failed", e));
+        const mail = await renderEmailTemplate("PASSWORD_RESET", {
+          url: `${webUrl()}/reset-password?token=${token}`,
+        });
+        await sendEmail({ to: email, ...mail }).catch((e) =>
+          console.error("[auth] reset email failed", e),
+        );
       }
 
       // Identical response whether or not the address exists — the difference
