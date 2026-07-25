@@ -10,6 +10,9 @@ import {
   SecretScope,
   PlanInterval,
   PlanStatus,
+  TicketStatus,
+  TicketPriority,
+  TicketAuthor,
 } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { requireAuth, type RequestWithAuth } from "../middleware/auth";
@@ -45,6 +48,12 @@ import {
   deletePlan,
   assignPlan,
 } from "../services/plan.service";
+import {
+  listTickets,
+  getTicket,
+  replyToTicket,
+  updateTicket,
+} from "../services/supportTicket.service";
 import {
   queueDepth,
   getGmbAutopilotQueue,
@@ -949,6 +958,80 @@ router.delete("/plans/:id", async (req: RequestWithAuth, res: Response, next: Ne
       ...extractRequestMeta(req),
     });
     res.json({ success: true, data: { id: req.params.id } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Support tickets (admin side) -------------------------------------------
+// Staff see every workspace's tickets and reply as STAFF. Reads span all
+// tenants (tenantId null); replies/status changes are audited.
+
+router.get("/tickets", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const status =
+      typeof req.query.status === "string" && req.query.status in TicketStatus
+        ? (req.query.status as TicketStatus)
+        : undefined;
+    res.json({ success: true, data: await listTickets({ status }) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/tickets/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getTicket(req.params.id, null) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const adminReplySchema = z.object({ body: z.string().min(1).max(5000) });
+
+router.post("/tickets/:id/reply", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { body } = adminReplySchema.parse(req.body);
+    const ticket = await replyToTicket({
+      ticketId: req.params.id,
+      tenantId: null,
+      author: TicketAuthor.STAFF,
+      authorUserId: req.userId,
+      body,
+    });
+    await logAudit({
+      tenantId: ticket.tenantId,
+      userId: req.userId!,
+      action: "REPLY",
+      resource: "SupportTicket",
+      resourceId: ticket.id,
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: ticket });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const ticketPatchSchema = z.object({
+  status: z.nativeEnum(TicketStatus).optional(),
+  priority: z.nativeEnum(TicketPriority).optional(),
+});
+
+router.patch("/tickets/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const patch = ticketPatchSchema.parse(req.body);
+    const ticket = await updateTicket(req.params.id, patch);
+    await logAudit({
+      tenantId: ticket.tenantId,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "SupportTicket",
+      resourceId: ticket.id,
+      newValues: { status: ticket.status, priority: ticket.priority },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: ticket });
   } catch (err) {
     next(err);
   }

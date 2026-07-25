@@ -37,6 +37,10 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string }> }
       { href: "/admin/audit", name: "Audit log" },
     ],
   },
+  {
+    label: "Support",
+    items: [{ href: "/admin/support", name: "Tickets" }],
+  },
 ];
 
 export function AdminShell({ title, children }: { title: string; children: React.ReactNode }) {

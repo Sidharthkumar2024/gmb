@@ -4,6 +4,13 @@ import { prisma } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { requireAuth, requireTenantScope, type RequestWithAuth } from "../middleware/auth";
 import { getTenantPlan } from "../services/plan.service";
+import { TicketPriority, TicketAuthor } from "@nexaflow/db";
+import {
+  createTicket,
+  listTickets,
+  getTicket,
+  replyToTicket,
+} from "../services/supportTicket.service";
 
 // Workspace-level endpoints the app shell calls on every page load: language,
 // currency, wallet balance and product access.
@@ -204,6 +211,66 @@ router.get("/customer/wallets", async (req: RequestWithAuth, res: Response, next
 router.get("/customer/plan", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await getTenantPlan(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Support tickets (customer side) ----------------------------------------
+// The workspace raises tickets and talks to platform staff. Everything here is
+// tenant-scoped: a customer only ever sees their own workspace's tickets.
+
+router.get("/support/tickets", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await listTickets({ tenantId: req.tenantId! }) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const createTicketSchema = z.object({
+  subject: z.string().min(1).max(160),
+  body: z.string().min(1).max(5000),
+  priority: z.nativeEnum(TicketPriority).optional(),
+});
+
+router.post("/support/tickets", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = createTicketSchema.parse(req.body);
+    const ticket = await createTicket({
+      tenantId: req.tenantId!,
+      createdByUserId: req.userId,
+      subject: input.subject,
+      body: input.body,
+      priority: input.priority,
+    });
+    res.status(201).json({ success: true, data: ticket });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/support/tickets/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getTicket(req.params.id, req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const replySchema = z.object({ body: z.string().min(1).max(5000) });
+
+router.post("/support/tickets/:id/reply", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { body } = replySchema.parse(req.body);
+    const ticket = await replyToTicket({
+      ticketId: req.params.id,
+      tenantId: req.tenantId!,
+      author: TicketAuthor.CUSTOMER,
+      authorUserId: req.userId,
+      body,
+    });
+    res.json({ success: true, data: ticket });
   } catch (err) {
     next(err);
   }

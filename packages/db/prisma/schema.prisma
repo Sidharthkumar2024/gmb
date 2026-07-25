@@ -37,6 +37,66 @@ enum TenantStatus {
   DELETED
 }
 
+enum TicketStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+/// Author side of a ticket message — who the workspace talks to is platform
+/// staff (SUPER_ADMIN). CUSTOMER = the workspace user, STAFF = the operator.
+enum TicketAuthor {
+  CUSTOMER
+  STAFF
+}
+
+/// Support ticket raised by a workspace (Suite "My tickets" / Admin "Tickets").
+model SupportTicket {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdByUserId String?
+
+  subject  String
+  status   TicketStatus   @default(OPEN)
+  priority TicketPriority @default(NORMAL)
+
+  // Denormalised for cheap list rendering without loading the thread.
+  lastReplyAt DateTime     @default(now())
+  lastReplyBy TicketAuthor @default(CUSTOMER)
+
+  messages SupportTicketMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([status])
+}
+
+model SupportTicketMessage {
+  id       String        @id @default(cuid())
+  ticketId String
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  author       TicketAuthor
+  authorUserId String?
+  body         String
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+}
+
 enum PlanInterval {
   MONTH
   YEAR
@@ -142,6 +202,7 @@ model Tenant {
   gmbDescriptions    GmbDescription[]
   gmbAdvisorReports  GmbAdvisorReport[]
   gmbImageRequests   GmbImageRequest[]
+  supportTickets     SupportTicket[]
   // GmbReportSchedule and GmbAutopilotConfig are deliberately absent: both are
   // one-row-per-tenant configs keyed by `tenantId @unique` with no declared FK
   // relation in the source schema. Adding back-relations here would require
