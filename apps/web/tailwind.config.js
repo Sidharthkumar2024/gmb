@@ -60,6 +60,20 @@ module.exports = {
           ok: "#7dd8a0",
           hero: "#241d3f",
         },
+        // Partner Portal (white-label reseller) — dark green theme per the
+        // Partner Portal design; distinct from the purple admin console.
+        ptn: {
+          bg: "#16141f",
+          panel: "#1d1a29",
+          "panel-hover": "#211e2e",
+          line: "#2c2839",
+          ink: "#edecf4",
+          muted: "#9894a8",
+          subtle: "#6b6880",
+          accent: "#7dd8a0",
+          "accent-hover": "#a5e8bf",
+          danger: "#e58c7f",
+        },
         // Nexa design system primary (indigo/violet, Adgrowly panel style).
         // Driven by CSS variables so white-label partners can re-theme at
         // runtime by overriding --nx-primary-* (see globals.css :root).

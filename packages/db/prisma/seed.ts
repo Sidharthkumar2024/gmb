@@ -61,6 +61,47 @@ async function main() {
   });
   console.log(`✓ super admin ${superUser.email}`);
 
+  // A white-label partner (reseller) with two customer tenants beneath it, so
+  // the Partner Portal has real customers to list. Child tenants use
+  // parentTenantId; the partner's user is WHITE_LABEL_ADMIN.
+  const PARTNER_EMAIL = process.env.SEED_PARTNER_EMAIL ?? "partner@adgrowly.local";
+  const PARTNER_PASSWORD = process.env.SEED_PARTNER_PASSWORD ?? "Partner@1234";
+  const partnerTenant = await prisma.tenant.upsert({
+    where: { slug: "growlabs" },
+    update: {},
+    create: { name: "GrowLabs Agency", slug: "growlabs", type: "WHITE_LABEL" },
+  });
+  const partnerUser = await prisma.user.upsert({
+    where: { email: PARTNER_EMAIL },
+    update: {},
+    create: {
+      tenantId: partnerTenant.id,
+      email: PARTNER_EMAIL,
+      name: "GrowLabs Owner",
+      password: await bcrypt.hash(PARTNER_PASSWORD, 10),
+      role: "WHITE_LABEL_ADMIN",
+    },
+  });
+  console.log(`✓ partner ${partnerUser.email}`);
+
+  for (const [slug, name, city] of [
+    ["growlabs-bloor-physio", "Bloor Physio", "Toronto"],
+    ["growlabs-casa-nonna", "Casa Nonna Trattoria", "Toronto"],
+  ] as const) {
+    const child = await prisma.tenant.upsert({
+      where: { slug },
+      update: {},
+      create: { name, slug, parentTenantId: partnerTenant.id },
+    });
+    const hasLoc = await prisma.gmbLocation.findFirst({ where: { tenantId: child.id } });
+    if (!hasLoc) {
+      await prisma.gmbLocation.create({
+        data: { tenantId: child.id, name: `${name} — ${city}`, city },
+      });
+    }
+  }
+  console.log("✓ 2 partner customers seeded");
+
   // Example plan catalog. Limits are enforced (see plan.service); price is
   // display-only until a payment gateway exists. Upserted by slug so re-seeding
   // is idempotent.

@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth.routes";
 import gmbRoutes from "./routes/gmb.routes";
 import workspaceRoutes from "./routes/workspace.routes";
 import adminRoutes from "./routes/admin.routes";
+import partnerRoutes from "./routes/partner.routes";
 import {
   primeGoogleOAuthCache,
   getCachedGoogleClientConfig,
@@ -62,6 +63,7 @@ app.get("/api/v1/health", async (_req, res) => {
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/gmb", gmbRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/partner", partnerRoutes);
 // Mounted at the version root: these paths are /language-settings,
 // /currency-settings, /customer/wallets and /products/customer-access.
 app.use("/api/v1", workspaceRoutes);

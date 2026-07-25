@@ -69,5 +69,7 @@ export function useAuth(opts: { required?: boolean; roles?: RoleName[] } = {}) {
  * /partner/dashboard and /agent/home do not exist here and would 404.
  */
 export function roleHome(role: UserRole): string {
-  return role === "SUPER_ADMIN" ? "/admin" : "/gmb-dashboard";
+  if (role === "SUPER_ADMIN") return "/admin";
+  if (role === "WHITE_LABEL_ADMIN") return "/partner";
+  return "/gmb-dashboard";
 }
