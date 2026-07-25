@@ -27,10 +27,14 @@ function sweep(now: number): void {
 }
 
 function clientKey(req: RequestWithAuth): string {
-  const forwarded = (req.headers["x-forwarded-for"] as string | undefined)
-    ?.split(",")[0]
-    ?.trim();
-  return forwarded ?? req.ip ?? req.socket.remoteAddress ?? "unknown";
+  // Use Express's resolved `req.ip`, which honours the app's `trust proxy`
+  // setting (configured in index.ts). Reading `X-Forwarded-For` directly — and
+  // taking its leftmost value — trusts a client-supplied, spoofable header:
+  // an attacker could send a fresh XFF per request, land each in a brand-new
+  // bucket, and nullify the login / password-reset throttles entirely (and
+  // inflate the bucket Map without bound). `req.ip` is only proxy-derived when
+  // we've explicitly opted into trusting that many proxy hops.
+  return req.ip ?? req.socket.remoteAddress ?? "unknown";
 }
 
 export interface RateLimitOptions {

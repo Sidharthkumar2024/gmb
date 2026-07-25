@@ -48,11 +48,24 @@ export const errorHandler = (
     typeof maybeStatus === "number" &&
     /anthropic|claude/i.test(err.message ?? "");
   if (looksLikeAnthropic) {
-    res.status(maybeStatus).json({
+    // Clamp to a valid HTTP error status. A provider can carry a non-standard
+    // status (e.g. 0 or >599) that would make res.status() throw RangeError
+    // *inside* this handler — turning a handled error into an unhandled one.
+    const status =
+      Number.isInteger(maybeStatus) && maybeStatus >= 400 && maybeStatus <= 599
+        ? maybeStatus
+        : 502;
+    res.status(status).json({
       success: false,
       error: {
-        code: maybeStatus === 401 ? ErrorCodes.UNAUTHORIZED : ErrorCodes.BAD_REQUEST,
-        message: `AI provider error: ${err.message}`,
+        code: status === 401 ? ErrorCodes.UNAUTHORIZED : ErrorCodes.BAD_REQUEST,
+        // Never echo the raw provider message to the client in production — it
+        // can embed model ids, org identifiers, request context, or prompt
+        // fragments. Mirror the 500 branch's prod/dev split below.
+        message:
+          process.env.NODE_ENV === "production"
+            ? "AI provider error. Please try again."
+            : `AI provider error: ${err.message}`,
       },
     });
     return;

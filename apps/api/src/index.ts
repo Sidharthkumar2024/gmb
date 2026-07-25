@@ -34,6 +34,14 @@ import {
 const app = express();
 const PORT = Number(process.env.API_PORT ?? 3001);
 
+// Trust the reverse proxy only as far as explicitly configured, so `req.ip`
+// reflects the real client for rate limiting. Default 0 = trust nothing, so a
+// spoofed X-Forwarded-For can't influence req.ip; set TRUST_PROXY_HOPS to the
+// number of proxies in front of the API in production (e.g. 1 for a single
+// nginx/ELB) so the real client IP is used instead of the proxy's.
+const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
+app.set("trust proxy", Number.isFinite(trustProxyHops) ? trustProxyHops : 0);
+
 app.use(helmet());
 app.use(
   cors({

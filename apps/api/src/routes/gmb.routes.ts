@@ -575,7 +575,11 @@ const oauthUrlSchema = z.object({
 const oauthExchangeSchema = z.object({
   code: z.string().trim().min(1).max(5000),
   redirectUri: z.string().url().max(800),
-  state: z.string().trim().max(2000).optional(),
+  // Required: `state` binds the callback to the tenant/user that started the
+  // flow (anti-CSRF / session binding). Making it optional let a caller skip
+  // the binding check entirely, so an attacker-obtained `code` could be planted
+  // onto the session. The real OAuth flow always round-trips state from Google.
+  state: z.string().trim().min(1).max(2000),
   label: z.string().trim().min(1).max(120).optional(),
 });
 
@@ -624,15 +628,13 @@ router.get("/google/oauth-url", async (req: RequestWithAuth, res: Response, next
 router.post("/google/oauth/exchange", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     const body = oauthExchangeSchema.parse(req.body);
-    if (body.state) {
-      const state = verifyGoogleOAuthState(body.state);
-      if (state.tenantId !== req.tenantId! || state.userId !== req.userId!) {
-        throw new ApiError(
-          ErrorCodes.BAD_REQUEST,
-          400,
-          "Google OAuth state does not match the current session.",
-        );
-      }
+    const state = verifyGoogleOAuthState(body.state);
+    if (state.tenantId !== req.tenantId! || state.userId !== req.userId!) {
+      throw new ApiError(
+        ErrorCodes.BAD_REQUEST,
+        400,
+        "Google OAuth state does not match the current session.",
+      );
     }
     const secret = await exchangeGoogleOAuthCode({
       tenantId: req.tenantId!,

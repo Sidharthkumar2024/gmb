@@ -149,6 +149,11 @@ export function GmbShell({
   useEffect(() => {
     if (!activeId) return;
     window.localStorage.setItem("gmb_active_location", activeId);
+    // Notify same-tab consumers (useActiveLocationId) — `storage` doesn't fire
+    // in the writing tab, so without this the location-scoped pages that rely
+    // solely on the hook (dashboard, Q&A, reviews, review link, descriptions)
+    // keep showing the previously-selected location until a full reload.
+    window.dispatchEvent(new Event(ACTIVE_LOCATION_EVENT));
     let cancelled = false;
     void api
       .get<{ businessScore?: number | null; grade?: string | null }>(
@@ -416,11 +421,28 @@ export function GmbShell({
   );
 }
 
-/** The active location id, for screens that need to scope their reads. */
+/** Broadcast an active-location change to same-tab listeners. `storage` events
+ *  don't fire in the tab that made the write, so pages using useActiveLocationId
+ *  would otherwise never learn the sidebar switcher changed the location. */
+export const ACTIVE_LOCATION_EVENT = "gmb:active-location-change";
+
+/** The active location id, for screens that need to scope their reads.
+ *  Re-reads whenever the sidebar switcher changes it (same-tab custom event)
+ *  or another tab changes it (`storage` event) — not just once on mount. */
 export function useActiveLocationId(): string {
   const [id, setId] = useState("");
   useEffect(() => {
-    setId(window.localStorage.getItem("gmb_active_location") ?? "");
+    const read = () => setId(window.localStorage.getItem("gmb_active_location") ?? "");
+    read();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "gmb_active_location") read();
+    };
+    window.addEventListener(ACTIVE_LOCATION_EVENT, read);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(ACTIVE_LOCATION_EVENT, read);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
   return id;
 }

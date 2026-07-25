@@ -159,6 +159,14 @@ export async function evaluateRankAlerts(
     });
     const previousRank = prior.length > 0 ? prior[0].rank : undefined;
 
+    // keywordId is constant across the loop, so fetch the keyword name once
+    // rather than re-querying it for every triggering rule (N+1 on the hot
+    // snapshot-write path).
+    const kw = await prisma.gmbTrackedKeyword.findUnique({
+      where: { id: keywordId },
+      select: { keyword: true },
+    });
+
     for (const rule of rules) {
       if (
         !shouldTriggerRankAlert({
@@ -169,10 +177,6 @@ export async function evaluateRankAlerts(
       ) {
         continue;
       }
-      const kw = await prisma.gmbTrackedKeyword.findUnique({
-        where: { id: keywordId },
-        select: { keyword: true },
-      });
       await prisma.gmbRankAlertRule.update({
         where: { id: rule.id },
         data: { lastTriggeredAt: new Date(), lastTriggeredRank: currentRank },
