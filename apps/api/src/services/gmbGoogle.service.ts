@@ -695,17 +695,32 @@ export async function syncGoogleReviewsForLocation(tenantId: string, locationId:
       operation: "GBP_LIST_REVIEWS",
       url: `${MY_BUSINESS_BASE}/${location.placeId}/reviews?${qs.toString()}`,
     });
-    for (const raw of body.reviews ?? []) {
+    const page = body.reviews ?? [];
+    // Batch the existence check: one query for every externalReviewId on this
+    // page instead of a findFirst per review (N+1). With hundreds of reviews
+    // per location and up to 200 locations per auto-sync sweep, the per-review
+    // SELECT was the dominant cost on this path.
+    const pageExternalIds = page
+      .map((r) => r.reviewId ?? r.name ?? null)
+      .filter((x): x is string => Boolean(x));
+    const existingRows = pageExternalIds.length
+      ? await prisma.gmbReview.findMany({
+          where: { tenantId, locationId, externalReviewId: { in: pageExternalIds } },
+          select: { id: true, externalReviewId: true },
+        })
+      : [];
+    const existingIdByExtId = new Map(
+      existingRows.map((r) => [r.externalReviewId, r.id] as const),
+    );
+
+    for (const raw of page) {
       const rating = mapGoogleStarRating(raw.starRating);
       if (!rating) continue;
       reviews.push({ rating });
       const externalReviewId = raw.reviewId ?? raw.name ?? null;
-      const existing = externalReviewId
-        ? await prisma.gmbReview.findFirst({
-            where: { tenantId, locationId, externalReviewId },
-            select: { id: true },
-          })
-        : null;
+      const existingId = externalReviewId
+        ? existingIdByExtId.get(externalReviewId)
+        : undefined;
       const data = {
         rating,
         authorName: raw.reviewer?.displayName ?? null,
@@ -720,8 +735,8 @@ export async function syncGoogleReviewsForLocation(tenantId: string, locationId:
             }
           : {}),
       };
-      if (existing) {
-        await prisma.gmbReview.update({ where: { id: existing.id }, data });
+      if (existingId) {
+        await prisma.gmbReview.update({ where: { id: existingId }, data });
         updated += 1;
       } else {
         await prisma.gmbReview.create({
