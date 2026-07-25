@@ -19,6 +19,7 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string }> }
       { href: "/partner", name: "Dashboard" },
       { href: "/partner/branding", name: "White-label" },
       { href: "/partner/team", name: "Team" },
+      { href: "/partner/support", name: "Tickets" },
     ],
   },
 ];
