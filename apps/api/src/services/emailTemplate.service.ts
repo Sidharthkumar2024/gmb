@@ -40,6 +40,15 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
     defaultBody:
       "Reset your password: {{url}}\n\nIf you didn't request this, ignore this email.",
   },
+  {
+    key: "STAFF_INVITE",
+    name: "Staff invite",
+    description: "Sent when a partner or admin invites a team member.",
+    placeholders: ["inviter", "url"],
+    defaultSubject: "You've been invited to Adgrowly",
+    defaultBody:
+      "{{inviter}} invited you to their Adgrowly workspace.\n\nSet your password to get started: {{url}}",
+  },
 ];
 
 const BY_KEY = new Map(EMAIL_TEMPLATES.map((t) => [t.key, t]));

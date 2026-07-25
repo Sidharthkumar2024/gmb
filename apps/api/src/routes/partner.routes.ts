@@ -2,7 +2,16 @@ import { Router, type NextFunction, type Response } from "express";
 import { z } from "zod";
 import { requireAuth, type RequestWithAuth } from "../middleware/auth";
 import { requireRole } from "../middleware/rbac";
-import { getPartnerOverview, getBranding, saveBranding } from "../services/partner.service";
+import {
+  getPartnerOverview,
+  getBranding,
+  saveBranding,
+  listTeam,
+  inviteStaff,
+  setStaffRole,
+  removeStaff,
+} from "../services/partner.service";
+import { UserRole } from "@nexaflow/db";
 
 // Partner (white-label reseller) portal API. Every route is a WHITE_LABEL_ADMIN
 // acting within their own tenant, so req.tenantId is the partner tenant and its
@@ -42,6 +51,56 @@ router.put("/branding", async (req: RequestWithAuth, res: Response, next: NextFu
   try {
     const input = brandingSchema.parse(req.body);
     res.json({ success: true, data: await saveBranding(req.tenantId!, { ...input, updatedByUserId: req.userId }) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Team -------------------------------------------------------------------
+
+const staffRoleSchema = z.enum([UserRole.WHITE_LABEL_ADMIN, UserRole.AGENT]);
+
+router.get("/team", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await listTeam(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const inviteSchema = z.object({
+  email: z.string().email().max(255),
+  name: z.string().max(120).optional(),
+  role: staffRoleSchema,
+});
+
+router.post("/team/invite", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = inviteSchema.parse(req.body);
+    const result = await inviteStaff({
+      partnerTenantId: req.tenantId!,
+      invitedByUserId: req.userId!,
+      ...input,
+    });
+    res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch("/team/:id/role", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { role } = z.object({ role: staffRoleSchema }).parse(req.body);
+    res.json({ success: true, data: await setStaffRole(req.tenantId!, req.userId!, req.params.id, role) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/team/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    await removeStaff(req.tenantId!, req.userId!, req.params.id);
+    res.json({ success: true, data: { id: req.params.id } });
   } catch (err) {
     next(err);
   }
