@@ -1,7 +1,8 @@
 import { Router, type NextFunction, type Response } from "express";
+import { z } from "zod";
 import { requireAuth, type RequestWithAuth } from "../middleware/auth";
 import { requireRole } from "../middleware/rbac";
-import { getPartnerOverview } from "../services/partner.service";
+import { getPartnerOverview, getBranding, saveBranding } from "../services/partner.service";
 
 // Partner (white-label reseller) portal API. Every route is a WHITE_LABEL_ADMIN
 // acting within their own tenant, so req.tenantId is the partner tenant and its
@@ -14,6 +15,33 @@ router.use(requireAuth, requireRole("WHITE_LABEL_ADMIN"));
 router.get("/overview", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await getPartnerOverview(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- White-label branding ---------------------------------------------------
+
+router.get("/branding", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getBranding(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const brandingSchema = z.object({
+  brandName: z.string().max(80).nullable().optional(),
+  customDomain: z.string().max(255).nullable().optional(),
+  brandColorHex: z.string().max(7).optional(),
+  logoUrl: z.string().url().max(500).nullable().optional(),
+  hidePoweredBy: z.boolean().optional(),
+});
+
+router.put("/branding", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = brandingSchema.parse(req.body);
+    res.json({ success: true, data: await saveBranding(req.tenantId!, { ...input, updatedByUserId: req.userId }) });
   } catch (err) {
     next(err);
   }

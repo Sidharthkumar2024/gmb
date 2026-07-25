@@ -97,6 +97,27 @@ model SupportTicketMessage {
   @@index([ticketId])
 }
 
+/// White-label branding for a partner (reseller) tenant — the "resell under
+/// your own brand" config from the Partner Portal. Domain purchase / DNS
+/// provisioning is external, so `customDomain` is stored with a verified flag
+/// the operator sets once DNS is pointed, rather than faking a registrar flow.
+model WhiteLabelConfig {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  brandName     String?
+  customDomain  String?
+  domainVerified Boolean @default(false)
+  brandColorHex String  @default("#5a4af0")
+  logoUrl       String?
+  hidePoweredBy Boolean @default(false)
+
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 /// Customisable transactional email (Admin → Email templates). `key` names a
 /// known email the platform sends (verification, password reset). When
 /// useCustom is false the built-in default is sent instead — so "editing" an
@@ -219,6 +240,7 @@ model Tenant {
   gmbAdvisorReports  GmbAdvisorReport[]
   gmbImageRequests   GmbImageRequest[]
   supportTickets     SupportTicket[]
+  whiteLabelConfig   WhiteLabelConfig?
   // GmbReportSchedule and GmbAutopilotConfig are deliberately absent: both are
   // one-row-per-tenant configs keyed by `tenantId @unique` with no declared FK
   // relation in the source schema. Adding back-relations here would require

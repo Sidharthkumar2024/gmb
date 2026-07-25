@@ -15,7 +15,10 @@ import { useAuth } from "../../hooks/useAuth";
 const NAV: Array<{ label: string; items: Array<{ href: string; name: string }> }> = [
   {
     label: "Business",
-    items: [{ href: "/partner", name: "Dashboard" }],
+    items: [
+      { href: "/partner", name: "Dashboard" },
+      { href: "/partner/branding", name: "White-label" },
+    ],
   },
 ];
 
