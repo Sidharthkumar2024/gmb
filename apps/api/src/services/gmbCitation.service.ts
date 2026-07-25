@@ -216,6 +216,8 @@ export async function listCitations(tenantId: string, filter: ListCitationsFilte
       ...(filter.status ? { status: filter.status } : {}),
     },
     orderBy: { directory: "asc" },
+    // Defensive cap — unpaginated list; bound to at most 500 citations.
+    take: 500,
     include: { location: { select: LOCATION_NAP_SELECT } },
   });
   return rows.map((row) => toSafeCitation(row, canonicalNap(row.location)));

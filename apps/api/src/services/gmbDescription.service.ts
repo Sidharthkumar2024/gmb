@@ -297,6 +297,8 @@ export async function listDescriptions(tenantId: string, filter: ListDescription
       ...(filter.target ? { target: filter.target } : {}),
     },
     orderBy: { createdAt: "desc" },
+    // Defensive cap — unpaginated list; bound to the most recent 500 rows.
+    take: 500,
   });
   return rows.map(toSafeDescription);
 }

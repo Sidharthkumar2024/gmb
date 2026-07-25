@@ -171,6 +171,8 @@ export async function listKeywords(tenantId: string, filter: ListKeywordsFilter 
       ...(filter.activeOnly ? { isActive: true } : {}),
     },
     orderBy: { createdAt: "desc" },
+    // Defensive cap — unpaginated list; bound to the most recent 500 keywords.
+    take: 500,
     include: {
       snapshots: { orderBy: { checkedAt: "desc" }, take: 1, select: { rank: true, checkedAt: true } },
     },

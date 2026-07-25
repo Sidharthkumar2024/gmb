@@ -221,6 +221,9 @@ export async function listReviews(tenantId: string, filter: ListReviewsFilter = 
       ...(filter.status ? { status: filter.status } : {}),
     },
     orderBy: [{ reviewedAt: "desc" }, { createdAt: "desc" }],
+    // Defensive cap — this list has no pagination, so bound the result set to
+    // the most recent 500 rather than let a large tenant pull everything.
+    take: 500,
   });
   return rows.map(toSafeReview);
 }

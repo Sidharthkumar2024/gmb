@@ -73,6 +73,8 @@ export async function listLocations(tenantId: string, status?: GmbLocationStatus
   const rows = await prisma.gmbLocation.findMany({
     where: { tenantId, ...(status ? { status } : {}) },
     orderBy: { createdAt: "desc" },
+    // Defensive cap — unpaginated list; bound to the most recent 500 locations.
+    take: 500,
   });
   return rows.map(toSafeLocation);
 }

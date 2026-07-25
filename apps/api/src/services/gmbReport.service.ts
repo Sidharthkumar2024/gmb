@@ -376,6 +376,8 @@ export async function listReports(tenantId: string, filter: ListReportsFilter = 
       ...(filter.type ? { type: filter.type } : {}),
     },
     orderBy: { createdAt: "desc" },
+    // Defensive cap — unpaginated list; bound to the most recent 500 reports.
+    take: 500,
   });
   return rows.map(toSafeReport);
 }
