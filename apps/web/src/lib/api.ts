@@ -114,9 +114,42 @@ async function request<T>(path: string, opts: FetchOpts = {}): Promise<T> {
   return parsed.data as T;
 }
 
+// In-flight GET de-duplication. The shell and each page independently fetch
+// shared reads (/auth/me, /gmb/locations, /gmb/dashboard) on the same mount, so
+// a single screen load fires each of them 2–3× concurrently. Coalescing
+// identical concurrent GETs into one shared promise collapses those duplicates
+// — halving round-trips on every navigation. The entry is dropped as soon as
+// the request settles, so this only ever shares *concurrent* calls; it never
+// serves stale data across time. Only plain authed/unauthed GETs are shared —
+// anything with custom headers, a body, or an abort signal bypasses it, since
+// those can differ between callers or be cancelled independently.
+const inflightGets = new Map<string, Promise<unknown>>();
+
+function canShare(opts: FetchOpts): boolean {
+  return (
+    !opts.headers &&
+    opts.json === undefined &&
+    opts.body === undefined &&
+    !opts.signal
+  );
+}
+
+function dedupedGet<T>(path: string, opts: FetchOpts = {}): Promise<T> {
+  if (!canShare(opts)) {
+    return request<T>(path, { ...opts, method: "GET" });
+  }
+  const key = `${opts.auth === false ? "0" : "1"}:${path}`;
+  const existing = inflightGets.get(key) as Promise<T> | undefined;
+  if (existing) return existing;
+  const p = request<T>(path, { ...opts, method: "GET" }).finally(() => {
+    inflightGets.delete(key);
+  });
+  inflightGets.set(key, p as Promise<unknown>);
+  return p;
+}
+
 export const api = {
-  get: <T>(path: string, opts: FetchOpts = {}) =>
-    request<T>(path, { ...opts, method: "GET" }),
+  get: <T>(path: string, opts: FetchOpts = {}) => dedupedGet<T>(path, opts),
   post: <T>(path: string, body?: unknown, opts: FetchOpts = {}) =>
     request<T>(path, { ...opts, method: "POST", json: body }),
   put: <T>(path: string, body?: unknown, opts: FetchOpts = {}) =>
