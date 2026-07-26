@@ -303,3 +303,79 @@ export async function removeStaff(
     }),
   ]);
 }
+
+// --- Customer Google connections --------------------------------------------
+//
+// Which of the partner's customers have linked Google Business Profile. Each
+// customer's connection is a CUSTOMER-scope vault secret on their own tenant;
+// this reads status only (never material) in two batch queries. The platform
+// OAuth client itself is admin-owned and deliberately not shown here.
+
+export interface CustomerGoogleStatus {
+  tenantId: string;
+  name: string;
+  connected: boolean;
+  accountName: string | null;
+  connectedAt: string | null;
+  lastSyncedAt: Date | null;
+  locations: number;
+}
+
+export async function getCustomerGoogleStatus(
+  partnerTenantId: string,
+): Promise<CustomerGoogleStatus[]> {
+  const children = await prisma.tenant.findMany({
+    where: { parentTenantId: partnerTenantId },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+    select: { id: true, name: true, _count: { select: { gmbLocations: true } } },
+  });
+  if (children.length === 0) return [];
+  const ids = children.map((c) => c.id);
+
+  const [secrets, syncs] = await Promise.all([
+    prisma.secretVaultEntry.findMany({
+      where: {
+        tenantId: { in: ids },
+        scope: "CUSTOMER",
+        provider: "GOOGLE_BUSINESS_PROFILE",
+        status: "ACTIVE",
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { tenantId: true, metadata: true },
+    }),
+    prisma.gmbLocation.groupBy({
+      by: ["tenantId"],
+      where: { tenantId: { in: ids } },
+      _max: { lastSyncedAt: true },
+    }),
+  ]);
+
+  const secretByTenant = new Map<string, unknown>();
+  for (const s of secrets) {
+    // newest-first ordering means the first seen per tenant wins
+    if (s.tenantId && !secretByTenant.has(s.tenantId)) {
+      let meta: Record<string, unknown> = {};
+      try {
+        meta = s.metadata ? (JSON.parse(s.metadata) as Record<string, unknown>) : {};
+      } catch {
+        // metadata is display-only; a parse failure just means no extra detail
+      }
+      secretByTenant.set(s.tenantId, meta);
+    }
+  }
+  const syncByTenant = new Map(syncs.map((s) => [s.tenantId, s._max.lastSyncedAt]));
+
+  return children.map((c) => {
+    const meta = secretByTenant.get(c.id) as Record<string, unknown> | undefined;
+    return {
+      tenantId: c.id,
+      name: c.name,
+      connected: secretByTenant.has(c.id),
+      accountName: typeof meta?.accountName === "string" ? meta.accountName : null,
+      connectedAt: typeof meta?.connectedAt === "string" ? meta.connectedAt : null,
+      lastSyncedAt: syncByTenant.get(c.id) ?? null,
+      locations: c._count.gmbLocations,
+    };
+  });
+}

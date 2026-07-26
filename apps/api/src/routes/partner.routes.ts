@@ -10,6 +10,7 @@ import {
   inviteStaff,
   setStaffRole,
   removeStaff,
+  getCustomerGoogleStatus,
 } from "../services/partner.service";
 import { UserRole } from "@nexaflow/db";
 
@@ -101,6 +102,16 @@ router.delete("/team/:id", async (req: RequestWithAuth, res: Response, next: Nex
   try {
     await removeStaff(req.tenantId!, req.userId!, req.params.id);
     res.json({ success: true, data: { id: req.params.id } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Customer Google connections --------------------------------------------
+
+router.get("/google", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getCustomerGoogleStatus(req.tenantId!) });
   } catch (err) {
     next(err);
   }
