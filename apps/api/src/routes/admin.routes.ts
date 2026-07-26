@@ -58,6 +58,7 @@ import {
 import { listEmailTemplates, upsertEmailTemplate } from "../services/emailTemplate.service";
 import { getGatewayStatus, setActiveProvider } from "../services/paymentGateway.service";
 import { listPayments } from "../services/payment.service";
+import { listInvoices, getInvoice } from "../services/invoice.service";
 import {
   queueDepth,
   getGmbAutopilotQueue,
@@ -900,6 +901,27 @@ router.get("/transactions", async (req: RequestWithAuth, res: Response, next: Ne
         createdAt: r.createdAt,
       })),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Invoices ---------------------------------------------------------------
+// Derived one-per-payment (see invoice.service). List + printable detail.
+
+router.get("/invoices", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await listInvoices() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/invoices/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const invoice = await getInvoice(req.params.id);
+    if (!invoice) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Invoice not found.");
+    res.json({ success: true, data: invoice });
   } catch (err) {
     next(err);
   }
