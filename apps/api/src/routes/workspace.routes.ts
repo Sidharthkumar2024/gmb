@@ -1,8 +1,9 @@
 import { Router, type NextFunction, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "@nexaflow/db";
-import { ApiError, ErrorCodes } from "@nexaflow/shared";
+import { ApiError, ErrorCodes, Permissions, UserRole } from "@nexaflow/shared";
 import { requireAuth, requireTenantScope, type RequestWithAuth } from "../middleware/auth";
+import { requirePermission, requireRole } from "../middleware/rbac";
 import { getTenantPlan } from "../services/plan.service";
 import { TicketPriority, TicketAuthor } from "@nexaflow/db";
 import {
@@ -74,7 +75,7 @@ const languagePatch = z.object({
   locale: z.string().optional(),
 });
 
-router.patch("/language-settings", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+router.patch("/language-settings", requireRole(UserRole.SUPER_ADMIN, UserRole.WHITE_LABEL_ADMIN, UserRole.BUSINESS_ADMIN), async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     const parsed = languagePatch.safeParse(req.body);
     if (!parsed.success) {
@@ -144,7 +145,7 @@ const currencyPatch = z.object({
   locale: z.string().optional(),
 });
 
-router.patch("/currency-settings", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+router.patch("/currency-settings", requireRole(UserRole.SUPER_ADMIN, UserRole.WHITE_LABEL_ADMIN, UserRole.BUSINESS_ADMIN), async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     const parsed = currencyPatch.safeParse(req.body);
     if (!parsed.success) {
@@ -172,7 +173,7 @@ router.patch("/currency-settings", async (req: RequestWithAuth, res: Response, n
 
 // --- wallet -----------------------------------------------------------------
 
-router.get("/customer/wallets", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+router.get("/customer/wallets", requirePermission(Permissions.WALLET_VIEW), async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     const wallets = await prisma.wallet.findMany({
       where: { tenantId: req.tenantId! },
@@ -280,7 +281,7 @@ router.post("/support/tickets/:id/reply", async (req: RequestWithAuth, res: Resp
 // Read-only spend history for the billing page. AiUsage rows are written by the
 // AI gateway after each call; this just reports them. No money moves here.
 
-router.get("/customer/ai-usage", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+router.get("/customer/ai-usage", requirePermission(Permissions.BILLING_VIEW), async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     const rows = await prisma.aiUsage.findMany({
       where: { tenantId: req.tenantId! },
