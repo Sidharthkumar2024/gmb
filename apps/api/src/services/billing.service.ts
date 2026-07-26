@@ -80,7 +80,13 @@ export async function assertCanAffordAi(
   const cost = resolveAiCostCredits(feature);
   if (cost <= 0) return;
 
-  const wallet = await prisma.wallet.findFirst({ where: { tenantId } });
+  // Read the tenant's primary (oldest) wallet deterministically, so the
+  // afford-check and debitAi always look at the *same* wallet. (Matches the
+  // UI's primaryWallet = wallets ordered createdAt asc.)
+  const wallet = await prisma.wallet.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "asc" },
+  });
   const available = wallet
     ? wallet.balanceCredits - wallet.reservedCredits
     : 0;
@@ -112,11 +118,24 @@ export async function debitAi(
   const cost = resolveAiCostCredits(args.feature);
   if (cost <= 0) return;
 
-  // Atomic decrement so concurrent AI calls can't interleave a read-modify-write.
-  const updated = await prisma.wallet.updateMany({
-    where: { tenantId, balanceCredits: { gte: cost } },
-    data: { balanceCredits: { decrement: cost } },
+  // Debit exactly the tenant's primary (oldest) wallet — the same one the
+  // afford-check reads — not every wallet the tenant owns. The previous
+  // updateMany over `{ tenantId }` decremented *every* wallet clearing the
+  // cost, so a tenant with more than one wallet was charged N times per call.
+  // The id-scoped conditional decrement stays atomic (single UPDATE), and
+  // guarding on balance >= cost + reservedCredits stops a debit from spending
+  // credits reserved for a pending job.
+  const wallet = await prisma.wallet.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, reservedCredits: true },
   });
+  const updated = wallet
+    ? await prisma.wallet.updateMany({
+        where: { id: wallet.id, balanceCredits: { gte: cost + wallet.reservedCredits } },
+        data: { balanceCredits: { decrement: cost } },
+      })
+    : { count: 0 };
 
   if (updated.count === 0) {
     // Raced to empty between the afford-check and here. Log loudly: the work
