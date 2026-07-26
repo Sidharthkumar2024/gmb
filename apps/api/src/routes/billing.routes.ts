@@ -3,7 +3,9 @@ import { z } from "zod";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { requireAuth, requireTenantScope, type RequestWithAuth } from "../middleware/auth";
 import { grantCredits } from "../services/billing.service";
-import { createRazorpayOrder, verifyRazorpayWebhook } from "../services/razorpay.service";
+import { verifyRazorpayWebhook } from "../services/razorpay.service";
+import { verifyStripeWebhook } from "../services/stripe.service";
+import { createTopUpOrder } from "../services/paymentGateway.service";
 
 const router = Router();
 
@@ -12,9 +14,10 @@ const topUpSchema = z.object({
 });
 
 /**
- * Start a top-up: create a Razorpay order for `credits`. The browser opens
- * Razorpay checkout with the returned orderId + keyId; the wallet is credited by
- * the webhook (below) after payment, never by the browser.
+ * Start a top-up with whichever gateway is active. The response says which
+ * provider and carries what that provider's browser step needs (Razorpay order +
+ * keyId, or a Stripe Checkout URL). The wallet is credited by the webhook after
+ * payment, never by the browser.
  */
 router.post(
   "/top-up",
@@ -23,7 +26,7 @@ router.post(
   async (req: RequestWithAuth, res: Response, next: NextFunction) => {
     try {
       const { credits } = topUpSchema.parse(req.body);
-      const order = await createRazorpayOrder({ tenantId: req.tenantId!, credits });
+      const order = await createTopUpOrder({ tenantId: req.tenantId!, credits });
       res.json({ success: true, data: order });
     } catch (err) {
       next(err);
@@ -32,44 +35,70 @@ router.post(
 );
 
 /**
- * Razorpay webhook (public — Razorpay calls it, no user auth). The signature is
- * verified against the RAW body (captured in index.ts's json `verify`), then the
- * wallet is credited idempotently keyed on the payment id, so a redelivered
- * webhook can't double-credit. Tenant + credits are read from the order `notes`
- * we set at creation, not from anything the caller controls.
+ * Razorpay webhook (public — no user auth). The signature is verified against the
+ * RAW body (captured in index.ts's json `verify`), then the wallet is credited
+ * idempotently keyed on the payment id, so a redelivered webhook can't
+ * double-credit. Tenant + credits come from the order `notes` we set, not from
+ * anything the caller controls.
+ */
+async function razorpayWebhook(
+  req: RequestWithAuth & { rawBody?: Buffer },
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    if (!verifyRazorpayWebhook(req.rawBody, req.headers["x-razorpay-signature"])) {
+      throw new ApiError(ErrorCodes.UNAUTHORIZED, 401, "Invalid webhook signature.");
+    }
+    const event = req.body as {
+      event?: string;
+      payload?: { payment?: { entity?: { id?: string; notes?: Record<string, string> } } };
+    };
+    if (event.event === "payment.captured") {
+      const payment = event.payload?.payment?.entity;
+      const tenantId = payment?.notes?.tenantId;
+      const credits = Number(payment?.notes?.credits ?? 0);
+      if (tenantId && credits > 0 && payment?.id) {
+        await grantCredits(tenantId, credits, {
+          reason: "Razorpay top-up",
+          idempotencyKey: `razorpay:${payment.id}`,
+        });
+      }
+    }
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+router.post("/webhook/razorpay", razorpayWebhook);
+
+/**
+ * Stripe webhook (public). Verified via the Stripe-Signature scheme against the
+ * raw body; on a completed checkout the wallet is credited idempotently keyed on
+ * the session id. tenant + credits come from the session metadata we set.
  */
 router.post(
-  "/webhook",
+  "/webhook/stripe",
   async (req: RequestWithAuth & { rawBody?: Buffer }, res: Response, next: NextFunction) => {
     try {
-      if (!verifyRazorpayWebhook(req.rawBody, req.headers["x-razorpay-signature"])) {
-        throw new ApiError(ErrorCodes.UNAUTHORIZED, 401, "Invalid webhook signature.");
+      const result = verifyStripeWebhook(req.rawBody, req.headers["stripe-signature"]);
+      // A verified-but-uninteresting event (or a bad signature) both return null;
+      // ack with 200 so Stripe stops retrying, but only credit on a real result.
+      if (result) {
+        await grantCredits(result.tenantId, result.credits, {
+          reason: "Stripe top-up",
+          idempotencyKey: `stripe:${result.paymentId}`,
+        });
       }
-
-      const event = req.body as {
-        event?: string;
-        payload?: { payment?: { entity?: { id?: string; notes?: Record<string, string> } } };
-      };
-
-      // Ack captured payments by crediting the wallet. Other events are ignored
-      // (still 200, so Razorpay doesn't retry them forever).
-      if (event.event === "payment.captured") {
-        const payment = event.payload?.payment?.entity;
-        const tenantId = payment?.notes?.tenantId;
-        const credits = Number(payment?.notes?.credits ?? 0);
-        if (tenantId && credits > 0 && payment?.id) {
-          await grantCredits(tenantId, credits, {
-            reason: "Razorpay top-up",
-            idempotencyKey: `razorpay:${payment.id}`,
-          });
-        }
-      }
-
       res.json({ success: true });
     } catch (err) {
       next(err);
     }
   },
 );
+
+// Back-compat: the original Razorpay-only webhook path.
+router.post("/webhook", razorpayWebhook);
 
 export default router;

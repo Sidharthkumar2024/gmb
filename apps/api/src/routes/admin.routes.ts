@@ -55,6 +55,7 @@ import {
   updateTicket,
 } from "../services/supportTicket.service";
 import { listEmailTemplates, upsertEmailTemplate } from "../services/emailTemplate.service";
+import { getGatewayStatus, setActiveProvider } from "../services/paymentGateway.service";
 import {
   queueDepth,
   getGmbAutopilotQueue,
@@ -854,6 +855,39 @@ router.delete("/smtp", async (req: RequestWithAuth, res: Response, next: NextFun
       ...extractRequestMeta(req),
     });
     res.json({ success: true, data: { deleted: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Payment gateways -------------------------------------------------------
+// Which gateway is active for top-ups. Keys live in the server env per provider
+// (safest for payment secrets); only the active-provider choice is admin-set.
+
+router.get("/gateways", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getGatewayStatus() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const gatewaySchema = z.object({ activeProvider: z.enum(["razorpay", "stripe"]) });
+
+router.put("/gateways", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { activeProvider } = gatewaySchema.parse(req.body);
+    const status = await setActiveProvider(activeProvider, req.userId);
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "PaymentGateway",
+      resourceId: "active",
+      newValues: { activeProvider },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: status });
   } catch (err) {
     next(err);
   }

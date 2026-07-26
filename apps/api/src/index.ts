@@ -82,12 +82,14 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/gmb", gmbRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/partner", partnerRoutes);
+// Top-up: POST /api/v1/billing/top-up (authed) + /billing/webhook/{razorpay,
+// stripe} (public, gateway-signature-verified). MUST precede the /api/v1
+// catch-all below — that router applies requireAuth to everything under it, so
+// the public webhooks would 401 before reaching their handler if mounted after.
+app.use("/api/v1/billing", billingRoutes);
 // Mounted at the version root: these paths are /language-settings,
 // /currency-settings, /customer/wallets and /products/customer-access.
 app.use("/api/v1", workspaceRoutes);
-// Top-up: POST /api/v1/billing/top-up (authed) + POST /api/v1/billing/webhook
-// (public, Razorpay-signature-verified).
-app.use("/api/v1/billing", billingRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({

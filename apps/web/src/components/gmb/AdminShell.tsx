@@ -23,6 +23,7 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string }> }
       { href: "/admin/accounts", name: "Accounts" },
       { href: "/admin/users", name: "Users" },
       { href: "/admin/plans", name: "Plans" },
+      { href: "/admin/gateways", name: "Payment gateways" },
       { href: "/admin/queue", name: "Scan queue" },
     ],
   },
