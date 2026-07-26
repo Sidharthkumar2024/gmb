@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { prisma, AiProviderKey, AiProviderKind, SecretScope } from "@nexaflow/db";
-import { assertCanAffordAi, debitAi } from "./billing.service";
+import { reserveAi, settleAi, releaseAi } from "./billing.service";
 import { resolveProviderChain } from "./aiProviderHub.service";
 import { resolveSecretValue } from "./secretVault.service";
 
@@ -123,22 +123,35 @@ function extractJson(raw: string): unknown {
  */
 export async function runTenantLlmJson<T>(opts: CallLlmOpts): Promise<T> {
   const { client: anthropic, model } = await resolveTextClient();
-  await assertCanAffordAi(opts.tenantId, opts.feature);
+  // Reserve credits up front so two concurrent calls can't both pass an
+  // affordability check and then both invoke the paid provider — the second
+  // caller is rejected with 402 here, before the provider runs.
+  const reservation = await reserveAi(opts.tenantId, opts.feature);
 
-  const response = await anthropic.messages.create({
-    model,
-    max_tokens: opts.maxTokens ?? 800,
-    temperature: opts.temperature ?? 0.4,
-    system: opts.system,
-    messages: [{ role: "user", content: opts.prompt }],
-  });
+  let parsed: T;
+  let inputTokens: number;
+  let outputTokens: number;
+  try {
+    const response = await anthropic.messages.create({
+      model,
+      max_tokens: opts.maxTokens ?? 800,
+      temperature: opts.temperature ?? 0.4,
+      system: opts.system,
+      messages: [{ role: "user", content: opts.prompt }],
+    });
 
-  const textBlock = response.content.find((c) => c.type === "text");
-  const raw = textBlock?.type === "text" ? textBlock.text : "";
-  const parsed = extractJson(raw) as T;
+    const textBlock = response.content.find((c) => c.type === "text");
+    const raw = textBlock?.type === "text" ? textBlock.text : "";
+    parsed = extractJson(raw) as T;
+    inputTokens = response.usage.input_tokens;
+    outputTokens = response.usage.output_tokens;
+  } catch (err) {
+    // Provider failed or returned unusable output — return the held credits so
+    // the reservation isn't leaked, and surface the error unchanged.
+    await releaseAi(reservation).catch(() => undefined);
+    throw err;
+  }
 
-  const inputTokens = response.usage.input_tokens;
-  const outputTokens = response.usage.output_tokens;
   const costInCents = Math.ceil(
     (inputTokens * INPUT_USD_PER_TOKEN + outputTokens * OUTPUT_USD_PER_TOKEN) * 100,
   );
@@ -156,13 +169,15 @@ export async function runTenantLlmJson<T>(opts: CallLlmOpts): Promise<T> {
         costInCents,
       },
     });
-    await debitAi(opts.tenantId, {
-      aiUsageId: usage.id,
-      feature: opts.feature,
-      reason: `AI call (${opts.feature})`,
-    });
+    void usage;
+    // Convert the hold into an actual spend now the call has succeeded.
+    await settleAi(reservation);
   } catch (err) {
-    console.error("[ai] failed to log usage/debit", err);
+    // Settling failed — release the hold so credits aren't stuck reserved. The
+    // caller keeps their result uncharged, matching the prior behaviour where a
+    // failed debit was logged, not thrown.
+    await releaseAi(reservation).catch(() => undefined);
+    console.error("[ai] failed to log usage/settle", err);
   }
 
   return parsed;

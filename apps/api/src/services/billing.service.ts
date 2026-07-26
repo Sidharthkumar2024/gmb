@@ -146,3 +146,92 @@ export async function debitAi(
     );
   }
 }
+
+/**
+ * A held credit reservation — the wallet the credits are held on and how many.
+ * Null when billing is off or the feature is free, so settle/release no-op.
+ */
+export interface AiReservation {
+  walletId: string;
+  cost: number;
+}
+
+/**
+ * Reserve credits BEFORE an AI call, closing the check-then-debit race:
+ * `assertCanAffordAi` + `debitAi` were separate, so two concurrent calls both
+ * passed the check, both invoked the (paid) provider, and only one debit landed
+ * — the design's own comment calls that "revenue lost". Reserving up front means
+ * the second call sees the credits already held (available = balance − reserved)
+ * and is rejected with 402 before the provider runs.
+ *
+ * The reserve must atomically check `balance − reserved >= cost` and increment
+ * `reserved`. Prisma's `where` can't compare two columns, so this is one guarded
+ * raw UPDATE (atomic; the row's own reserved value is read and written in place).
+ *
+ * NOTE: gated behind WALLET_BILLING_ENABLED (off today), so this path is dormant
+ * and has not been exercised against a live wallet — verify before enabling.
+ */
+export async function reserveAi(
+  tenantId: string,
+  feature?: string,
+): Promise<AiReservation | null> {
+  if (!billingEnabled()) return null;
+
+  const cost = resolveAiCostCredits(feature);
+  if (cost <= 0) return null;
+
+  const wallet = await prisma.wallet.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (!wallet) {
+    throw new ApiError(
+      ErrorCodes.BAD_REQUEST,
+      402,
+      `Not enough AI credits for this action (needs ${cost}, available 0). Top up to continue.`,
+    );
+  }
+
+  const held = await prisma.$executeRaw`
+    UPDATE "Wallet"
+    SET "reservedCredits" = "reservedCredits" + ${cost}
+    WHERE "id" = ${wallet.id}
+      AND ("balanceCredits" - "reservedCredits") >= ${cost}
+  `;
+  if (held === 0) {
+    throw new ApiError(
+      ErrorCodes.BAD_REQUEST,
+      402,
+      `Not enough AI credits for this action (needs ${cost}). Top up to continue.`,
+    );
+  }
+  return { walletId: wallet.id, cost };
+}
+
+/**
+ * Settle a reservation after the AI call succeeded: convert the held credits
+ * into an actual spend — decrement both balance and reserved by the held cost.
+ */
+export async function settleAi(reservation: AiReservation | null): Promise<void> {
+  if (!reservation) return;
+  await prisma.wallet.update({
+    where: { id: reservation.walletId },
+    data: {
+      balanceCredits: { decrement: reservation.cost },
+      reservedCredits: { decrement: reservation.cost },
+    },
+  });
+}
+
+/**
+ * Release a reservation without charging (the AI call failed): return the held
+ * credits by decrementing only `reserved`. Safe to call once per reservation.
+ */
+export async function releaseAi(reservation: AiReservation | null): Promise<void> {
+  if (!reservation) return;
+  await prisma.wallet.update({
+    where: { id: reservation.walletId },
+    data: { reservedCredits: { decrement: reservation.cost } },
+  });
+}
