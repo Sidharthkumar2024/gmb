@@ -1,10 +1,30 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const deps = vi.hoisted(() => ({
+  imageFindFirst: vi.fn(),
+  imageUpdateMany: vi.fn(),
+}));
+
+vi.mock("@nexaflow/db", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nexaflow/db")>();
+  return {
+    ...actual, // keep the real GmbImageStatus etc.
+    prisma: {
+      gmbImageRequest: {
+        findFirst: deps.imageFindFirst,
+        updateMany: deps.imageUpdateMany,
+      },
+    },
+  };
+});
+
 import { GmbImageStatus } from "@nexaflow/db";
 import {
   buildImagePrompt,
   describeAspect,
   isAllowedSize,
   normalizeSize,
+  processImageRequest,
   toSafeImage,
 } from "./gmbImage.service";
 
@@ -73,5 +93,41 @@ describe("toSafeImage", () => {
     expect(safe.status).toBe("PENDING");
     expect((safe as Record<string, unknown>).secretId).toBeUndefined();
     expect((safe as Record<string, unknown>).tenantId).toBeUndefined();
+  });
+});
+
+describe("processImageRequest claim", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.WALLET_BILLING_ENABLED; // billing off → affordability is a no-op
+  });
+
+  it("rejects a request that isn't PENDING or FAILED (400)", async () => {
+    deps.imageFindFirst.mockResolvedValue({
+      id: "img-1",
+      tenantId: "t1",
+      status: GmbImageStatus.READY,
+    });
+    await expect(processImageRequest("t1", "img-1")).rejects.toMatchObject({ statusCode: 400 });
+    expect(deps.imageUpdateMany).not.toHaveBeenCalled(); // never even claims
+  });
+
+  it("does not double-charge: a lost claim (count 0) throws 409 before the provider runs", async () => {
+    deps.imageFindFirst.mockResolvedValue({
+      id: "img-1",
+      tenantId: "t1",
+      status: GmbImageStatus.PENDING,
+    });
+    // Another concurrent run already flipped it out of PENDING/FAILED.
+    deps.imageUpdateMany.mockResolvedValue({ count: 0 });
+    await expect(processImageRequest("t1", "img-1")).rejects.toMatchObject({ statusCode: 409 });
+    expect(deps.imageUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: "img-1",
+        tenantId: "t1",
+        status: { in: [GmbImageStatus.PENDING, GmbImageStatus.FAILED] },
+      },
+      data: { status: GmbImageStatus.PROCESSING },
+    });
   });
 });
