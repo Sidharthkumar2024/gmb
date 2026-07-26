@@ -9,6 +9,7 @@ import gmbRoutes from "./routes/gmb.routes";
 import workspaceRoutes from "./routes/workspace.routes";
 import adminRoutes from "./routes/admin.routes";
 import partnerRoutes from "./routes/partner.routes";
+import billingRoutes from "./routes/billing.routes";
 import {
   primeGoogleOAuthCache,
   getCachedGoogleClientConfig,
@@ -51,7 +52,16 @@ app.use(
 );
 // Branded post images and report PDFs are sizeable; the default 100kb limit
 // rejects them.
-app.use(express.json({ limit: "5mb" }));
+app.use(
+  express.json({
+    limit: "5mb",
+    // Capture the raw body so the Razorpay webhook can verify its HMAC signature
+    // — JSON parsing discards the exact bytes the signature is computed over.
+    verify: (req, _res, buf) => {
+      (req as unknown as { rawBody?: Buffer }).rawBody = buf;
+    },
+  }),
+);
 
 app.get("/api/v1/health", async (_req, res) => {
   // Report DB reachability rather than just "the process is up" — an API that
@@ -75,6 +85,9 @@ app.use("/api/v1/partner", partnerRoutes);
 // Mounted at the version root: these paths are /language-settings,
 // /currency-settings, /customer/wallets and /products/customer-access.
 app.use("/api/v1", workspaceRoutes);
+// Top-up: POST /api/v1/billing/top-up (authed) + POST /api/v1/billing/webhook
+// (public, Razorpay-signature-verified).
+app.use("/api/v1/billing", billingRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({
