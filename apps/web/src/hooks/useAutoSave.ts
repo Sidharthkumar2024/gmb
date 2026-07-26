@@ -99,6 +99,14 @@ export function useAutoSave<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
+  // Clear the pending debounce timer on unmount so it can't fire (and setStatus)
+  // after the component is gone.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
   function setValue(next: T | ((prev: T) => T)) {
     setValueState((prev) => {
       const computed =

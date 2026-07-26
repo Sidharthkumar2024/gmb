@@ -360,9 +360,11 @@ export async function resendVerification(email: string): Promise<{ message: stri
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  // The backend schema expects `password`, not `newPassword`. Sending the wrong
+  // field made this helper silently fail Zod validation for any caller.
   await api.post(
     "/api/v1/auth/reset-password",
-    { token, newPassword },
+    { token, password: newPassword },
     { auth: false },
   );
 }
