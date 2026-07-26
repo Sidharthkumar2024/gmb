@@ -148,11 +148,13 @@ export async function debitAi(
 }
 
 /**
- * A held credit reservation — the wallet the credits are held on and how many.
- * Null when billing is off or the feature is free, so settle/release no-op.
+ * A held credit reservation — the wallet, tenant and cost, so settle/release can
+ * write the matching ledger row. Null when billing is off or the feature is free.
  */
 export interface AiReservation {
   walletId: string;
+  tenantId: string;
+  feature?: string;
   cost: number;
 }
 
@@ -164,9 +166,9 @@ export interface AiReservation {
  * the second call sees the credits already held (available = balance − reserved)
  * and is rejected with 402 before the provider runs.
  *
- * The reserve must atomically check `balance − reserved >= cost` and increment
- * `reserved`. Prisma's `where` can't compare two columns, so this is one guarded
- * raw UPDATE (atomic; the row's own reserved value is read and written in place).
+ * The reserve atomically checks `balance − reserved >= cost` and increments
+ * `reserved` (one guarded raw UPDATE — Prisma's `where` can't compare two
+ * columns), then records a RESERVE ledger row in the same transaction.
  *
  * NOTE: gated behind WALLET_BILLING_ENABLED (off today), so this path is dormant
  * and has not been exercised against a live wallet — verify before enabling.
@@ -193,45 +195,95 @@ export async function reserveAi(
     );
   }
 
-  const held = await prisma.$executeRaw`
-    UPDATE "Wallet"
-    SET "reservedCredits" = "reservedCredits" + ${cost}
-    WHERE "id" = ${wallet.id}
-      AND ("balanceCredits" - "reservedCredits") >= ${cost}
-  `;
-  if (held === 0) {
-    throw new ApiError(
-      ErrorCodes.BAD_REQUEST,
-      402,
-      `Not enough AI credits for this action (needs ${cost}). Top up to continue.`,
-    );
-  }
-  return { walletId: wallet.id, cost };
+  return prisma.$transaction(async (tx) => {
+    const held = await tx.$executeRaw`
+      UPDATE "Wallet"
+      SET "reservedCredits" = "reservedCredits" + ${cost}
+      WHERE "id" = ${wallet.id}
+        AND ("balanceCredits" - "reservedCredits") >= ${cost}
+    `;
+    if (held === 0) {
+      throw new ApiError(
+        ErrorCodes.BAD_REQUEST,
+        402,
+        `Not enough AI credits for this action (needs ${cost}). Top up to continue.`,
+      );
+    }
+    const w = await tx.wallet.findUniqueOrThrow({
+      where: { id: wallet.id },
+      select: { balanceCredits: true },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        tenantId,
+        type: "RESERVE",
+        deltaCredits: 0,
+        deltaReserved: cost,
+        balanceAfter: w.balanceCredits,
+        feature: feature ?? null,
+      },
+    });
+    return { walletId: wallet.id, tenantId, feature, cost };
+  });
 }
 
 /**
- * Settle a reservation after the AI call succeeded: convert the held credits
- * into an actual spend — decrement both balance and reserved by the held cost.
+ * Settle a reservation after the AI call succeeded: convert the held credits into
+ * an actual spend (decrement balance and reserved) and record a SETTLE ledger
+ * row — atomically, so the balance change and its audit row can't diverge.
  */
-export async function settleAi(reservation: AiReservation | null): Promise<void> {
+export async function settleAi(
+  reservation: AiReservation | null,
+  opts: { aiUsageId?: string | null } = {},
+): Promise<void> {
   if (!reservation) return;
-  await prisma.wallet.update({
-    where: { id: reservation.walletId },
-    data: {
-      balanceCredits: { decrement: reservation.cost },
-      reservedCredits: { decrement: reservation.cost },
-    },
+  await prisma.$transaction(async (tx) => {
+    const w = await tx.wallet.update({
+      where: { id: reservation.walletId },
+      data: {
+        balanceCredits: { decrement: reservation.cost },
+        reservedCredits: { decrement: reservation.cost },
+      },
+      select: { balanceCredits: true },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        walletId: reservation.walletId,
+        tenantId: reservation.tenantId,
+        type: "SETTLE",
+        deltaCredits: -reservation.cost,
+        deltaReserved: -reservation.cost,
+        balanceAfter: w.balanceCredits,
+        feature: reservation.feature ?? null,
+        aiUsageId: opts.aiUsageId ?? null,
+      },
+    });
   });
 }
 
 /**
  * Release a reservation without charging (the AI call failed): return the held
- * credits by decrementing only `reserved`. Safe to call once per reservation.
+ * credits (decrement only `reserved`) and record a RELEASE ledger row.
  */
 export async function releaseAi(reservation: AiReservation | null): Promise<void> {
   if (!reservation) return;
-  await prisma.wallet.update({
-    where: { id: reservation.walletId },
-    data: { reservedCredits: { decrement: reservation.cost } },
+  await prisma.$transaction(async (tx) => {
+    const w = await tx.wallet.update({
+      where: { id: reservation.walletId },
+      data: { reservedCredits: { decrement: reservation.cost } },
+      select: { balanceCredits: true },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        walletId: reservation.walletId,
+        tenantId: reservation.tenantId,
+        type: "RELEASE",
+        deltaCredits: 0,
+        deltaReserved: -reservation.cost,
+        balanceAfter: w.balanceCredits,
+        feature: reservation.feature ?? null,
+      },
+    });
   });
 }

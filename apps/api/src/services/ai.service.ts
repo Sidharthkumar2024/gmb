@@ -169,9 +169,9 @@ export async function runTenantLlmJson<T>(opts: CallLlmOpts): Promise<T> {
         costInCents,
       },
     });
-    void usage;
-    // Convert the hold into an actual spend now the call has succeeded.
-    await settleAi(reservation);
+    // Convert the hold into an actual spend now the call has succeeded, linking
+    // the ledger row to its usage record.
+    await settleAi(reservation, { aiUsageId: usage.id });
   } catch (err) {
     // Settling failed — release the hold so credits aren't stuck reserved. The
     // caller keeps their result uncharged, matching the prior behaviour where a

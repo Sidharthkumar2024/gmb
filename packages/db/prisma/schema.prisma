@@ -469,7 +469,42 @@ model Wallet {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  transactions WalletTransaction[]
+
   @@index([tenantId])
+}
+
+enum WalletTransactionType {
+  RESERVE // credits held for an in-flight AI call
+  SETTLE // reservation converted to a spend
+  RELEASE // reservation returned (call failed)
+  GRANT // signup bonus / manual top-up / plan monthly credits
+  REFUND // corrective credit
+}
+
+// Append-only credit ledger: one row per balance/reservation change, so every
+// mutation is auditable, reconcilable (SUM(deltaCredits) per wallet == balance),
+// and reversible. idempotencyKey lets a replayed provider/payment event no-op.
+model WalletTransaction {
+  id       String @id @default(cuid())
+  walletId String
+  wallet   Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  tenantId String
+
+  type          WalletTransactionType
+  deltaCredits  Int // signed change to balanceCredits
+  deltaReserved Int                   @default(0) // signed change to reservedCredits
+  balanceAfter  Int // balanceCredits after this row
+
+  feature        String?
+  reason         String?
+  aiUsageId      String?
+  idempotencyKey String? @unique
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([walletId, createdAt])
 }
 
 // --- Platform config + observability ---------------------------------------
@@ -635,6 +670,7 @@ enum GmbPostStatus {
   DRAFT
   PENDING_APPROVAL
   SCHEDULED
+  PUBLISHING
   PUBLISHED
   FAILED
 }
@@ -1178,6 +1214,7 @@ model GmbAdvisorReport {
 
 enum GmbImageStatus {
   PENDING
+  PROCESSING
   READY
   FAILED
   APPROVED

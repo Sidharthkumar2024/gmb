@@ -306,6 +306,22 @@ export async function processImageRequest(tenantId: string, id: string) {
   }
   await assertCanAffordAi(tenantId, "gmb_image_generation");
 
+  // Atomically claim the request so two concurrent generate calls (a double
+  // click, or a retry racing the first run) can't both hit the paid provider and
+  // both debit. Only the runner that flips PENDING/FAILED -> PROCESSING proceeds;
+  // it then becomes READY on success or FAILED on failure (both retryable).
+  const claim = await prisma.gmbImageRequest.updateMany({
+    where: {
+      id,
+      tenantId,
+      status: { in: [GmbImageStatus.PENDING, GmbImageStatus.FAILED] },
+    },
+    data: { status: GmbImageStatus.PROCESSING },
+  });
+  if (claim.count !== 1) {
+    throw new ApiError(ErrorCodes.CONFLICT, 409, "This image is already being generated.");
+  }
+
   const contexts: SecretContext[] = [
     { scope: SecretScope.CUSTOMER, tenantId },
     { scope: SecretScope.PLATFORM, tenantId: null },
