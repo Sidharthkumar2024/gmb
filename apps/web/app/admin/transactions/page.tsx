@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AdminShell, AdmCard, AdmLabel, AdmPill } from "../../../src/components/gmb/AdminShell";
+import { AdminShell, AdmCard, AdmPill } from "../../../src/components/gmb/AdminShell";
 import { api, ApiClientError } from "../../../src/lib/api";
 
 // Transactions — the raw credit ledger across all workspaces. Every grant,

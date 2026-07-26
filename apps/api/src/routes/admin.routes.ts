@@ -13,6 +13,7 @@ import {
   TicketStatus,
   TicketPriority,
   TicketAuthor,
+  WalletTransactionType,
 } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { requireAuth, type RequestWithAuth } from "../middleware/auth";
@@ -875,9 +876,13 @@ router.get("/payments", async (_req: RequestWithAuth, res: Response, next: NextF
 
 router.get("/transactions", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
-    const type = typeof req.query.type === "string" ? req.query.type : undefined;
+    // Only accept a real ledger type; anything else (junk query param) is
+    // ignored rather than passed to Prisma, which would 500 on an invalid enum.
+    const raw = typeof req.query.type === "string" ? req.query.type : undefined;
+    const type =
+      raw && raw in WalletTransactionType ? (raw as WalletTransactionType) : undefined;
     const rows = await prisma.walletTransaction.findMany({
-      where: type ? { type: type as never } : undefined,
+      where: type ? { type } : undefined,
       orderBy: { createdAt: "desc" },
       take: 200,
       include: { wallet: { select: { tenant: { select: { name: true } } } } },
