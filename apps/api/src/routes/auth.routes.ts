@@ -182,12 +182,26 @@ router.post(
           data: { name: companyName, slug, ...(category ? { industry: category } : {}) },
         });
         // Every workspace gets a wallet so AI-credit reads never hit a null.
-        await tx.wallet.create({
-          data: {
-            tenantId: tenant.id,
-            balanceCredits: Number(process.env.SIGNUP_BONUS_CREDITS ?? 100),
-          },
+        const signupBonus = Number(process.env.SIGNUP_BONUS_CREDITS ?? 100);
+        const wallet = await tx.wallet.create({
+          data: { tenantId: tenant.id, balanceCredits: signupBonus },
+          select: { id: true },
         });
+        // Record the grant on the ledger so every balance change is auditable
+        // (the signup bonus was previously the one credit change with no row).
+        if (signupBonus > 0) {
+          await tx.walletTransaction.create({
+            data: {
+              walletId: wallet.id,
+              tenantId: tenant.id,
+              type: "GRANT",
+              deltaCredits: signupBonus,
+              deltaReserved: 0,
+              balanceAfter: signupBonus,
+              reason: "Signup bonus",
+            },
+          });
+        }
         // Seed the first location from what the form already asked for, so a
         // new workspace opens onto real content instead of an empty state.
         // It is a local draft until the owner connects Google and maps it —

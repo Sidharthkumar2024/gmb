@@ -287,3 +287,65 @@ export async function releaseAi(reservation: AiReservation | null): Promise<void
     });
   });
 }
+
+/**
+ * Add credits to a tenant's primary wallet and record a GRANT ledger row — the
+ * gateway-agnostic core of top-up. A verified payment webhook (Stripe/Razorpay)
+ * calls this with the provider's event id as `idempotencyKey` so a replayed
+ * webhook can't double-credit: the unique key means a second attempt either
+ * short-circuits (already recorded) or rolls back on the constraint. Also used
+ * for signup bonuses and manual/plan grants.
+ */
+export async function grantCredits(
+  tenantId: string,
+  credits: number,
+  opts: { reason?: string; idempotencyKey?: string } = {},
+): Promise<void> {
+  if (credits <= 0) return;
+
+  const wallet = await prisma.wallet.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (!wallet) {
+    throw new ApiError(ErrorCodes.NOT_FOUND, 404, "No wallet for this tenant.");
+  }
+
+  // Fast path: this grant was already applied (replayed webhook).
+  if (opts.idempotencyKey) {
+    const existing = await prisma.walletTransaction.findUnique({
+      where: { idempotencyKey: opts.idempotencyKey },
+      select: { id: true },
+    });
+    if (existing) return;
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const w = await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balanceCredits: { increment: credits } },
+        select: { balanceCredits: true },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          tenantId,
+          type: "GRANT",
+          deltaCredits: credits,
+          deltaReserved: 0,
+          balanceAfter: w.balanceCredits,
+          reason: opts.reason ?? null,
+          idempotencyKey: opts.idempotencyKey ?? null,
+        },
+      });
+    });
+  } catch (e) {
+    // Two webhooks with the same idempotencyKey raced — the unique constraint
+    // rolls this one back (so the balance isn't double-incremented). Treat as
+    // already-applied rather than an error.
+    if ((e as { code?: string }).code === "P2002") return;
+    throw e;
+  }
+}
