@@ -44,7 +44,11 @@ export function resolveAiCostCredits(feature?: string): number {
   const envOverride = feature
     ? Number(process.env[`AI_COST_${feature.toUpperCase()}`])
     : NaN;
-  if (Number.isFinite(envOverride) && envOverride >= 0) return envOverride;
+  // Credits are an integer column, and this value feeds both the afford-check's
+  // `gte` guard and the `{ decrement }`. A fractional env override (e.g. 0.5)
+  // would create rounding/precision mismatches between the two, so round to a
+  // whole credit here.
+  if (Number.isFinite(envOverride) && envOverride >= 0) return Math.round(envOverride);
   return feature
     ? (AI_FEATURE_COSTS[feature]?.credits ?? DEFAULT_AI_COST_CREDITS)
     : DEFAULT_AI_COST_CREDITS;
