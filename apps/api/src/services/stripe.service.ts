@@ -91,6 +91,8 @@ export interface StripeWebhookResult {
   paymentId: string;
   tenantId: string;
   credits: number;
+  amountMinor: number;
+  currency: string;
 }
 
 /**
@@ -137,6 +139,8 @@ export function verifyStripeWebhook(
         object?: {
           id?: string;
           payment_status?: string;
+          amount_total?: number;
+          currency?: string;
           metadata?: Record<string, string>;
         };
       };
@@ -150,7 +154,13 @@ export function verifyStripeWebhook(
     const tenantId = obj?.metadata?.tenantId;
     const credits = Number(obj?.metadata?.credits ?? 0);
     if (!obj?.id || !tenantId || !(credits > 0)) return null;
-    return { paymentId: obj.id, tenantId, credits };
+    return {
+      paymentId: obj.id,
+      tenantId,
+      credits,
+      amountMinor: Number(obj.amount_total ?? credits * stripeCreditPriceCents()),
+      currency: (obj.currency ?? "usd").toUpperCase(),
+    };
   } catch {
     return null;
   }

@@ -6,6 +6,7 @@ import { grantCredits } from "../services/billing.service";
 import { verifyRazorpayWebhook, fetchRazorpayOrderNotes } from "../services/razorpay.service";
 import { verifyStripeWebhook } from "../services/stripe.service";
 import { createTopUpOrder } from "../services/paymentGateway.service";
+import { recordPayment } from "../services/payment.service";
 
 const router = Router();
 
@@ -57,6 +58,8 @@ async function razorpayWebhook(
           entity?: {
             id?: string;
             order_id?: string;
+            amount?: number;
+            currency?: string;
             notes?: Record<string, string>;
           };
         };
@@ -79,6 +82,14 @@ async function razorpayWebhook(
         await grantCredits(tenantId, credits, {
           reason: "Razorpay top-up",
           idempotencyKey: `razorpay:${payment.id}`,
+        });
+        await recordPayment({
+          tenantId,
+          provider: "RAZORPAY",
+          providerPaymentId: payment.id,
+          credits,
+          amountMinor: Number(payment.amount ?? 0),
+          currency: (payment.currency ?? "INR").toUpperCase(),
         });
       }
     }
@@ -106,6 +117,14 @@ router.post(
         await grantCredits(result.tenantId, result.credits, {
           reason: "Stripe top-up",
           idempotencyKey: `stripe:${result.paymentId}`,
+        });
+        await recordPayment({
+          tenantId: result.tenantId,
+          provider: "STRIPE",
+          providerPaymentId: result.paymentId,
+          credits: result.credits,
+          amountMinor: result.amountMinor,
+          currency: result.currency,
         });
       }
       res.json({ success: true });

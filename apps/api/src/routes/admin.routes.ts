@@ -56,6 +56,7 @@ import {
 } from "../services/supportTicket.service";
 import { listEmailTemplates, upsertEmailTemplate } from "../services/emailTemplate.service";
 import { getGatewayStatus, setActiveProvider } from "../services/paymentGateway.service";
+import { listPayments } from "../services/payment.service";
 import {
   queueDepth,
   getGmbAutopilotQueue,
@@ -855,6 +856,45 @@ router.delete("/smtp", async (req: RequestWithAuth, res: Response, next: NextFun
       ...extractRequestMeta(req),
     });
     res.json({ success: true, data: { deleted: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Payments + transactions ------------------------------------------------
+// Platform-wide money views. Payments = captured gateway payments; transactions
+// = the raw credit ledger across all workspaces. Read-only.
+
+router.get("/payments", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await listPayments() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/transactions", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const type = typeof req.query.type === "string" ? req.query.type : undefined;
+    const rows = await prisma.walletTransaction.findMany({
+      where: type ? { type: type as never } : undefined,
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: { wallet: { select: { tenant: { select: { name: true } } } } },
+    });
+    res.json({
+      success: true,
+      data: rows.map((r) => ({
+        id: r.id,
+        tenantName: r.wallet.tenant.name,
+        type: r.type,
+        deltaCredits: r.deltaCredits,
+        balanceAfter: r.balanceAfter,
+        feature: r.feature,
+        reason: r.reason,
+        createdAt: r.createdAt,
+      })),
+    });
   } catch (err) {
     next(err);
   }

@@ -24,6 +24,8 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string }> }
       { href: "/admin/users", name: "Users" },
       { href: "/admin/plans", name: "Plans" },
       { href: "/admin/gateways", name: "Payment gateways" },
+      { href: "/admin/payments", name: "Payments" },
+      { href: "/admin/transactions", name: "Transactions" },
       { href: "/admin/queue", name: "Scan queue" },
     ],
   },
