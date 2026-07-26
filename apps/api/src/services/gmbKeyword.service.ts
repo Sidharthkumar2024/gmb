@@ -241,6 +241,16 @@ export async function createIdeaSet(tenantId: string, input: CreateIdeaSetInput)
       "Provide a category or at least one service to generate keyword ideas.",
     );
   }
+  // Verify a supplied locationId belongs to this tenant before storing it,
+  // matching the sibling create functions and avoiding a dangling reference.
+  const ideaLocationId = input.locationId?.trim() || null;
+  if (ideaLocationId) {
+    const owned = await prisma.gmbLocation.findFirst({
+      where: { id: ideaLocationId, tenantId },
+      select: { id: true },
+    });
+    if (!owned) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Location not found.");
+  }
   const row = await prisma.gmbKeywordIdeaSet.create({
     data: {
       tenantId,

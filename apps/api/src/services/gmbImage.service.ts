@@ -130,6 +130,18 @@ export async function createImageRequest(tenantId: string, input: CreateImageInp
     throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "An image subject is required.");
   }
   await assertSecretOwned(tenantId, input.secretId);
+  // Verify a supplied locationId actually belongs to this tenant before storing
+  // it — the sibling create functions (reviews, questions, citations) all do
+  // this. Without it a caller can attach an arbitrary/foreign location id to
+  // their own row, leaving a dangling reference.
+  const imageLocationId = input.locationId?.trim() || null;
+  if (imageLocationId) {
+    const owned = await prisma.gmbLocation.findFirst({
+      where: { id: imageLocationId, tenantId },
+      select: { id: true },
+    });
+    if (!owned) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Location not found.");
+  }
   const prompt = buildImagePrompt(input);
   const row = await prisma.gmbImageRequest.create({
     data: {

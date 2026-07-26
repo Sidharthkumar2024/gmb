@@ -265,6 +265,16 @@ export async function createDescription(tenantId: string, input: CreateDescripti
     tone: input.tone,
   });
 
+  // Verify a supplied locationId belongs to this tenant before storing it,
+  // matching the sibling create functions and avoiding a dangling reference.
+  const descriptionLocationId = input.locationId?.trim() || null;
+  if (descriptionLocationId) {
+    const owned = await prisma.gmbLocation.findFirst({
+      where: { id: descriptionLocationId, tenantId },
+      select: { id: true },
+    });
+    if (!owned) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Location not found.");
+  }
   const row = await prisma.gmbDescription.create({
     data: {
       tenantId,
