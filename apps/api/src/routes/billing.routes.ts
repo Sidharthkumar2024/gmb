@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { requireAuth, requireTenantScope, type RequestWithAuth } from "../middleware/auth";
 import { grantCredits } from "../services/billing.service";
-import { verifyRazorpayWebhook } from "../services/razorpay.service";
+import { verifyRazorpayWebhook, fetchRazorpayOrderNotes } from "../services/razorpay.service";
 import { verifyStripeWebhook } from "../services/stripe.service";
 import { createTopUpOrder } from "../services/paymentGateway.service";
 
@@ -52,12 +52,29 @@ async function razorpayWebhook(
     }
     const event = req.body as {
       event?: string;
-      payload?: { payment?: { entity?: { id?: string; notes?: Record<string, string> } } };
+      payload?: {
+        payment?: {
+          entity?: {
+            id?: string;
+            order_id?: string;
+            notes?: Record<string, string>;
+          };
+        };
+      };
     };
     if (event.event === "payment.captured") {
       const payment = event.payload?.payment?.entity;
-      const tenantId = payment?.notes?.tenantId;
-      const credits = Number(payment?.notes?.credits ?? 0);
+      // tenantId/credits live in the ORDER's notes — a Razorpay payment does NOT
+      // inherit them, so payment.notes is normally empty. Resolve from the order
+      // (server-side, untamperable) via order_id; keep payment.notes as a fast
+      // path in case a future checkout also sets them.
+      let tenantId = payment?.notes?.tenantId;
+      let credits = Number(payment?.notes?.credits ?? 0);
+      if ((!tenantId || !(credits > 0)) && payment?.order_id) {
+        const orderNotes = await fetchRazorpayOrderNotes(payment.order_id);
+        tenantId = orderNotes?.tenantId ?? tenantId;
+        credits = Number(orderNotes?.credits ?? credits);
+      }
       if (tenantId && credits > 0 && payment?.id) {
         await grantCredits(tenantId, credits, {
           reason: "Razorpay top-up",

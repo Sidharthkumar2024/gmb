@@ -88,3 +88,24 @@ export function verifyRazorpayWebhook(
   const b = Buffer.from(sig, "utf8");
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
+
+/**
+ * Fetch an order's `notes` from Razorpay. Needed because a payment entity does
+ * NOT inherit the order's notes — so the `payment.captured` webhook can't read
+ * tenantId/credits off `payment.notes`; it must resolve them from the order we
+ * created (server-side, so the browser can't tamper with which tenant is
+ * credited). Returns null on any failure so the caller can skip crediting.
+ */
+export async function fetchRazorpayOrderNotes(
+  orderId: string,
+): Promise<Record<string, string> | null> {
+  const { keyId, keySecret } = credentials();
+  const res = await fetch(`https://api.razorpay.com/v1/orders/${orderId}`, {
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
+    },
+  });
+  if (!res.ok) return null;
+  const order = (await res.json()) as { notes?: Record<string, string> };
+  return order.notes ?? null;
+}
