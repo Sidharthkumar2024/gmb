@@ -184,10 +184,13 @@ export default function GmbBillingPage() {
           description: `${credits} AI credits`,
           handler: () => {
             setNotice("Payment received — your credits will appear here within a moment.");
+            // Poll for ~30s: the webhook → grantCredits round-trip can lag a few
+            // seconds after checkout closes. (Simple count, not an early-exit on
+            // balance change — the wallet in this closure is stale.)
             let tries = 0;
             const iv = window.setInterval(() => {
               void refreshWalletAndLedger();
-              if (++tries >= 5) window.clearInterval(iv);
+              if (++tries >= 15) window.clearInterval(iv);
             }, 2000);
           },
         }).open();

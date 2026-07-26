@@ -114,6 +114,14 @@ export function verifyStripeWebhook(
   const v1 = parts["v1"];
   if (!ts || !v1) return null;
 
+  // Reject events whose timestamp is outside a 5-minute window to blunt replay.
+  // Idempotency (stripe:<sessionId>) already prevents double-credit; this is
+  // defense-in-depth, matching Stripe's recommended tolerance.
+  const tsNum = Number(ts);
+  if (!Number.isFinite(tsNum) || Math.abs(Date.now() / 1000 - tsNum) > 300) {
+    return null;
+  }
+
   const expected = crypto
     .createHmac("sha256", secret)
     .update(`${ts}.${rawBody.toString("utf8")}`)
@@ -125,10 +133,20 @@ export function verifyStripeWebhook(
   try {
     const event = JSON.parse(rawBody.toString("utf8")) as {
       type?: string;
-      data?: { object?: { id?: string; metadata?: Record<string, string> } };
+      data?: {
+        object?: {
+          id?: string;
+          payment_status?: string;
+          metadata?: Record<string, string>;
+        };
+      };
     };
     if (event.type !== "checkout.session.completed") return null;
     const obj = event.data?.object;
+    // Only credit a settled payment. checkout.session.completed can fire before
+    // an async payment method actually settles; crediting then would grant
+    // credits for a payment that may still fail.
+    if (obj?.payment_status !== "paid") return null;
     const tenantId = obj?.metadata?.tenantId;
     const credits = Number(obj?.metadata?.credits ?? 0);
     if (!obj?.id || !tenantId || !(credits > 0)) return null;
