@@ -105,6 +105,27 @@ describe("publishDuePosts branded media integration", () => {
     });
   });
 
+  it("claims each post SCHEDULED -> PUBLISHING before sending it to Google", async () => {
+    await publishDuePosts("tenant-1", NOW);
+    // The very first write is the atomic claim; publishing only proceeds when it
+    // flips the row out of SCHEDULED.
+    expect(deps.postUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: "post-1", tenantId: "tenant-1", status: GmbPostStatus.SCHEDULED },
+      data: { status: GmbPostStatus.PUBLISHING },
+    });
+  });
+
+  it("does not double-publish: skips a post whose claim is lost to a concurrent run", async () => {
+    // The claim CAS matches no row (another runner already flipped it), so this
+    // runner must not call Google or write a further status.
+    deps.postUpdateMany.mockReset();
+    deps.postUpdateMany.mockResolvedValueOnce({ count: 0 });
+    const result = await publishDuePosts("tenant-1", NOW);
+    expect(result).toMatchObject({ published: 0, live: 0, failed: 0 });
+    expect(deps.createGoogleLocalPost).not.toHaveBeenCalled();
+    expect(deps.postUpdateMany).toHaveBeenCalledTimes(1); // only the failed claim
+  });
+
   it("reuses existing media without rasterizing again", async () => {
     deps.postFindMany.mockResolvedValue([
       { ...duePost, mediaUrl: "https://cdn.example.com/manual.png" },
