@@ -46,6 +46,24 @@ export async function getActiveProvider(): Promise<GatewayProvider> {
   return "razorpay";
 }
 
+export interface CustomerTopupInfo {
+  available: boolean;
+  provider: GatewayProvider | null;
+  priceLabel: string | null;
+}
+
+/** What the customer billing page needs to decide whether to offer top-up. */
+export async function getCustomerTopupInfo(): Promise<CustomerTopupInfo> {
+  const provider = await getActiveProvider();
+  const configured = provider === "razorpay" ? razorpayConfigured() : stripeConfigured();
+  if (!configured) return { available: false, provider: null, priceLabel: null };
+  const priceLabel =
+    provider === "razorpay"
+      ? `₹${(Number(process.env.RAZORPAY_CREDIT_PRICE_PAISA ?? 100) / 100).toFixed(2)} / credit`
+      : `$${(stripeCreditPriceCents() / 100).toFixed(2)} / credit`;
+  return { available: true, provider, priceLabel };
+}
+
 export interface GatewayStatus {
   activeProvider: GatewayProvider;
   providers: Array<{

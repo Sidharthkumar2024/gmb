@@ -5,6 +5,7 @@ import { ApiError, ErrorCodes, Permissions, UserRole } from "@nexaflow/shared";
 import { requireAuth, requireTenantScope, type RequestWithAuth } from "../middleware/auth";
 import { requirePermission, requireRole } from "../middleware/rbac";
 import { getTenantPlan } from "../services/plan.service";
+import { getCustomerTopupInfo } from "../services/paymentGateway.service";
 import { TicketPriority, TicketAuthor } from "@nexaflow/db";
 import {
   createTicket,
@@ -212,6 +213,42 @@ router.get("/customer/wallets", requirePermission(Permissions.WALLET_VIEW), asyn
 router.get("/customer/plan", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await getTenantPlan(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Wallet: top-up availability + ledger history ---------------------------
+
+router.get("/customer/topup-info", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getCustomerTopupInfo() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// The credit ledger for this workspace — every grant, spend, reservation and
+// refund, newest first. Read-only; the WalletTransaction rows are written by the
+// billing service and are the source of truth for the balance.
+router.get("/customer/wallet-transactions", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const rows = await prisma.walletTransaction.findMany({
+      where: { tenantId: req.tenantId! },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        id: true,
+        type: true,
+        deltaCredits: true,
+        deltaReserved: true,
+        balanceAfter: true,
+        feature: true,
+        reason: true,
+        createdAt: true,
+      },
+    });
+    res.json({ success: true, data: rows });
   } catch (err) {
     next(err);
   }
