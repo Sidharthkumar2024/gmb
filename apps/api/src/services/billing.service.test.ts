@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const deps = vi.hoisted(() => ({
   walletFindFirst: vi.fn(),
+  walletCreate: vi.fn(),
   walletTxnFindUnique: vi.fn(),
   txExecuteRaw: vi.fn(),
   txWalletUpdate: vi.fn(),
@@ -26,7 +27,7 @@ vi.mock("@nexaflow/db", async (importOriginal) => {
   return {
     ...actual,
     prisma: {
-      wallet: { findFirst: deps.walletFindFirst },
+      wallet: { findFirst: deps.walletFindFirst, create: deps.walletCreate },
       walletTransaction: { findUnique: deps.walletTxnFindUnique },
       // Run the interactive-transaction callback against the mock tx client.
       $transaction: (fn: (t: typeof tx) => unknown) => Promise.resolve(fn(tx)),
@@ -158,9 +159,18 @@ describe("grantCredits", () => {
     expect(deps.walletFindFirst).not.toHaveBeenCalled();
   });
 
-  it("throws 404 when the tenant has no wallet", async () => {
+  it("provisions a wallet when the tenant has none, then credits it", async () => {
     deps.walletFindFirst.mockResolvedValue(null);
-    await expect(grantCredits("t1", 100)).rejects.toMatchObject({ statusCode: 404 });
+    deps.walletCreate.mockResolvedValue({ id: "w_new" });
+    deps.walletTxnFindUnique.mockResolvedValue(null);
+    deps.txWalletUpdate.mockResolvedValue({ balanceCredits: 100 });
+    await grantCredits("t1", 100, { idempotencyKey: "razorpay:pay_new" });
+    expect(deps.walletCreate).toHaveBeenCalledWith({ data: { tenantId: "t1" }, select: { id: true } });
+    expect(deps.txWalletUpdate).toHaveBeenCalledWith({
+      where: { id: "w_new" },
+      data: { balanceCredits: { increment: 100 } },
+      select: { balanceCredits: true },
+    });
   });
 
   it("is idempotent — a seen idempotencyKey short-circuits", async () => {

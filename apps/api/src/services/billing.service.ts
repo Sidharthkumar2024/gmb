@@ -303,13 +303,17 @@ export async function grantCredits(
 ): Promise<void> {
   if (credits <= 0) return;
 
-  const wallet = await prisma.wallet.findFirst({
+  // Provision a wallet on first grant if the tenant has none. Self-service
+  // signups get a wallet up front, but a tenant created another way (e.g. a
+  // partner-provisioned customer) may not — and a top-up must never fail just
+  // because the wallet row doesn't exist yet.
+  let wallet = await prisma.wallet.findFirst({
     where: { tenantId },
     orderBy: { createdAt: "asc" },
     select: { id: true },
   });
   if (!wallet) {
-    throw new ApiError(ErrorCodes.NOT_FOUND, 404, "No wallet for this tenant.");
+    wallet = await prisma.wallet.create({ data: { tenantId }, select: { id: true } });
   }
 
   // Fast path: this grant was already applied (replayed webhook).
