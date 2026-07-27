@@ -10,6 +10,7 @@ import workspaceRoutes from "./routes/workspace.routes";
 import adminRoutes from "./routes/admin.routes";
 import partnerRoutes from "./routes/partner.routes";
 import billingRoutes from "./routes/billing.routes";
+import uploadsRoutes from "./routes/uploads.routes";
 import {
   primeGoogleOAuthCache,
   getCachedGoogleClientConfig,
@@ -87,6 +88,8 @@ app.use("/api/v1/partner", partnerRoutes);
 // catch-all below — that router applies requireAuth to everything under it, so
 // the public webhooks would 401 before reaching their handler if mounted after.
 app.use("/api/v1/billing", billingRoutes);
+// Direct-to-storage upload presign: POST /api/v1/uploads/presign (authed).
+app.use("/api/v1/uploads", uploadsRoutes);
 // Mounted at the version root: these paths are /language-settings,
 // /currency-settings, /customer/wallets and /products/customer-access.
 app.use("/api/v1", workspaceRoutes);
