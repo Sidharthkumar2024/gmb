@@ -18,6 +18,7 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string }> }
     items: [
       { href: "/partner", name: "Dashboard" },
       { href: "/partner/branding", name: "White-label" },
+      { href: "/partner/plans", name: "Resale plans" },
       { href: "/partner/team", name: "Team" },
       { href: "/partner/google", name: "Google" },
       { href: "/partner/support", name: "Tickets" },

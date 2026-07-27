@@ -172,12 +172,40 @@ model Plan {
   isDefault Boolean    @default(false)
   sortOrder Int        @default(100)
 
-  tenants Tenant[]
+  tenants      Tenant[]
+  partnerPlans PartnerPlan[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
+}
+
+/// A white-label partner's retail plan: it resells a platform Plan (the
+/// wholesale) to the partner's own customers at a marked-up retail price.
+/// Margin (retail − wholesale) is DERIVED in the service from the base plan's
+/// current price, never stored, so it can't drift. onDelete Restrict on the base
+/// plan means a platform plan that a partner is actively reselling can't be
+/// deleted out from under them.
+model PartnerPlan {
+  id              String @id @default(cuid())
+  partnerTenantId String
+  partnerTenant   Tenant @relation("PartnerResalePlans", fields: [partnerTenantId], references: [id], onDelete: Cascade)
+
+  basePlanId String
+  basePlan   Plan   @relation(fields: [basePlanId], references: [id], onDelete: Restrict)
+
+  name        String
+  retailCents Int
+  currency    String     @default("USD")
+  status      PlanStatus @default(ACTIVE)
+  sortOrder   Int        @default(100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([partnerTenantId])
+  @@index([basePlanId])
 }
 
 enum UserRole {
@@ -242,6 +270,7 @@ model Tenant {
   supportTickets     SupportTicket[]
   whiteLabelConfig   WhiteLabelConfig?
   payments           Payment[]
+  partnerPlans       PartnerPlan[] @relation("PartnerResalePlans")
   // GmbReportSchedule and GmbAutopilotConfig are deliberately absent: both are
   // one-row-per-tenant configs keyed by `tenantId @unique` with no declared FK
   // relation in the source schema. Adding back-relations here would require
