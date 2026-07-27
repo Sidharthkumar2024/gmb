@@ -32,6 +32,10 @@ import {
   startGmbReportScheduleWorker,
   stopGmbReportScheduleWorker,
 } from "./services/gmbReportScheduler.service";
+import {
+  startPartnerInvoiceWorker,
+  stopPartnerInvoiceWorker,
+} from "./services/partnerInvoice.service";
 
 const app = express();
 const PORT = Number(process.env.API_PORT ?? 3001);
@@ -122,8 +126,11 @@ async function startWorkers(): Promise<void> {
     startGmbAutopilotWorker(),
     startGmbPostPublisherWorker(),
     startGmbReportScheduleWorker(),
+    startPartnerInvoiceWorker(),
   ]);
-  console.log("[workers] GMB auto-sync, autopilot, post publisher, report scheduler started");
+  console.log(
+    "[workers] GMB auto-sync, autopilot, post publisher, report scheduler, partner invoice started",
+  );
 }
 
 async function stopWorkers(): Promise<void> {
@@ -133,6 +140,7 @@ async function stopWorkers(): Promise<void> {
     stopGmbAutopilotWorker(),
     stopGmbPostPublisherWorker(),
     stopGmbReportScheduleWorker(),
+    stopPartnerInvoiceWorker(),
   ]);
 }
 

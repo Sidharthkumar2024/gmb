@@ -35,6 +35,7 @@ export const QueueNames = {
   DEMO_EXPIRY: "demo-expiry",
   AI_VISIBILITY: "ai-visibility",
   COMPLIANCE_ESCALATION: "compliance-escalation",
+  PARTNER_INVOICE: "partner-invoice",
 } as const;
 
 export type QueueName = (typeof QueueNames)[keyof typeof QueueNames];
@@ -70,6 +71,7 @@ export type WebhookJobData = WebhookDeliveryData;
 export type WabaTokenExpiryJobData = { kind: "scan" };
 export type GmbPostPublisherJobData = { kind: "sweep" };
 export type GmbReportScheduleJobData = { kind: "sweep" };
+export type PartnerInvoiceJobData = { kind: "sweep" };
 export type GmbAutopilotJobData = { kind: "sweep" };
 export type GmbAutoSyncJobData = { kind: "sweep" };
 export type TemplateStatusSyncJobData = { kind: "sweep" };
@@ -160,6 +162,10 @@ export function getGmbAutoSyncQueue(): Queue<GmbAutoSyncJobData> {
 
 export function getGmbReportScheduleQueue(): Queue<GmbReportScheduleJobData> {
   return makeQueue<GmbReportScheduleJobData>(QueueNames.GMB_REPORT_SCHEDULE);
+}
+
+export function getPartnerInvoiceQueue(): Queue<PartnerInvoiceJobData> {
+  return makeQueue<PartnerInvoiceJobData>(QueueNames.PARTNER_INVOICE);
 }
 
 export function getTemplateStatusSyncQueue(): Queue<TemplateStatusSyncJobData> {

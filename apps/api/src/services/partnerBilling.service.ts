@@ -116,10 +116,13 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-export async function getPartnerStatement(partnerTenantId: string): Promise<PartnerStatement> {
+export async function getPartnerStatement(
+  partnerTenantId: string,
+  period?: { year: number; month0: number }, // month0 = 0-based; omit for current month
+): Promise<PartnerStatement> {
   const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth(); // 0-based
+  const year = period?.year ?? now.getUTCFullYear();
+  const month = period?.month0 ?? now.getUTCMonth(); // 0-based
   const monthStart = new Date(Date.UTC(year, month, 1));
   const nextMonth = new Date(Date.UTC(year, month + 1, 1));
 

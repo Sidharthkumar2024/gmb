@@ -21,6 +21,11 @@ import {
 } from "../services/partnerPlan.service";
 import { listPartnerTransactions, getPartnerStatement } from "../services/partnerBilling.service";
 import {
+  listPartnerInvoices,
+  getPartnerInvoice,
+  finalisePartnerInvoice,
+} from "../services/partnerInvoice.service";
+import {
   getPartnerGatewayStatus,
   savePartnerGatewayKeys,
   setPartnerActiveProvider,
@@ -202,6 +207,40 @@ router.get("/transactions", async (req: RequestWithAuth, res: Response, next: Ne
 router.get("/statement", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await getPartnerStatement(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Finalised past invoices (snapshots produced by the monthly job).
+router.get("/invoices", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await listPartnerInvoices(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/invoices/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getPartnerInvoice(req.tenantId!, req.params.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Close the previous month now (ops/self-service; the monthly job does this
+// automatically). Idempotent — re-closing returns the existing invoice.
+router.post("/invoices/close-previous", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const now = new Date();
+    const prev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const invoice = await finalisePartnerInvoice(
+      req.tenantId!,
+      prev.getUTCFullYear(),
+      prev.getUTCMonth() + 1,
+    );
+    res.status(201).json({ success: true, data: invoice });
   } catch (err) {
     next(err);
   }

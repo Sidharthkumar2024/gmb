@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PartnerShell, PtnCard, PtnLabel, PtnPill } from "../../../src/components/gmb/PartnerShell";
 import { api, ApiClientError } from "../../../src/lib/api";
@@ -41,16 +42,47 @@ function byCurrency(map: Record<string, number>): string {
   return e.length === 0 ? "—" : e.map(([c, m]) => money(m, c)).join(" · ");
 }
 
+interface FinalisedInvoice {
+  id: string;
+  number: string;
+  year: number;
+  month: number;
+  issuedAt: string;
+  statement: Statement;
+}
+
 export default function PartnerInvoicesPage() {
   const [stmt, setStmt] = useState<Statement | null>(null);
+  const [invoices, setInvoices] = useState<FinalisedInvoice[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
+
+  const loadInvoices = () =>
+    api
+      .get<FinalisedInvoice[]>("/api/v1/partner/invoices")
+      .then((r) => setInvoices(r ?? []))
+      .catch(() => setInvoices([]));
 
   useEffect(() => {
     void api
       .get<Statement>("/api/v1/partner/statement")
       .then(setStmt)
       .catch((e) => setError(e instanceof ApiClientError ? e.message : "Could not load statement."));
+    void loadInvoices();
   }, []);
+
+  const closePrevious = async () => {
+    setClosing(true);
+    setError(null);
+    try {
+      await api.post("/api/v1/partner/invoices/close-previous");
+      await loadInvoices();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not close the month.");
+    } finally {
+      setClosing(false);
+    }
+  };
 
   const marginTone = (v: number) => (v > 0 ? "text-ptn-accent" : v < 0 ? "text-ptn-danger" : "text-ptn-subtle");
 
@@ -139,9 +171,68 @@ export default function PartnerInvoicesPage() {
       )}
 
       <p className="mt-3 text-micro text-ptn-subtle">
-        Figures are the live month-to-date derivation. A finalised, downloadable invoice is issued at
+        Figures are the live month-to-date derivation. A finalised invoice is issued automatically at
         month close.
       </p>
+
+      <div className="mt-6 mb-3 flex items-center gap-2">
+        <PtnLabel>Finalised invoices</PtnLabel>
+        <button
+          type="button"
+          onClick={closePrevious}
+          disabled={closing}
+          className="ml-auto rounded-control border border-ptn-line px-3 py-1.5 text-xs2 font-medium text-ptn-muted hover:bg-ptn-panel-hover disabled:opacity-50"
+        >
+          {closing ? "Closing…" : "Close previous month now"}
+        </button>
+      </div>
+
+      {invoices.length === 0 ? (
+        <PtnCard>
+          <div className="py-6 text-center text-sm2 text-ptn-muted">
+            No finalised invoices yet. One is issued after each month closes.
+          </div>
+        </PtnCard>
+      ) : (
+        <PtnCard className="overflow-x-auto p-0">
+          <table className="w-full border-collapse text-left">
+            <thead>
+              <tr className="border-b border-ptn-line">
+                {["Invoice", "Period", "Issued", "Margin", ""].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 font-geist-mono text-micro font-medium uppercase tracking-[0.1em] text-ptn-subtle"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((inv) => (
+                <tr key={inv.id} className="border-b border-ptn-line/60 last:border-0 hover:bg-ptn-panel-hover">
+                  <td className="px-4 py-3 font-geist-mono text-xs2 text-ptn-ink">{inv.number}</td>
+                  <td className="px-4 py-3 text-xs2 text-ptn-muted">{inv.statement.period.label}</td>
+                  <td className="whitespace-nowrap px-4 py-3 font-geist-mono text-micro text-ptn-subtle">
+                    {new Date(inv.issuedAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3 font-geist-mono text-xs2 text-ptn-muted">
+                    {byCurrency(inv.statement.totals.marginByCurrency)}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Link
+                      href={`/partner/invoices/${inv.id}`}
+                      className="rounded-control border border-ptn-line px-2.5 py-1 text-xs2 font-medium text-ptn-muted no-underline hover:bg-ptn-panel-hover hover:no-underline"
+                    >
+                      View
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </PtnCard>
+      )}
     </PartnerShell>
   );
 }

@@ -208,6 +208,27 @@ model PartnerPlan {
   @@index([basePlanId])
 }
 
+/// A finalised monthly billing statement for a partner — the snapshot of what
+/// getPartnerStatement derived at month close, frozen so the document doesn't
+/// drift as later data changes. One per (partner, year, month); the monthly job
+/// upserts it idempotently. `snapshot` holds the full PartnerStatement JSON.
+model PartnerInvoice {
+  id              String @id @default(cuid())
+  partnerTenantId String
+  partnerTenant   Tenant @relation("PartnerInvoices", fields: [partnerTenantId], references: [id], onDelete: Cascade)
+
+  year   Int
+  month  Int // 1-based
+  number String @unique
+
+  snapshot Json
+
+  issuedAt DateTime @default(now())
+
+  @@unique([partnerTenantId, year, month])
+  @@index([partnerTenantId, issuedAt])
+}
+
 enum UserRole {
   SUPER_ADMIN
   WHITE_LABEL_ADMIN
@@ -270,7 +291,8 @@ model Tenant {
   supportTickets     SupportTicket[]
   whiteLabelConfig   WhiteLabelConfig?
   payments           Payment[]
-  partnerPlans       PartnerPlan[] @relation("PartnerResalePlans")
+  partnerPlans       PartnerPlan[]    @relation("PartnerResalePlans")
+  partnerInvoices    PartnerInvoice[] @relation("PartnerInvoices")
   // GmbReportSchedule and GmbAutopilotConfig are deliberately absent: both are
   // one-row-per-tenant configs keyed by `tenantId @unique` with no declared FK
   // relation in the source schema. Adding back-relations here would require
