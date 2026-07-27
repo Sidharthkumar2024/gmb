@@ -19,7 +19,7 @@ vi.mock("@nexaflow/db", async (importOriginal) => {
   };
 });
 
-import { listPartnerTransactions } from "./partnerBilling.service";
+import { listPartnerTransactions, getPartnerStatement } from "./partnerBilling.service";
 
 afterEach(() => vi.clearAllMocks());
 
@@ -55,5 +55,47 @@ describe("listPartnerTransactions", () => {
     expect(out.totals.payments).toBe(3); // all rows listed
     expect(out.totals.creditsSold).toBe(600); // refunded row excluded
     expect(out.totals.collectedByCurrency).toEqual({ INR: 50000, USD: 1000 }); // refund not added
+  });
+});
+
+describe("getPartnerStatement", () => {
+  it("bills wholesale per active child on a plan and derives margin per currency", async () => {
+    deps.tenantFindMany.mockResolvedValue([
+      { id: "c1", name: "Alpha", plan: { name: "Pro", priceCents: 4900, currency: "USD" } },
+      { id: "c2", name: "Beta", plan: { name: "Starter", priceCents: 1500, currency: "USD" } },
+      { id: "c3", name: "Gamma", plan: null }, // no plan → no wholesale
+    ]);
+    deps.paymentFindMany.mockResolvedValue([
+      { tenantId: "c1", amountMinor: 9900, currency: "USD" },
+      { tenantId: "c1", amountMinor: 100, currency: "USD" }, // two payments this month
+      { tenantId: "c2", amountMinor: 2000, currency: "USD" },
+    ]);
+    const s = await getPartnerStatement("partner_1");
+
+    // Only ACTIVE children queried
+    expect(deps.tenantFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { parentTenantId: "partner_1", status: "ACTIVE" } }),
+    );
+    // Wholesale = 4900 + 1500 (Gamma has no plan)
+    expect(s.totals.wholesaleDueByCurrency).toEqual({ USD: 6400 });
+    // Collected = 9900 + 100 + 2000
+    expect(s.totals.collectedByCurrency).toEqual({ USD: 12000 });
+    // Margin = 12000 − 6400
+    expect(s.totals.marginByCurrency).toEqual({ USD: 5600 });
+    expect(s.singleCurrency).toBe("USD");
+    expect(s.totals.activeCustomers).toBe(3);
+    // Per-line: c1 collected 10000 aggregated
+    expect(s.lines.find((l) => l.customerId === "c1")?.collectedThisMonthMinor).toBe(10000);
+  });
+
+  it("returns null singleCurrency when currencies are mixed", async () => {
+    deps.tenantFindMany.mockResolvedValue([
+      { id: "c1", name: "A", plan: { name: "P", priceCents: 4900, currency: "USD" } },
+      { id: "c2", name: "B", plan: { name: "Q", priceCents: 50000, currency: "INR" } },
+    ]);
+    deps.paymentFindMany.mockResolvedValue([]);
+    const s = await getPartnerStatement("partner_1");
+    expect(s.singleCurrency).toBeNull();
+    expect(s.totals.wholesaleDueByCurrency).toEqual({ USD: 4900, INR: 50000 });
   });
 });

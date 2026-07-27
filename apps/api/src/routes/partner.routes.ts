@@ -19,7 +19,7 @@ import {
   updatePartnerPlan,
   deletePartnerPlan,
 } from "../services/partnerPlan.service";
-import { listPartnerTransactions } from "../services/partnerBilling.service";
+import { listPartnerTransactions, getPartnerStatement } from "../services/partnerBilling.service";
 import {
   getPartnerGatewayStatus,
   savePartnerGatewayKeys,
@@ -192,6 +192,16 @@ router.delete("/plans/:id", async (req: RequestWithAuth, res: Response, next: Ne
 router.get("/transactions", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await listPartnerTransactions(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Monthly billing statement / invoices -----------------------------------
+
+router.get("/statement", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getPartnerStatement(req.tenantId!) });
   } catch (err) {
     next(err);
   }

@@ -4,6 +4,20 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
+import { api } from "../../lib/api";
+
+interface CommissionSummary {
+  marginByCurrency: Record<string, number>;
+  label: string;
+}
+
+function money(minor: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(minor / 100);
+  } catch {
+    return `${(minor / 100).toFixed(2)} ${currency}`;
+  }
+}
 
 // Shell for the Partner Portal (white-label reseller). Dark green theme per the
 // Partner Portal design, distinct from the purple admin console.
@@ -21,6 +35,7 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string }> }
       { href: "/partner/plans", name: "Resale plans" },
       { href: "/partner/transactions", name: "Transactions" },
       { href: "/partner/gateway", name: "Payment gateway" },
+      { href: "/partner/invoices", name: "Invoices" },
       { href: "/partner/team", name: "Team" },
       { href: "/partner/google", name: "Google" },
       { href: "/partner/support", name: "Tickets" },
@@ -34,6 +49,18 @@ export function PartnerShell({ title, children }: { title: string; children: Rea
   const { user, loading, signOut } = useAuth();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  // Real month-to-date commission for the sidebar card, from the statement.
+  const [commission, setCommission] = useState<CommissionSummary | null>(null);
+  useEffect(() => {
+    if (!mounted || loading || user?.role !== "WHITE_LABEL_ADMIN") return;
+    void api
+      .get<{ totals: { marginByCurrency: Record<string, number> }; period: { label: string } }>(
+        "/api/v1/partner/statement",
+      )
+      .then((s) => setCommission({ marginByCurrency: s.totals.marginByCurrency, label: s.period.label }))
+      .catch(() => setCommission(null));
+  }, [mounted, loading, user]);
 
   useEffect(() => {
     if (!mounted || loading) return;
@@ -101,12 +128,27 @@ export function PartnerShell({ title, children }: { title: string; children: Rea
 
         <div className="m-3 rounded-[12px] border border-ptn-line bg-ptn-panel-hover px-3.5 py-3">
           <div className="font-geist-mono text-micro uppercase tracking-[0.1em] text-ptn-subtle">
-            Commission · this month
+            Margin · {commission?.label ?? "this month"}
           </div>
-          <div className="mt-1 text-[15px] font-bold text-ptn-muted">Enabled with billing</div>
-          <div className="mt-0.5 text-[11px] text-ptn-subtle">
-            Payouts appear once payments go live.
-          </div>
+          {commission ? (
+            (() => {
+              const entries = Object.entries(commission.marginByCurrency);
+              return (
+                <>
+                  <div className="mt-1 text-[15px] font-bold text-ptn-ink">
+                    {entries.length === 0
+                      ? "—"
+                      : entries.map(([c, m]) => money(m, c)).join(" · ")}
+                  </div>
+                  <Link href="/partner/invoices" className="mt-0.5 block text-[11px] text-ptn-accent no-underline hover:underline">
+                    View statement →
+                  </Link>
+                </>
+              );
+            })()
+          ) : (
+            <div className="mt-1 text-[15px] font-bold text-ptn-muted">—</div>
+          )}
         </div>
       </aside>
 
