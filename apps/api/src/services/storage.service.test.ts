@@ -6,6 +6,7 @@ const deps = vi.hoisted(() => ({
   createSecret: vi.fn(),
   updateSecret: vi.fn(),
   rotateSecret: vi.fn(),
+  deleteSecret: vi.fn(),
 }));
 
 vi.mock("./secretVault.service", () => ({
@@ -14,6 +15,7 @@ vi.mock("./secretVault.service", () => ({
   createSecret: deps.createSecret,
   updateSecret: deps.updateSecret,
   rotateSecret: deps.rotateSecret,
+  deleteSecret: deps.deleteSecret,
 }));
 
 import { getStorageConfig, presignUpload, saveStorageConfig } from "./storage.service";

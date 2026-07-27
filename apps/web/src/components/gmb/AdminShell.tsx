@@ -38,6 +38,7 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string }> }
       { href: "/admin/email", name: "Email" },
       { href: "/admin/email-templates", name: "Email templates" },
       { href: "/admin/providers", name: "Integrations" },
+      { href: "/admin/storage", name: "Image storage" },
       { href: "/admin/health", name: "Health" },
       { href: "/admin/audit", name: "Audit log" },
     ],

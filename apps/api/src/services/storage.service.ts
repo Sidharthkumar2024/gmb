@@ -7,6 +7,7 @@ import {
   updateSecret,
   rotateSecret,
   resolveSecretValue,
+  deleteSecret,
   type SecretContext,
 } from "./secretVault.service";
 
@@ -118,6 +119,12 @@ export async function saveStorageConfig(
       createdByUserId,
     });
   }
+}
+
+/** Remove the stored storage config (disables uploads until reconfigured). */
+export async function deleteStorageConfig(): Promise<void> {
+  const entry = await findStorageEntry();
+  if (entry) await deleteSecret(PLATFORM_CTX, entry.id);
 }
 
 function hmac(key: crypto.BinaryLike, data: string): Buffer {

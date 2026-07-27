@@ -19,6 +19,12 @@ import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { requireAuth, type RequestWithAuth } from "../middleware/auth";
 import { requireRole } from "../middleware/rbac";
 import { logAudit, extractRequestMeta } from "../services/audit.service";
+import {
+  getStorageConfig,
+  saveStorageConfig,
+  deleteStorageConfig,
+  type StorageProvider,
+} from "../services/storage.service";
 import { getSafeGoogleOAuthConfig } from "../services/googleOAuthConfig.service";
 import {
   listProviders,
@@ -855,6 +861,73 @@ router.delete("/smtp", async (req: RequestWithAuth, res: Response, next: NextFun
       resource: "SmtpConfig",
       resourceId: existing.id,
       oldValues: { host: (existing.metadata as SmtpMeta | null)?.host ?? null },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: { deleted: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Object storage (S3 / R2) ------------------------------------------------
+// Platform config for image uploads. Keys live in the Secret Vault; only a
+// last-4 mask is ever returned, same as SMTP/AI keys.
+
+const storagePutSchema = z.object({
+  provider: z.enum(["S3", "R2"]),
+  bucket: z.string().min(1).max(255),
+  region: z.string().min(1).max(64),
+  endpoint: z.string().max(255).optional(),
+  publicBaseUrl: z.string().max(500).optional(),
+  accessKeyId: z.string().min(1).max(255),
+  secretAccessKey: z.string().max(500).optional(),
+});
+
+router.get("/storage", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getStorageConfig() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/storage", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = storagePutSchema.parse(req.body);
+    await saveStorageConfig(
+      {
+        provider: input.provider as StorageProvider,
+        bucket: input.bucket,
+        region: input.region,
+        endpoint: input.endpoint,
+        publicBaseUrl: input.publicBaseUrl,
+        accessKeyId: input.accessKeyId,
+        secretAccessKey: input.secretAccessKey,
+      },
+      req.userId,
+    );
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "StorageConfig",
+      newValues: { provider: input.provider, bucket: input.bucket, region: input.region },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: await getStorageConfig() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/storage", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    await deleteStorageConfig();
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "DELETE",
+      resource: "StorageConfig",
       ...extractRequestMeta(req),
     });
     res.json({ success: true, data: { deleted: true } });
