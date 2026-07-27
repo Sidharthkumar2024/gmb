@@ -12,8 +12,8 @@ export function stripeCreditPriceCents(): number {
   return Number.isFinite(v) && v > 0 ? Math.round(v) : 1;
 }
 
-function secretKey(): string {
-  const key = process.env.STRIPE_SECRET_KEY;
+function secretKey(override?: string): string {
+  const key = override ?? process.env.STRIPE_SECRET_KEY;
   if (!key || key.startsWith("your_")) {
     throw new ApiError(
       ErrorCodes.SERVICE_UNAVAILABLE,
@@ -41,11 +41,14 @@ export interface StripeCheckout {
  * session metadata so the webhook credits the right wallet without trusting the
  * browser. Success/cancel return to the billing page.
  */
-export async function createStripeCheckout(args: {
-  tenantId: string;
-  credits: number;
-}): Promise<StripeCheckout> {
-  const key = secretKey();
+export async function createStripeCheckout(
+  args: {
+    tenantId: string;
+    credits: number;
+  },
+  secretOverride?: string,
+): Promise<StripeCheckout> {
+  const key = secretKey(secretOverride);
   const amountCents = args.credits * stripeCreditPriceCents();
   const webUrl = process.env.WEB_URL ?? "http://localhost:3000";
 
@@ -104,8 +107,9 @@ export interface StripeWebhookResult {
 export function verifyStripeWebhook(
   rawBody: Buffer | undefined,
   signature: string | string[] | undefined,
+  secretOverride?: string,
 ): StripeWebhookResult | null {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  const secret = secretOverride ?? process.env.STRIPE_WEBHOOK_SECRET;
   const sigHeader = Array.isArray(signature) ? signature[0] : signature;
   if (!secret || !rawBody || !sigHeader) return null;
 

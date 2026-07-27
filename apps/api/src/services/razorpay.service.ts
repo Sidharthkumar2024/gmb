@@ -12,9 +12,18 @@ function creditPricePaisa(): number {
   return Number.isFinite(v) && v > 0 ? Math.round(v) : 100;
 }
 
-function credentials(): { keyId: string; keySecret: string } {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+// Credentials come from env (the platform account) unless an override is passed
+// — a partner-owned account, resolved from the partner's vault. Every entry
+// point takes an optional override so a partner's customer's top-up is captured
+// on the partner's own gateway rather than the platform's.
+export interface RazorpayCreds {
+  keyId: string;
+  keySecret: string;
+}
+
+function credentials(override?: RazorpayCreds): RazorpayCreds {
+  const keyId = override?.keyId ?? process.env.RAZORPAY_KEY_ID;
+  const keySecret = override?.keySecret ?? process.env.RAZORPAY_KEY_SECRET;
   if (!keyId || !keySecret) {
     throw new ApiError(
       ErrorCodes.SERVICE_UNAVAILABLE,
@@ -38,11 +47,14 @@ export interface TopUpOrder {
  * count are stored in the order `notes`, so the webhook can credit the right
  * wallet without trusting anything the browser sends back.
  */
-export async function createRazorpayOrder(args: {
-  tenantId: string;
-  credits: number;
-}): Promise<TopUpOrder> {
-  const { keyId, keySecret } = credentials();
+export async function createRazorpayOrder(
+  args: {
+    tenantId: string;
+    credits: number;
+  },
+  override?: RazorpayCreds,
+): Promise<TopUpOrder> {
+  const { keyId, keySecret } = credentials(override);
   const amountPaisa = args.credits * creditPricePaisa();
 
   const res = await fetch("https://api.razorpay.com/v1/orders", {
@@ -79,8 +91,9 @@ export async function createRazorpayOrder(args: {
 export function verifyRazorpayWebhook(
   rawBody: Buffer | undefined,
   signature: string | string[] | undefined,
+  secretOverride?: string,
 ): boolean {
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  const secret = secretOverride ?? process.env.RAZORPAY_WEBHOOK_SECRET;
   const sig = Array.isArray(signature) ? signature[0] : signature;
   if (!secret || !rawBody || !sig) return false;
   const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
@@ -98,8 +111,9 @@ export function verifyRazorpayWebhook(
  */
 export async function fetchRazorpayOrderNotes(
   orderId: string,
+  override?: RazorpayCreds,
 ): Promise<Record<string, string> | null> {
-  const { keyId, keySecret } = credentials();
+  const { keyId, keySecret } = credentials(override);
   const res = await fetch(`https://api.razorpay.com/v1/orders/${orderId}`, {
     headers: {
       Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PartnerShell, PtnCard, PtnLabel, PtnPill } from "../../../src/components/gmb/PartnerShell";
-import { api, ApiClientError } from "../../../src/lib/api";
+import { api, API_BASE, ApiClientError } from "../../../src/lib/api";
 
 // Partner payment gateway. The partner stores its OWN Razorpay / Stripe keys
 // (in the PARTNER-scope vault, only a last-4 ever comes back). Live charge
@@ -13,11 +13,14 @@ type Provider = "razorpay" | "stripe";
 interface ProviderStatus {
   provider: Provider;
   configured: boolean;
+  webhookConfigured: boolean;
+  ready: boolean;
   active: boolean;
   last4: string | null;
   keyIdLast4: string | null;
 }
 interface GatewayStatus {
+  partnerTenantId: string;
   activeProvider: Provider | null;
   liveRoutingEnabled: boolean;
   providers: ProviderStatus[];
@@ -42,9 +45,11 @@ export default function PartnerGatewayPage() {
   const [status, setStatus] = useState<GatewayStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [forms, setForms] = useState<Record<Provider, { keyId: string; secret: string }>>({
-    razorpay: { keyId: "", secret: "" },
-    stripe: { keyId: "", secret: "" },
+  const [forms, setForms] = useState<
+    Record<Provider, { keyId: string; secret: string; webhookSecret: string }>
+  >({
+    razorpay: { keyId: "", secret: "", webhookSecret: "" },
+    stripe: { keyId: "", secret: "", webhookSecret: "" },
   });
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -68,8 +73,9 @@ export default function PartnerGatewayPage() {
     try {
       const body: Record<string, string> = { provider, secret: f.secret };
       if (META[provider].needsKeyId) body.keyId = f.keyId;
+      if (f.webhookSecret.trim()) body.webhookSecret = f.webhookSecret.trim();
       setStatus(await api.put<GatewayStatus>("/api/v1/partner/gateway/keys", body));
-      setForms({ ...forms, [provider]: { keyId: "", secret: "" } });
+      setForms({ ...forms, [provider]: { keyId: "", secret: "", webhookSecret: "" } });
       setNotice(`${META[provider].name} keys saved.`);
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not save keys.");
@@ -104,6 +110,11 @@ export default function PartnerGatewayPage() {
     }
   };
 
+  // The webhook must reach the API, not the web app. Prefer the configured API
+  // base; fall back to the current origin (same-origin/proxied deployments).
+  const webhookOrigin =
+    API_BASE || (typeof window !== "undefined" ? window.location.origin : "");
+
   const inputCls =
     "w-full rounded-control border border-ptn-line bg-ptn-bg px-3 py-2 font-geist-mono text-xs2 text-ptn-ink outline-none focus:border-ptn-accent";
 
@@ -122,11 +133,17 @@ export default function PartnerGatewayPage() {
 
       <div className="mb-3.5 rounded-control border border-ptn-line bg-ptn-bg px-4 py-3 text-xs2 text-ptn-muted">
         Keys are stored encrypted — only the last 4 digits are ever shown.{" "}
-        {status && !status.liveRoutingEnabled && (
-          <span className="text-ptn-ink">
-            Customer charges route to your gateway once commission billing is enabled.
-          </span>
-        )}
+        {status &&
+          (status.liveRoutingEnabled ? (
+            <span className="text-ptn-accent">
+              Live: your customers&apos; top-ups are captured on your active gateway.
+            </span>
+          ) : (
+            <span className="text-ptn-ink">
+              Add both API keys and a webhook secret, then activate a provider to route your
+              customers&apos; charges to your own gateway.
+            </span>
+          ))}
       </div>
 
       <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
@@ -138,7 +155,7 @@ export default function PartnerGatewayPage() {
               <div className="flex items-center justify-between">
                 <PtnLabel>{meta.name}</PtnLabel>
                 {p.active ? (
-                  <PtnPill tone="ok">Active</PtnPill>
+                  <PtnPill tone={p.ready ? "ok" : "warn"}>{p.ready ? "Active" : "Active · needs webhook"}</PtnPill>
                 ) : p.configured ? (
                   <PtnPill tone="neutral">Connected</PtnPill>
                 ) : (
@@ -156,9 +173,28 @@ export default function PartnerGatewayPage() {
                   <div>
                     Secret ····<span className="font-geist-mono text-ptn-ink">{p.last4 ?? "••••"}</span>
                   </div>
+                  <div>
+                    Webhook{" "}
+                    {p.webhookConfigured ? (
+                      <span className="text-ptn-accent">configured</span>
+                    ) : (
+                      <span className="text-[#f0b264]">not set</span>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="mt-3 text-xs2 text-ptn-subtle">{meta.hint}</div>
+              )}
+
+              {status && (
+                <div className="mt-3 rounded-control border border-ptn-line bg-ptn-bg px-3 py-2">
+                  <div className="font-geist-mono text-micro uppercase tracking-[0.1em] text-ptn-subtle">
+                    Webhook URL — add this in your {meta.name} dashboard
+                  </div>
+                  <div className="mt-1 break-all font-geist-mono text-micro text-ptn-ink">
+                    {webhookOrigin}/api/v1/billing/webhook/{p.provider}/{status.partnerTenantId}
+                  </div>
+                </div>
               )}
 
               <div className="mt-3 space-y-2">
@@ -179,6 +215,15 @@ export default function PartnerGatewayPage() {
                   value={f.secret}
                   onChange={(e) =>
                     setForms({ ...forms, [p.provider]: { ...f, secret: e.target.value } })
+                  }
+                />
+                <input
+                  className={inputCls}
+                  type="password"
+                  placeholder="Webhook signing secret"
+                  value={f.webhookSecret}
+                  onChange={(e) =>
+                    setForms({ ...forms, [p.provider]: { ...f, webhookSecret: e.target.value } })
                   }
                 />
               </div>

@@ -261,6 +261,7 @@ const saveKeysSchema = z.object({
   provider: gatewayProviderSchema,
   secret: z.string().min(1).max(500),
   keyId: z.string().max(200).optional(),
+  webhookSecret: z.string().max(500).optional(),
 });
 
 router.put("/gateway/keys", async (req: RequestWithAuth, res: Response, next: NextFunction) => {

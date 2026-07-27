@@ -3,6 +3,7 @@ import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { listSecrets, createSecret, updateSecret } from "./secretVault.service";
 import { createRazorpayOrder } from "./razorpay.service";
 import { createStripeCheckout, stripeConfigured, stripeCreditPriceCents } from "./stripe.service";
+import { resolvePartnerGatewayForTenant } from "./partnerCharge.service";
 
 // Payment-gateway abstraction. Two adapters (Razorpay, Stripe); the platform
 // picks one active provider. Provider KEYS live in env per provider (the safest
@@ -134,11 +135,39 @@ export interface TopUpOrder {
   stripe?: { checkoutUrl: string; amountCents: number; currency: string };
 }
 
-/** Start a top-up with whichever gateway is active. */
+/**
+ * Start a top-up. If the paying tenant is a partner's customer and that partner
+ * has a ready gateway, the order is created on the PARTNER's account (so the
+ * money lands with the partner, and the partner's webhook credits the customer).
+ * Otherwise the platform gateway is used. Crediting always flows through
+ * grantCredits regardless, so the ledger stays the source of truth.
+ */
 export async function createTopUpOrder(args: {
   tenantId: string;
   credits: number;
 }): Promise<TopUpOrder> {
+  const routed = await resolvePartnerGatewayForTenant(args.tenantId);
+
+  // Partner-routed: use the partner's own account + provider.
+  if (routed) {
+    const { creds } = routed;
+    if (creds.provider === "stripe") {
+      const s = await createStripeCheckout(args, creds.apiSecret);
+      return {
+        provider: "stripe",
+        credits: args.credits,
+        stripe: { checkoutUrl: s.checkoutUrl, amountCents: s.amountCents, currency: s.currency },
+      };
+    }
+    const r = await createRazorpayOrder(args, { keyId: creds.keyId!, keySecret: creds.apiSecret });
+    return {
+      provider: "razorpay",
+      credits: args.credits,
+      razorpay: { orderId: r.orderId, amountPaisa: r.amountPaisa, currency: r.currency, keyId: r.keyId },
+    };
+  }
+
+  // Platform-routed (default).
   const provider = await getActiveProvider();
   if (provider === "stripe") {
     const s = await createStripeCheckout(args);
