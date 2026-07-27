@@ -20,6 +20,12 @@ import {
   deletePartnerPlan,
 } from "../services/partnerPlan.service";
 import { listPartnerTransactions } from "../services/partnerBilling.service";
+import {
+  getPartnerGatewayStatus,
+  savePartnerGatewayKeys,
+  setPartnerActiveProvider,
+  disconnectPartnerGateway,
+} from "../services/partnerGateway.service";
 import { UserRole, PlanStatus } from "@nexaflow/db";
 
 // Partner (white-label reseller) portal API. Every route is a WHITE_LABEL_ADMIN
@@ -186,6 +192,50 @@ router.delete("/plans/:id", async (req: RequestWithAuth, res: Response, next: Ne
 router.get("/transactions", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await listPartnerTransactions(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Payment gateway (partner-owned keys, PARTNER-scope vault) ---------------
+
+router.get("/gateway", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getPartnerGatewayStatus(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const gatewayProviderSchema = z.enum(["razorpay", "stripe"]);
+const saveKeysSchema = z.object({
+  provider: gatewayProviderSchema,
+  secret: z.string().min(1).max(500),
+  keyId: z.string().max(200).optional(),
+});
+
+router.put("/gateway/keys", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = saveKeysSchema.parse(req.body);
+    res.json({ success: true, data: await savePartnerGatewayKeys(req.tenantId!, input, req.userId) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/gateway/active", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { provider } = z.object({ provider: gatewayProviderSchema }).parse(req.body);
+    res.json({ success: true, data: await setPartnerActiveProvider(req.tenantId!, provider, req.userId) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/gateway/:provider", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const provider = gatewayProviderSchema.parse(req.params.provider);
+    res.json({ success: true, data: await disconnectPartnerGateway(req.tenantId!, provider) });
   } catch (err) {
     next(err);
   }

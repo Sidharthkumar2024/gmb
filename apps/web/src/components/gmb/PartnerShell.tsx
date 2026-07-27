@@ -20,6 +20,7 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string }> }
       { href: "/partner/branding", name: "White-label" },
       { href: "/partner/plans", name: "Resale plans" },
       { href: "/partner/transactions", name: "Transactions" },
+      { href: "/partner/gateway", name: "Payment gateway" },
       { href: "/partner/team", name: "Team" },
       { href: "/partner/google", name: "Google" },
       { href: "/partner/support", name: "Tickets" },
