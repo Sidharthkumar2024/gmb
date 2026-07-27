@@ -19,6 +19,7 @@ import {
   updatePartnerPlan,
   deletePartnerPlan,
 } from "../services/partnerPlan.service";
+import { listPartnerTransactions } from "../services/partnerBilling.service";
 import { UserRole, PlanStatus } from "@nexaflow/db";
 
 // Partner (white-label reseller) portal API. Every route is a WHITE_LABEL_ADMIN
@@ -174,6 +175,17 @@ router.delete("/plans/:id", async (req: RequestWithAuth, res: Response, next: Ne
   try {
     await deletePartnerPlan(req.tenantId!, req.params.id);
     res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Transactions -----------------------------------------------------------
+// A partner sees only its child customers' payments (scoped by parentTenantId).
+
+router.get("/transactions", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await listPartnerTransactions(req.tenantId!) });
   } catch (err) {
     next(err);
   }
