@@ -83,6 +83,37 @@ export default function PartnerDashboardPage() {
     }
   };
 
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+
+  const toggleStatus = async (c: Customer) => {
+    const next = c.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED";
+    setRowBusy(c.id);
+    setError(null);
+    try {
+      await api.patch(`/api/v1/partner/customers/${c.id}/status`, { status: next });
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not update status.");
+    } finally {
+      setRowBusy(null);
+    }
+  };
+
+  const changePlan = async (c: Customer, partnerPlanId: string) => {
+    setRowBusy(c.id);
+    setError(null);
+    try {
+      await api.patch(`/api/v1/partner/customers/${c.id}/plan`, {
+        partnerPlanId: partnerPlanId || null,
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not change plan.");
+    } finally {
+      setRowBusy(null);
+    }
+  };
+
   const inputCls =
     "w-full rounded-control border border-ptn-line bg-ptn-bg px-3 py-2 text-sm2 text-ptn-ink outline-none focus:border-ptn-accent";
 
@@ -238,7 +269,7 @@ export default function PartnerDashboardPage() {
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="border-b border-ptn-line">
-                  {["Business", "Plan", "Locations", "Users", "Status", "Since"].map((h) => (
+                  {["Business", "Plan", "Locations", "Users", "Status", "Since", ""].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-3 font-geist-mono text-micro font-medium uppercase tracking-[0.1em] text-ptn-subtle"
@@ -263,6 +294,40 @@ export default function PartnerDashboardPage() {
                     </td>
                     <td className="px-4 py-3 font-geist-mono text-micro text-ptn-subtle">
                       {new Date(c.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
+                      <select
+                        aria-label={`Change plan for ${c.name}`}
+                        disabled={rowBusy === c.id}
+                        defaultValue=""
+                        onChange={(e) => {
+                          void changePlan(c, e.target.value);
+                          e.target.value = "";
+                        }}
+                        className="mr-1.5 rounded-control border border-ptn-line bg-ptn-bg px-2 py-1 text-xs2 text-ptn-muted outline-none focus:border-ptn-accent disabled:opacity-50"
+                      >
+                        <option value="" disabled>
+                          Set plan…
+                        </option>
+                        {plans.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                        <option value="">No plan</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => toggleStatus(c)}
+                        disabled={rowBusy === c.id}
+                        className={`rounded-control border px-2.5 py-1 text-xs2 font-medium disabled:opacity-50 ${
+                          c.status === "SUSPENDED"
+                            ? "border-ptn-line text-ptn-accent hover:bg-ptn-panel-hover"
+                            : "border-ptn-line text-[#f0b264] hover:bg-gmb-warn/10"
+                        }`}
+                      >
+                        {rowBusy === c.id ? "…" : c.status === "SUSPENDED" ? "Reactivate" : "Suspend"}
+                      </button>
                     </td>
                   </tr>
                 ))}

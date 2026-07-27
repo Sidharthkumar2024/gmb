@@ -176,6 +176,65 @@ export async function createPartnerCustomer(
   };
 }
 
+// --- Customer management -----------------------------------------------------
+
+/** Ownership guard: the customer must be a child tenant of this partner. */
+async function requireOwnedCustomer(partnerTenantId: string, customerId: string) {
+  const customer = await prisma.tenant.findFirst({
+    where: { id: customerId, parentTenantId: partnerTenantId },
+    select: { id: true, status: true },
+  });
+  if (!customer) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Customer not found.");
+  return customer;
+}
+
+/**
+ * Suspend or reactivate a customer. Only ACTIVE⇄SUSPENDED — a partner can't
+ * hard-delete a customer here (that's a destructive, platform-level action).
+ */
+export async function setPartnerCustomerStatus(
+  partnerTenantId: string,
+  customerId: string,
+  status: "ACTIVE" | "SUSPENDED",
+): Promise<{ id: string; status: TenantStatus }> {
+  await requireOwnedCustomer(partnerTenantId, customerId);
+  const updated = await prisma.tenant.update({
+    where: { id: customerId },
+    data: { status: status === "SUSPENDED" ? TenantStatus.SUSPENDED : TenantStatus.ACTIVE },
+    select: { id: true, status: true },
+  });
+  return updated;
+}
+
+/**
+ * Put a customer on the platform plan behind one of the partner's resale plans,
+ * or clear the plan (null). The resale plan must belong to the partner.
+ */
+export async function setPartnerCustomerPlan(
+  partnerTenantId: string,
+  customerId: string,
+  partnerPlanId: string | null,
+): Promise<{ id: string; planName: string | null }> {
+  await requireOwnedCustomer(partnerTenantId, customerId);
+
+  let basePlanId: string | null = null;
+  if (partnerPlanId) {
+    const rp = await prisma.partnerPlan.findFirst({
+      where: { id: partnerPlanId, partnerTenantId },
+      select: { basePlanId: true },
+    });
+    if (!rp) throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "That resale plan wasn't found.");
+    basePlanId = rp.basePlanId;
+  }
+
+  const updated = await prisma.tenant.update({
+    where: { id: customerId },
+    data: { planId: basePlanId },
+    select: { plan: { select: { name: true } } },
+  });
+  return { id: customerId, planName: updated.plan?.name ?? null };
+}
+
 // --- White-label branding ---------------------------------------------------
 
 export interface Branding {

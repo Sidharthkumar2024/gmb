@@ -12,6 +12,8 @@ import {
   removeStaff,
   getCustomerGoogleStatus,
   createPartnerCustomer,
+  setPartnerCustomerStatus,
+  setPartnerCustomerPlan,
 } from "../services/partner.service";
 import {
   listBasePlans,
@@ -66,6 +68,26 @@ router.post("/customers", async (req: RequestWithAuth, res: Response, next: Next
       ...input,
     });
     res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch("/customers/:id/status", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { status } = z.object({ status: z.enum(["ACTIVE", "SUSPENDED"]) }).parse(req.body);
+    res.json({ success: true, data: await setPartnerCustomerStatus(req.tenantId!, req.params.id, status) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch("/customers/:id/plan", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { partnerPlanId } = z
+      .object({ partnerPlanId: z.string().nullable() })
+      .parse(req.body);
+    res.json({ success: true, data: await setPartnerCustomerPlan(req.tenantId!, req.params.id, partnerPlanId) });
   } catch (err) {
     next(err);
   }
