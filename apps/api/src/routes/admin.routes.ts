@@ -136,9 +136,10 @@ router.get("/tenants", async (req: RequestWithAuth, res: Response, next: NextFun
       orderBy: { createdAt: "desc" },
       take: 200,
       include: {
-        _count: { select: { users: true, gmbLocations: true, gmbReviews: true } },
+        _count: { select: { users: true, gmbLocations: true, gmbReviews: true, children: true } },
         wallets: { select: { balanceCredits: true }, take: 1 },
         plan: { select: { id: true, name: true } },
+        parentTenant: { select: { name: true } },
       },
     });
     res.json({
@@ -149,6 +150,9 @@ router.get("/tenants", async (req: RequestWithAuth, res: Response, next: NextFun
         slug: t.slug,
         industry: t.industry,
         status: t.status,
+        type: t.type, // WHITE_LABEL partner vs DIRECT customer
+        parentName: t.parentTenant?.name ?? null, // the partner this tenant belongs to
+        customerCount: t._count.children, // for a partner, how many customers
         users: t._count.users,
         locations: t._count.gmbLocations,
         reviews: t._count.gmbReviews,

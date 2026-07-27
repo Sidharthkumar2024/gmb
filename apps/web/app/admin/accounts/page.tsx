@@ -16,6 +16,9 @@ interface TenantRow {
   slug: string;
   industry: string | null;
   status: "ACTIVE" | "SUSPENDED" | "DELETED";
+  type: "DIRECT" | "WHITE_LABEL" | string;
+  parentName: string | null;
+  customerCount: number;
   users: number;
   locations: number;
   reviews: number;
@@ -134,7 +137,7 @@ export default function AdminAccountsPage() {
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-adm-line">
-                {["Workspace", "Status", "Plan", "Users", "Locations", "Reviews", "Credits", "Created", ""].map(
+                {["Workspace", "Type", "Status", "Plan", "Users", "Locations", "Reviews", "Credits", "Created", ""].map(
                   (h) => (
                     <th
                       key={h}
@@ -155,6 +158,23 @@ export default function AdminAccountsPage() {
                       {t.slug}
                       {t.industry ? ` · ${t.industry}` : ""}
                     </div>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    {t.type === "WHITE_LABEL" ? (
+                      <div>
+                        <AdmPill tone="brand">Partner</AdmPill>
+                        <div className="mt-1 font-geist-mono text-micro text-adm-subtle">
+                          {t.customerCount} customer{t.customerCount === 1 ? "" : "s"}
+                        </div>
+                      </div>
+                    ) : t.parentName ? (
+                      <div className="text-xs2 text-adm-muted">
+                        Customer of
+                        <div className="text-adm-ink">{t.parentName}</div>
+                      </div>
+                    ) : (
+                      <span className="text-xs2 text-adm-subtle">Direct</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <AdmPill tone={STATUS_TONE[t.status]}>{t.status}</AdmPill>
