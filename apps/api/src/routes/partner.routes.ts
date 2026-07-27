@@ -11,6 +11,7 @@ import {
   setStaffRole,
   removeStaff,
   getCustomerGoogleStatus,
+  createPartnerCustomer,
 } from "../services/partner.service";
 import {
   listBasePlans,
@@ -44,6 +45,27 @@ router.use(requireAuth, requireRole("WHITE_LABEL_ADMIN"));
 router.get("/overview", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await getPartnerOverview(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const createCustomerSchema = z.object({
+  businessName: z.string().min(1).max(120),
+  adminEmail: z.string().email().max(255),
+  adminName: z.string().max(120).optional(),
+  partnerPlanId: z.string().optional(),
+});
+
+router.post("/customers", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = createCustomerSchema.parse(req.body);
+    const result = await createPartnerCustomer({
+      partnerTenantId: req.tenantId!,
+      createdByUserId: req.userId,
+      ...input,
+    });
+    res.status(201).json({ success: true, data: result });
   } catch (err) {
     next(err);
   }

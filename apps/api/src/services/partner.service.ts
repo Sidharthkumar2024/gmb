@@ -60,6 +60,122 @@ export async function getPartnerOverview(partnerTenantId: string): Promise<Partn
   };
 }
 
+// --- Customer onboarding ----------------------------------------------------
+
+export interface CreatePartnerCustomerInput {
+  partnerTenantId: string;
+  businessName: string;
+  adminEmail: string;
+  adminName?: string;
+  partnerPlanId?: string; // one of the partner's resale plans → customer on its base plan
+  createdByUserId?: string;
+}
+
+export interface CreatePartnerCustomerResult {
+  customer: PartnerCustomer;
+  inviteUrl: string;
+  emailSent: boolean;
+}
+
+/**
+ * Provision a new customer workspace under a partner: a child tenant (so it
+ * shows up in the partner's overview/transactions/statement) plus its first
+ * BUSINESS_ADMIN, who sets their own password via the standard reset flow — no
+ * credential ever travels by email. Optionally puts the customer on the base
+ * plan behind one of the partner's resale plans.
+ */
+export async function createPartnerCustomer(
+  input: CreatePartnerCustomerInput,
+): Promise<CreatePartnerCustomerResult> {
+  const businessName = input.businessName.trim();
+  const email = input.adminEmail.trim().toLowerCase();
+  if (!businessName) throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "A business name is required.");
+  if (!email) throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "An admin email is required.");
+
+  const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (existing) {
+    throw new ApiError(ErrorCodes.CONFLICT, 409, "A user with that email already exists.");
+  }
+
+  // A resale plan (if chosen) must belong to THIS partner; the customer is put
+  // on the platform plan it resells, so plan limits + wholesale apply.
+  let basePlanId: string | undefined;
+  if (input.partnerPlanId) {
+    const rp = await prisma.partnerPlan.findFirst({
+      where: { id: input.partnerPlanId, partnerTenantId: input.partnerTenantId },
+      select: { basePlanId: true },
+    });
+    if (!rp) throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "That resale plan wasn't found.");
+    basePlanId = rp.basePlanId;
+  }
+
+  // Unique slug from the business name, disambiguated.
+  const base =
+    businessName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "customer";
+  let slug = base;
+  for (let i = 2; await prisma.tenant.findUnique({ where: { slug }, select: { id: true } }); i += 1) {
+    slug = `${base}-${i}`;
+  }
+
+  const { tenant, user } = await prisma.$transaction(async (tx) => {
+    const tenant = await tx.tenant.create({
+      data: {
+        name: businessName,
+        slug,
+        parentTenantId: input.partnerTenantId,
+        ...(basePlanId ? { planId: basePlanId } : {}),
+      },
+    });
+    // Give the workspace a wallet up front so credit reads never hit a null.
+    await tx.wallet.create({ data: { tenantId: tenant.id }, select: { id: true } });
+    const user = await tx.user.create({
+      data: {
+        tenantId: tenant.id,
+        email,
+        name: input.adminName?.trim() || null,
+        password: await bcrypt.hash(randomBytes(32).toString("hex"), 10),
+        role: UserRole.BUSINESS_ADMIN,
+      },
+    });
+    return { tenant, user };
+  });
+
+  const { token } = await issueAuthToken(user.id, AuthTokenPurpose.PASSWORD_RESET);
+  const webUrl = process.env.WEB_URL ?? "http://localhost:3000";
+  const inviteUrl = `${webUrl}/reset-password?token=${token}`;
+
+  // sendEmail silently skips when SMTP is off, so check first — emailSent must
+  // mean an email actually went out, or the partner won't know to share the link.
+  let emailSent = false;
+  try {
+    if (await resolveSmtpSettings()) {
+      const mail = await renderEmailTemplate("STAFF_INVITE", {
+        inviter: businessName,
+        url: inviteUrl,
+      });
+      await sendEmail({ to: email, ...mail });
+      emailSent = true;
+    }
+  } catch (err) {
+    console.error("[partner] customer invite email failed", err);
+  }
+
+  return {
+    customer: {
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
+      status: tenant.status,
+      planName: null,
+      locations: 0,
+      users: 1,
+      createdAt: tenant.createdAt,
+    },
+    inviteUrl,
+    emailSent,
+  };
+}
+
 // --- White-label branding ---------------------------------------------------
 
 export interface Branding {
