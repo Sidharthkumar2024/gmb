@@ -14,6 +14,7 @@ import {
   createPartnerCustomer,
   setPartnerCustomerStatus,
   setPartnerCustomerPlan,
+  getPartnerCustomerDetail,
 } from "../services/partner.service";
 import {
   listBasePlans,
@@ -68,6 +69,14 @@ router.post("/customers", async (req: RequestWithAuth, res: Response, next: Next
       ...input,
     });
     res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/customers/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getPartnerCustomerDetail(req.tenantId!, req.params.id) });
   } catch (err) {
     next(err);
   }

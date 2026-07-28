@@ -8,6 +8,7 @@ const deps = vi.hoisted(() => ({
   tenantFindFirst: vi.fn(),
   tenantUpdate: vi.fn(),
   partnerPlanFindFirst: vi.fn(),
+  paymentFindMany: vi.fn(),
 }));
 
 vi.mock("@nexaflow/db", async (importOriginal) => {
@@ -17,11 +18,16 @@ vi.mock("@nexaflow/db", async (importOriginal) => {
     prisma: {
       tenant: { findFirst: deps.tenantFindFirst, update: deps.tenantUpdate },
       partnerPlan: { findFirst: deps.partnerPlanFindFirst },
+      payment: { findMany: deps.paymentFindMany },
     },
   };
 });
 
-import { setPartnerCustomerStatus, setPartnerCustomerPlan } from "./partner.service";
+import {
+  setPartnerCustomerStatus,
+  setPartnerCustomerPlan,
+  getPartnerCustomerDetail,
+} from "./partner.service";
 
 afterEach(() => vi.clearAllMocks());
 
@@ -71,5 +77,39 @@ describe("setPartnerCustomerPlan", () => {
     );
     expect(out.planName).toBeNull();
     expect(deps.partnerPlanFindFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe("getPartnerCustomerDetail", () => {
+  it("404s (and never reads payments) when the customer isn't the partner's child", async () => {
+    deps.tenantFindFirst.mockResolvedValue(null);
+    await expect(getPartnerCustomerDetail("partner_1", "other")).rejects.toThrow(/not found/i);
+    expect(deps.tenantFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "other", parentTenantId: "partner_1" } }),
+    );
+    expect(deps.paymentFindMany).not.toHaveBeenCalled();
+  });
+
+  it("returns detail with balance and CAPTURED-only per-currency totals", async () => {
+    deps.tenantFindFirst.mockResolvedValue({
+      id: "c1",
+      name: "Acme",
+      slug: "acme",
+      status: "ACTIVE",
+      createdAt: new Date(),
+      plan: { name: "Pro" },
+      wallets: [{ balanceCredits: 500 }],
+      _count: { users: 2, gmbLocations: 1 },
+    });
+    deps.paymentFindMany.mockResolvedValue([
+      { id: "p1", provider: "RAZORPAY", credits: 500, amountMinor: 50000, currency: "INR", status: "CAPTURED", createdAt: new Date() },
+      { id: "p2", provider: "RAZORPAY", credits: 100, amountMinor: 10000, currency: "INR", status: "REFUNDED", createdAt: new Date() },
+    ]);
+    const d = await getPartnerCustomerDetail("partner_1", "c1");
+    expect(d.creditBalance).toBe(500);
+    expect(d.planName).toBe("Pro");
+    expect(d.users).toBe(2);
+    expect(d.payments).toHaveLength(2); // all listed
+    expect(d.collectedByCurrency).toEqual({ INR: 50000 }); // refund excluded
   });
 });

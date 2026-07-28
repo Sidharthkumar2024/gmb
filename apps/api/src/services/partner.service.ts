@@ -176,6 +176,82 @@ export async function createPartnerCustomer(
   };
 }
 
+// --- Customer detail ---------------------------------------------------------
+
+export interface PartnerCustomerPayment {
+  id: string;
+  provider: string;
+  credits: number;
+  amountMinor: number;
+  currency: string;
+  status: string;
+  createdAt: Date;
+}
+
+export interface PartnerCustomerDetail {
+  id: string;
+  name: string;
+  slug: string;
+  status: TenantStatus;
+  planName: string | null;
+  creditBalance: number;
+  users: number;
+  locations: number;
+  createdAt: Date;
+  payments: PartnerCustomerPayment[];
+  collectedByCurrency: Record<string, number>;
+}
+
+/** A single customer's detail, scoped to the partner that owns it. */
+export async function getPartnerCustomerDetail(
+  partnerTenantId: string,
+  customerId: string,
+): Promise<PartnerCustomerDetail> {
+  const tenant = await prisma.tenant.findFirst({
+    where: { id: customerId, parentTenantId: partnerTenantId },
+    include: {
+      plan: { select: { name: true } },
+      wallets: { select: { balanceCredits: true }, take: 1, orderBy: { createdAt: "asc" } },
+      _count: { select: { users: true, gmbLocations: true } },
+    },
+  });
+  if (!tenant) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Customer not found.");
+
+  const rows = await prisma.payment.findMany({
+    where: { tenantId: customerId },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+
+  const collectedByCurrency: Record<string, number> = {};
+  for (const p of rows) {
+    if (p.status !== "CAPTURED") continue;
+    collectedByCurrency[p.currency] = (collectedByCurrency[p.currency] ?? 0) + p.amountMinor;
+  }
+
+  return {
+    id: tenant.id,
+    name: tenant.name,
+    slug: tenant.slug,
+    status: tenant.status,
+    planName: tenant.plan?.name ?? null,
+    creditBalance: tenant.wallets[0]?.balanceCredits ?? 0,
+    users: tenant._count.users,
+    locations: tenant._count.gmbLocations,
+    createdAt: tenant.createdAt,
+    payments: rows.map((p) => ({
+      id: p.id,
+      provider: p.provider,
+      credits: p.credits,
+      amountMinor: p.amountMinor,
+      currency: p.currency,
+      status: p.status,
+      createdAt: p.createdAt,
+    })),
+    collectedByCurrency,
+  };
+}
+
 // --- Customer management -----------------------------------------------------
 
 /** Ownership guard: the customer must be a child tenant of this partner. */

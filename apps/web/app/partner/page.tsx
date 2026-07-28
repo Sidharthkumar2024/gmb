@@ -283,7 +283,12 @@ export default function PartnerDashboardPage() {
                 {data.customers.map((c) => (
                   <tr key={c.id} className="border-b border-ptn-line/60 last:border-0 hover:bg-ptn-panel-hover">
                     <td className="px-4 py-3">
-                      <div className="text-[13px] font-semibold text-ptn-ink">{c.name}</div>
+                      <Link
+                        href={`/partner/customers/${c.id}`}
+                        className="text-[13px] font-semibold text-ptn-ink no-underline hover:text-ptn-accent hover:underline"
+                      >
+                        {c.name}
+                      </Link>
                       <div className="font-geist-mono text-micro text-ptn-subtle">{c.slug}</div>
                     </td>
                     <td className="px-4 py-3 text-xs2 text-ptn-muted">{c.planName ?? "No plan"}</td>
