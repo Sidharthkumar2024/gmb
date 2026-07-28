@@ -104,3 +104,26 @@ export async function getInvoice(id: string): Promise<Invoice | null> {
   });
   return p ? toInvoice(p) : null;
 }
+
+/** Customer: this workspace's own receipts (one per payment), newest first. */
+export async function listCustomerInvoices(tenantId: string, limit = 200): Promise<Invoice[]> {
+  const rows = await prisma.payment.findMany({
+    where: { tenantId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    include: { tenant: { select: { name: true } } },
+  });
+  return rows.map(toInvoice);
+}
+
+/**
+ * Customer: one of this workspace's own receipts. Scoped to the tenant, so a
+ * customer can never read another workspace's receipt. Null if not found/theirs.
+ */
+export async function getCustomerInvoice(tenantId: string, id: string): Promise<Invoice | null> {
+  const p = await prisma.payment.findFirst({
+    where: { id, tenantId },
+    include: { tenant: { select: { name: true } } },
+  });
+  return p ? toInvoice(p) : null;
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { GmbShell } from "../../src/components/gmb/GmbShell";
 import { Card, SectionLabel, Pill, Button, ErrorNote, Skeleton } from "../../src/components/gmb/ui";
@@ -66,6 +67,15 @@ interface Usage {
   byFeature: Array<{ feature: string; calls: number; costInCents: number }>;
   recent: Array<{ id: string; feature: string; model: string; costInCents: number; createdAt: string }>;
 }
+interface Receipt {
+  id: string;
+  number: string;
+  status: "PAID" | "REFUNDED";
+  issuedAt: string;
+  currency: string;
+  totalMinor: number;
+  payment: { provider: string };
+}
 interface Plan {
   name: string;
   description: string | null;
@@ -95,6 +105,7 @@ export default function GmbBillingPage() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [topup, setTopup] = useState<TopupInfo | null>(null);
   const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [buying, setBuying] = useState(false);
@@ -112,13 +123,14 @@ export default function GmbBillingPage() {
     let cancelled = false;
     async function loadAll() {
       try {
-        const [w, c, u, p, t, l] = await Promise.all([
+        const [w, c, u, p, t, l, r] = await Promise.all([
           api.get<Wallet>("/api/v1/customer/wallets"),
           api.get<CreditCost[]>("/api/v1/gmb/credit-costs").catch(() => []),
           api.get<Usage>("/api/v1/customer/ai-usage").catch(() => null),
           api.get<Plan | null>("/api/v1/customer/plan").catch(() => null),
           api.get<TopupInfo>("/api/v1/customer/topup-info").catch(() => null),
           api.get<LedgerRow[]>("/api/v1/customer/wallet-transactions").catch(() => []),
+          api.get<Receipt[]>("/api/v1/customer/invoices").catch(() => []),
         ]);
         if (cancelled) return;
         setWallet(w);
@@ -127,6 +139,7 @@ export default function GmbBillingPage() {
         setPlan(p);
         setTopup(t);
         setLedger(l);
+        setReceipts(r ?? []);
       } catch (e) {
         if (!cancelled) setError(e instanceof ApiClientError ? e.message : "Could not load billing.");
       }
@@ -484,6 +497,55 @@ export default function GmbBillingPage() {
           </div>
         )}
       </Card>
+
+      {/* Receipts — one per top-up payment, each with a printable detail. */}
+      {receipts.length > 0 && (
+        <Card className="mt-3.5">
+          <SectionLabel>Receipts</SectionLabel>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr className="border-b border-gmb-line">
+                  {["Receipt", "Date", "Amount", "Status", ""].map((h) => (
+                    <th
+                      key={h}
+                      className="py-2 pr-4 font-geist-mono text-micro font-medium uppercase tracking-[0.1em] text-gmb-ink-subtle"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {receipts.map((r) => (
+                  <tr key={r.id} className="border-b border-gmb-line-soft last:border-0">
+                    <td className="py-2 pr-4 font-geist-mono text-xs2 text-gmb-ink">{r.number}</td>
+                    <td className="whitespace-nowrap py-2 pr-4 font-geist-mono text-micro text-gmb-ink-subtle">
+                      {new Date(r.issuedAt).toLocaleDateString()}
+                    </td>
+                    <td className="py-2 pr-4 font-geist-mono text-xs2 text-gmb-ink-muted">
+                      {new Intl.NumberFormat(undefined, { style: "currency", currency: r.currency }).format(
+                        r.totalMinor / 100,
+                      )}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <Pill tone={r.status === "PAID" ? "ok" : "neutral"}>{r.status}</Pill>
+                    </td>
+                    <td className="py-2 text-right">
+                      <Link
+                        href={`/gmb-billing/receipt/${r.id}`}
+                        className="rounded-control border border-gmb-line px-2.5 py-1 text-xs2 font-medium text-gmb-ink-muted no-underline hover:bg-gmb-canvas hover:no-underline"
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </GmbShell>
   );
 }

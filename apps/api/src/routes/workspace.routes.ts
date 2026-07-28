@@ -13,6 +13,7 @@ import {
   getTicket,
   replyToTicket,
 } from "../services/supportTicket.service";
+import { listCustomerInvoices, getCustomerInvoice } from "../services/invoice.service";
 
 // Workspace-level endpoints the app shell calls on every page load: language,
 // currency, wallet balance and product access.
@@ -249,6 +250,28 @@ router.get("/customer/wallet-transactions", async (req: RequestWithAuth, res: Re
       },
     });
     res.json({ success: true, data: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Receipts (customer-facing invoices) ------------------------------------
+// A workspace's own top-up receipts, one per payment. Tenant-scoped, so a
+// customer only ever sees its own; a foreign id 404s.
+
+router.get("/customer/invoices", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await listCustomerInvoices(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/customer/invoices/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const invoice = await getCustomerInvoice(req.tenantId!, req.params.id);
+    if (!invoice) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Receipt not found.");
+    res.json({ success: true, data: invoice });
   } catch (err) {
     next(err);
   }
