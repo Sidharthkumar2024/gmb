@@ -6,27 +6,54 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const deps = vi.hoisted(() => ({
   tenantFindFirst: vi.fn(),
+  tenantFindUnique: vi.fn(),
   tenantUpdate: vi.fn(),
+  tenantCreate: vi.fn(),
+  userFindUnique: vi.fn(),
+  userCreate: vi.fn(),
+  walletCreate: vi.fn(),
   partnerPlanFindFirst: vi.fn(),
   paymentFindMany: vi.fn(),
+  issueAuthToken: vi.fn(),
+  resolveSmtpSettings: vi.fn(),
+  sendEmail: vi.fn(),
+  renderEmailTemplate: vi.fn(),
 }));
 
 vi.mock("@nexaflow/db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@nexaflow/db")>();
+  const tx = {
+    tenant: { create: deps.tenantCreate },
+    wallet: { create: deps.walletCreate },
+    user: { create: deps.userCreate },
+  };
   return {
     ...actual,
     prisma: {
-      tenant: { findFirst: deps.tenantFindFirst, update: deps.tenantUpdate },
+      tenant: {
+        findFirst: deps.tenantFindFirst,
+        findUnique: deps.tenantFindUnique,
+        update: deps.tenantUpdate,
+      },
+      user: { findUnique: deps.userFindUnique },
       partnerPlan: { findFirst: deps.partnerPlanFindFirst },
       payment: { findMany: deps.paymentFindMany },
+      $transaction: (fn: (t: typeof tx) => unknown) => Promise.resolve(fn(tx)),
     },
   };
 });
+vi.mock("./authToken.service", () => ({ issueAuthToken: deps.issueAuthToken }));
+vi.mock("./email.service", () => ({
+  sendEmail: deps.sendEmail,
+  resolveSmtpSettings: deps.resolveSmtpSettings,
+}));
+vi.mock("./emailTemplate.service", () => ({ renderEmailTemplate: deps.renderEmailTemplate }));
 
 import {
   setPartnerCustomerStatus,
   setPartnerCustomerPlan,
   getPartnerCustomerDetail,
+  createPartnerCustomer,
 } from "./partner.service";
 
 afterEach(() => vi.clearAllMocks());
@@ -111,5 +138,60 @@ describe("getPartnerCustomerDetail", () => {
     expect(d.users).toBe(2);
     expect(d.payments).toHaveLength(2); // all listed
     expect(d.collectedByCurrency).toEqual({ INR: 50000 }); // refund excluded
+  });
+});
+
+describe("createPartnerCustomer", () => {
+  const input = { partnerTenantId: "partner_1", businessName: "New Co", adminEmail: "Owner@New.com" };
+
+  it("409s on a duplicate admin email, before creating anything", async () => {
+    deps.userFindUnique.mockResolvedValue({ id: "existing" });
+    await expect(createPartnerCustomer(input)).rejects.toThrow(/already exists/i);
+    expect(deps.tenantCreate).not.toHaveBeenCalled();
+    expect(deps.userCreate).not.toHaveBeenCalled();
+  });
+
+  it("400s when the chosen resale plan isn't the partner's, before creating anything", async () => {
+    deps.userFindUnique.mockResolvedValue(null);
+    deps.partnerPlanFindFirst.mockResolvedValue(null);
+    await expect(
+      createPartnerCustomer({ ...input, partnerPlanId: "pp_foreign" }),
+    ).rejects.toThrow(/resale plan/i);
+    expect(deps.tenantCreate).not.toHaveBeenCalled();
+  });
+
+  it("creates a child tenant + wallet + BUSINESS_ADMIN and returns an invite link (emailSent false when SMTP off)", async () => {
+    deps.userFindUnique.mockResolvedValue(null);
+    deps.tenantFindUnique.mockResolvedValue(null); // slug is free
+    deps.tenantCreate.mockResolvedValue({
+      id: "cust_1",
+      name: "New Co",
+      slug: "new-co",
+      status: "ACTIVE",
+      createdAt: new Date(),
+    });
+    deps.walletCreate.mockResolvedValue({ id: "w1" });
+    deps.userCreate.mockResolvedValue({ id: "u1" });
+    deps.issueAuthToken.mockResolvedValue({ token: "tok123" });
+    deps.resolveSmtpSettings.mockResolvedValue(null); // SMTP off
+
+    const out = await createPartnerCustomer(input);
+
+    // child tenant under the partner
+    expect(deps.tenantCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ parentTenantId: "partner_1", slug: "new-co" }) }),
+    );
+    // wallet provisioned + BUSINESS_ADMIN with a normalised email
+    expect(deps.walletCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { tenantId: "cust_1" } }),
+    );
+    expect(deps.userCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ tenantId: "cust_1", email: "owner@new.com", role: "BUSINESS_ADMIN" }) }),
+    );
+    // invite link, and honest emailSent=false with SMTP off (email never sent)
+    expect(out.inviteUrl).toContain("token=tok123");
+    expect(out.emailSent).toBe(false);
+    expect(deps.sendEmail).not.toHaveBeenCalled();
+    expect(out.customer.id).toBe("cust_1");
   });
 });
