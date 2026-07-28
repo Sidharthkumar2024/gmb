@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AdminShell, AdmCard, AdmPill } from "../../../src/components/gmb/AdminShell";
 import { api, ApiClientError } from "../../../src/lib/api";
+import { downloadAuthed } from "../../../src/lib/download";
 
 // Transactions — the raw credit ledger across all workspaces. Every grant,
 // spend, reservation and refund. Read-only; this is the reconcilable source of
@@ -62,7 +63,7 @@ export default function AdminTransactionsPage() {
         <span className="text-xs2 text-adm-muted">
           The credit ledger across all workspaces — the reconcilable source of truth for balances.
         </span>
-        <div className="ml-auto flex gap-1.5">
+        <div className="ml-auto flex items-center gap-1.5">
           {FILTERS.map((f) => (
             <button
               key={f}
@@ -77,6 +78,17 @@ export default function AdminTransactionsPage() {
               {f === "ALL" ? "All" : f.charAt(0) + f.slice(1).toLowerCase()}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() =>
+              void downloadAuthed("/api/v1/admin/transactions/export", "transactions.csv").catch(() =>
+                setError("Could not export transactions."),
+              )
+            }
+            className="ml-1 rounded-control border border-adm-line px-3 py-1 text-xs2 font-medium text-adm-muted hover:bg-adm-panel-hover"
+          >
+            Export CSV
+          </button>
         </div>
       </div>
 

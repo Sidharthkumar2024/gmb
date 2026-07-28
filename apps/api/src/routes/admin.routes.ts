@@ -1092,12 +1092,63 @@ router.get("/transactions", async (req: RequestWithAuth, res: Response, next: Ne
   }
 });
 
+// CSV export of the credit ledger — for reconciliation/accounting.
+router.get("/transactions/export", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const rows = await prisma.walletTransaction.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 5000,
+      include: { wallet: { select: { tenant: { select: { name: true } } } } },
+    });
+    const csv = toCsv(
+      ["Date", "Workspace", "Type", "Change", "Balance After", "Detail"],
+      rows.map((r) => [
+        r.createdAt.toISOString(),
+        r.wallet.tenant.name,
+        r.type,
+        r.deltaCredits,
+        r.balanceAfter,
+        r.reason ?? r.feature ?? "",
+      ]),
+    );
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="transactions.csv"');
+    res.send(csv);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // --- Invoices ---------------------------------------------------------------
 // Derived one-per-payment (see invoice.service). List + printable detail.
 
 router.get("/invoices", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await listInvoices() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// CSV export of invoices — placed before /:id so "export" isn't read as an id.
+router.get("/invoices/export", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const rows = await listInvoices();
+    const csv = toCsv(
+      ["Invoice", "Date", "Workspace", "Total", "Currency", "Status", "Payment ID"],
+      rows.map((inv) => [
+        inv.number,
+        inv.issuedAt.toISOString(),
+        inv.buyer.name,
+        (inv.totalMinor / 100).toFixed(2),
+        inv.currency,
+        inv.status,
+        inv.payment.providerPaymentId,
+      ]),
+    );
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="invoices.csv"');
+    res.send(csv);
   } catch (err) {
     next(err);
   }
