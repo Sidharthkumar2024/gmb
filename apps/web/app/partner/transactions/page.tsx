@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PartnerShell, PtnCard, PtnLabel, PtnPill } from "../../../src/components/gmb/PartnerShell";
 import { api, ApiClientError } from "../../../src/lib/api";
+import { downloadAuthed } from "../../../src/lib/download";
 
 // Partner transactions — payments made by the partner's own customers (its child
 // tenants). Read-only. Every figure is a real Payment row; nothing is estimated.
@@ -55,6 +56,22 @@ export default function PartnerTransactionsPage() {
       {error && (
         <div className="mb-3.5 rounded-control border border-gmb-danger/30 bg-gmb-danger/10 px-3 py-2 text-sm2 text-ptn-danger">
           {error}
+        </div>
+      )}
+
+      {(data?.payments.length ?? 0) > 0 && (
+        <div className="mb-3.5 flex">
+          <button
+            type="button"
+            onClick={() =>
+              void downloadAuthed("/api/v1/partner/transactions/export", "transactions.csv").catch(() =>
+                setError("Could not export transactions."),
+              )
+            }
+            className="ml-auto rounded-control border border-ptn-line px-3 py-1.5 text-xs2 font-medium text-ptn-muted hover:bg-ptn-panel-hover"
+          >
+            Export CSV
+          </button>
         </div>
       )}
 

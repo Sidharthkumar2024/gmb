@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AdminShell, AdmCard, AdmLabel, AdmPill } from "../../../src/components/gmb/AdminShell";
 import { api, ApiClientError } from "../../../src/lib/api";
+import { downloadAuthed } from "../../../src/lib/download";
 
 // Payments — captured gateway payments across all workspaces. Each row is a real
 // Payment record written by the top-up webhook, not scraped from the ledger.
@@ -49,6 +50,22 @@ export default function AdminPaymentsPage() {
       {error && (
         <div className="mb-3.5 rounded-control border border-gmb-danger/30 bg-gmb-danger/10 px-3 py-2 text-sm2 text-[#ff8f85]">
           {error}
+        </div>
+      )}
+
+      {(rows?.length ?? 0) > 0 && (
+        <div className="mb-3.5 flex">
+          <button
+            type="button"
+            onClick={() =>
+              void downloadAuthed("/api/v1/admin/payments/export", "payments.csv").catch(() =>
+                setError("Could not export payments."),
+              )
+            }
+            className="ml-auto rounded-control border border-adm-line px-3 py-1.5 text-xs2 font-medium text-adm-muted hover:bg-adm-panel-hover"
+          >
+            Export CSV
+          </button>
         </div>
       )}
 

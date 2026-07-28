@@ -24,6 +24,7 @@ import {
   deletePartnerPlan,
 } from "../services/partnerPlan.service";
 import { listPartnerTransactions, getPartnerStatement } from "../services/partnerBilling.service";
+import { toCsv } from "../lib/csv";
 import {
   listPartnerInvoices,
   getPartnerInvoice,
@@ -250,6 +251,31 @@ router.delete("/plans/:id", async (req: RequestWithAuth, res: Response, next: Ne
 router.get("/transactions", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await listPartnerTransactions(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// CSV export of the partner's customers' payments — for the reseller's books.
+router.get("/transactions/export", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { payments } = await listPartnerTransactions(req.tenantId!);
+    const csv = toCsv(
+      ["Date", "Customer", "Gateway", "Credits", "Amount", "Currency", "Status", "Payment ID"],
+      payments.map((p) => [
+        p.createdAt.toISOString(),
+        p.customerName,
+        p.provider,
+        p.credits,
+        (p.amountMinor / 100).toFixed(2),
+        p.currency,
+        p.status,
+        p.providerPaymentId,
+      ]),
+    );
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="transactions.csv"');
+    res.send(csv);
   } catch (err) {
     next(err);
   }

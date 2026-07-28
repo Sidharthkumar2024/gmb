@@ -64,6 +64,7 @@ import {
 import { listEmailTemplates, upsertEmailTemplate } from "../services/emailTemplate.service";
 import { getGatewayStatus, setActiveProvider } from "../services/paymentGateway.service";
 import { listPayments } from "../services/payment.service";
+import { toCsv } from "../lib/csv";
 import { listInvoices, getInvoice } from "../services/invoice.service";
 import {
   queueDepth,
@@ -1009,6 +1010,31 @@ router.delete("/storage", async (req: RequestWithAuth, res: Response, next: Next
 router.get("/payments", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await listPayments() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// CSV export of all captured payments — for the operator's accounting.
+router.get("/payments/export", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const rows = await listPayments();
+    const csv = toCsv(
+      ["Date", "Workspace", "Gateway", "Credits", "Amount", "Currency", "Status", "Payment ID"],
+      rows.map((p) => [
+        p.createdAt.toISOString(),
+        p.tenantName,
+        p.provider,
+        p.credits,
+        (p.amountMinor / 100).toFixed(2),
+        p.currency,
+        p.status,
+        p.providerPaymentId,
+      ]),
+    );
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="payments.csv"');
+    res.send(csv);
   } catch (err) {
     next(err);
   }
