@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AdminShell, AdmCard, AdmLabel, AdmPill } from "../../../src/components/gmb/AdminShell";
-import { api, ApiClientError } from "../../../src/lib/api";
+import { api, ApiClientError, tokenStore } from "../../../src/lib/api";
 
 // Accounts — every workspace on the platform.
 //
@@ -73,6 +73,27 @@ export default function AdminAccountsPage() {
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not change the plan.");
     } finally {
+      setBusy(null);
+    }
+  }
+
+  async function impersonate(t: TenantRow) {
+    if (
+      !window.confirm(
+        `View "${t.name}" as one of its users? Your admin session is parked and restored when you exit. This is audit-logged.`,
+      )
+    )
+      return;
+    setBusy(t.id);
+    setError(null);
+    try {
+      const r = await api.post<{ accessToken: string }>(`/api/v1/admin/tenants/${t.id}/impersonate`);
+      // Park the admin tokens and load the impersonation token, then hard-nav so
+      // the app re-initialises as the target workspace.
+      tokenStore.stashAdminAndSetImpersonation(r.accessToken);
+      window.location.href = "/gmb-dashboard";
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not start impersonation.");
       setBusy(null);
     }
   }
@@ -206,7 +227,17 @@ export default function AdminAccountsPage() {
                   <td className="px-4 py-3 font-geist-mono text-micro text-adm-subtle">
                     {new Date(t.createdAt).toLocaleDateString()}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="whitespace-nowrap px-4 py-3 text-right">
+                    {t.status === "ACTIVE" && (
+                      <button
+                        type="button"
+                        disabled={busy === t.id}
+                        onClick={() => void impersonate(t)}
+                        className="mr-1.5 rounded-control border border-adm-line px-3 py-1.5 text-xs2 font-medium text-adm-muted hover:bg-adm-panel-hover disabled:opacity-50"
+                      >
+                        View as
+                      </button>
+                    )}
                     {t.status === "ACTIVE" ? (
                       <button
                         type="button"

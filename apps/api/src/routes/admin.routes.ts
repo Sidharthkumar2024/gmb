@@ -16,7 +16,7 @@ import {
   WalletTransactionType,
 } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
-import { requireAuth, type RequestWithAuth } from "../middleware/auth";
+import { requireAuth, signAccessToken, type RequestWithAuth } from "../middleware/auth";
 import { requireRole } from "../middleware/rbac";
 import { logAudit, extractRequestMeta } from "../services/audit.service";
 import {
@@ -161,6 +161,68 @@ router.get("/tenants", async (req: RequestWithAuth, res: Response, next: NextFun
         planName: t.plan?.name ?? null,
         createdAt: t.createdAt,
       })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Mint a short-lived impersonation access token so a super admin can view a
+ * workspace as one of its users (support/debugging). The token carries the
+ * TARGET's sub/tenant/role — that's what grants the access — plus actorUserId
+ * for the UI banner and audit trail. It is NOT refreshable: the client keeps the
+ * admin's own refresh token, so the impersonation lapses back to the admin when
+ * it expires. Every impersonation is audit-logged.
+ */
+router.post("/tenants/:id/impersonate", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, name: true, status: true },
+    });
+    if (!tenant) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Workspace not found.");
+    if (tenant.status !== "ACTIVE") {
+      throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Reactivate the workspace before viewing as it.");
+    }
+    // Prefer a BUSINESS_ADMIN; fall back to the oldest active user.
+    const target =
+      (await prisma.user.findFirst({
+        where: { tenantId: tenant.id, isActive: true, role: "BUSINESS_ADMIN" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, email: true, role: true },
+      })) ??
+      (await prisma.user.findFirst({
+        where: { tenantId: tenant.id, isActive: true },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, email: true, role: true },
+      }));
+    if (!target) throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "This workspace has no user to view as.");
+
+    const accessToken = signAccessToken(
+      {
+        sub: target.id,
+        tenantId: tenant.id,
+        role: target.role,
+        actorUserId: req.userId!,
+        actorRole: "SUPER_ADMIN",
+      },
+      "30m",
+    );
+
+    await logAudit({
+      tenantId: tenant.id,
+      userId: req.userId!,
+      action: "IMPERSONATE",
+      resource: "Tenant",
+      resourceId: tenant.id,
+      newValues: { targetUserId: target.id, targetEmail: target.email },
+      ...extractRequestMeta(req),
+    });
+
+    res.json({
+      success: true,
+      data: { accessToken, expiresIn: 1800, tenantName: tenant.name, targetEmail: target.email },
     });
   } catch (err) {
     next(err);

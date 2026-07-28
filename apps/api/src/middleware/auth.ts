@@ -23,6 +23,10 @@ export interface AccessTokenPayload {
   sub: string;
   tenantId: string;
   role: RoleName;
+  // Set only on an impersonation token: the admin acting as this user. Recorded
+  // for the UI banner + audit; the server still authorizes by sub/tenant/role.
+  actorUserId?: string;
+  actorRole?: RoleName;
 }
 
 function jwtSecret(): string {

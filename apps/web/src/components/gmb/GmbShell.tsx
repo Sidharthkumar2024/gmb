@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { useAuth } from "../../hooks/useAuth";
+import { ImpersonationBanner } from "./ImpersonationBanner";
 
 // Shell for the Adgrowly GMB Suite: 248px sidebar + 64px header, per the
 // design file. Every figure it shows is fetched — locations, credits and the
@@ -201,6 +202,7 @@ export function GmbShell({
 
   return (
     <div className="flex h-screen overflow-hidden bg-gmb-canvas font-geist text-gmb-ink">
+      <ImpersonationBanner />
       {/* ---------------- Sidebar ---------------- */}
       <aside className="flex w-[248px] flex-shrink-0 flex-col border-r border-gmb-line bg-gmb-surface">
         <div className="flex items-center gap-2.5 px-5 pb-4 pt-5">
