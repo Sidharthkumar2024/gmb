@@ -31,16 +31,39 @@ function money(minor: number, currency: string): string {
 export default function AdminPaymentsPage() {
   const [rows, setRows] = useState<Payment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
-  useEffect(() => {
-    void api
+  const load = () =>
+    api
       .get<Payment[]>("/api/v1/admin/payments")
       .then((r) => setRows(r ?? []))
       .catch((e) => {
         setError(e instanceof ApiClientError ? e.message : "Could not load payments.");
         setRows([]);
       });
+
+  useEffect(() => {
+    void load();
   }, []);
+
+  async function refund(p: Payment) {
+    if (
+      !window.confirm(
+        `Refund ${p.credits} credits to ${p.tenantName}? This reverses the credits in the ledger and marks the payment refunded. Issue the actual money-back in your ${p.provider} dashboard.`,
+      )
+    )
+      return;
+    setBusy(p.id);
+    setError(null);
+    try {
+      await api.post(`/api/v1/admin/payments/${p.id}/refund`);
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not refund the payment.");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   const captured = (rows ?? []).filter((r) => r.status === "CAPTURED");
   const creditsSold = captured.reduce((s, r) => s + r.credits, 0);
@@ -102,7 +125,7 @@ export default function AdminPaymentsPage() {
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-adm-line">
-                {["When", "Workspace", "Gateway", "Credits", "Amount", "Status", "Payment id"].map((h) => (
+                {["When", "Workspace", "Gateway", "Credits", "Amount", "Status", "Payment id", ""].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-3 font-geist-mono text-micro font-medium uppercase tracking-[0.1em] text-adm-subtle"
@@ -131,6 +154,18 @@ export default function AdminPaymentsPage() {
                   </td>
                   <td className="px-4 py-3 font-geist-mono text-micro text-adm-subtle">
                     {p.providerPaymentId}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {p.status === "CAPTURED" && (
+                      <button
+                        type="button"
+                        disabled={busy === p.id}
+                        onClick={() => void refund(p)}
+                        className="rounded-control border border-adm-line px-2.5 py-1 text-xs2 font-medium text-[#ff8f85] hover:bg-gmb-danger/10 disabled:opacity-50"
+                      >
+                        {busy === p.id ? "…" : "Refund"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -353,3 +353,61 @@ export async function grantCredits(
     throw e;
   }
 }
+
+/**
+ * Reverse a prior grant (a refund). Debits `credits` and records a REFUND ledger
+ * row, idempotency-keyed like grantCredits. The balance is allowed to go
+ * negative: if the customer already spent the refunded credits, that debt is the
+ * truthful record — and a negative balance simply blocks further paid usage
+ * until it's topped back up. Never moves money; the gateway refund is issued
+ * separately by the operator.
+ */
+export async function reverseCredits(
+  tenantId: string,
+  credits: number,
+  opts: { reason?: string; idempotencyKey?: string } = {},
+): Promise<void> {
+  if (credits <= 0) return;
+
+  let wallet = await prisma.wallet.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (!wallet) {
+    wallet = await prisma.wallet.create({ data: { tenantId }, select: { id: true } });
+  }
+
+  if (opts.idempotencyKey) {
+    const existing = await prisma.walletTransaction.findUnique({
+      where: { idempotencyKey: opts.idempotencyKey },
+      select: { id: true },
+    });
+    if (existing) return;
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const w = await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balanceCredits: { decrement: credits } },
+        select: { balanceCredits: true },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          tenantId,
+          type: "REFUND",
+          deltaCredits: -credits,
+          deltaReserved: 0,
+          balanceAfter: w.balanceCredits,
+          reason: opts.reason ?? null,
+          idempotencyKey: opts.idempotencyKey ?? null,
+        },
+      });
+    });
+  } catch (e) {
+    if ((e as { code?: string }).code === "P2002") return;
+    throw e;
+  }
+}

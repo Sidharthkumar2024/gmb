@@ -63,7 +63,7 @@ import {
 } from "../services/supportTicket.service";
 import { listEmailTemplates, upsertEmailTemplate } from "../services/emailTemplate.service";
 import { getGatewayStatus, setActiveProvider } from "../services/paymentGateway.service";
-import { listPayments } from "../services/payment.service";
+import { listPayments, refundPayment } from "../services/payment.service";
 import { toCsv } from "../lib/csv";
 import { listInvoices, getInvoice } from "../services/invoice.service";
 import {
@@ -1010,6 +1010,27 @@ router.delete("/storage", async (req: RequestWithAuth, res: Response, next: Next
 router.get("/payments", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await listPayments() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Refund a payment: reverse its credits + mark it REFUNDED (idempotent). Records
+// the refund in the ledger only — the operator issues the money-back in the
+// gateway dashboard. Audit-logged.
+router.post("/payments/:id/refund", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const refunded = await refundPayment(req.params.id);
+    await logAudit({
+      tenantId: refunded.tenantId,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "Payment",
+      resourceId: refunded.id,
+      newValues: { status: "REFUNDED", credits: refunded.credits, providerPaymentId: refunded.providerPaymentId },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: refunded });
   } catch (err) {
     next(err);
   }
