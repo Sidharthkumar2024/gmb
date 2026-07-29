@@ -86,8 +86,10 @@ row appears in `/admin/payments`, and a replay leaves the balance unchanged.
 ## 6. Object storage (S3 / R2)
 
 - Configured by the super admin at `/admin/storage` (bucket/region/keys stored in
-  the vault), not via env. Needed for real image uploads (branding logo, GMB post
-  images); until set, those fields accept URLs.
+  the vault), not via env. Needed for real image uploads (e.g. the partner branding
+  logo). The branding page's "Upload image" button uses this; until storage is set,
+  the upload surfaces a "not configured" message and partners can still paste a
+  hosted image URL.
 
 ## 7. Workers
 

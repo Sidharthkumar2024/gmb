@@ -34,6 +34,29 @@ export interface StorageMeta {
   hasSecretKey: boolean;
 }
 
+export type UploadPurpose = "gmb-image" | "branding-logo";
+
+/**
+ * Build the tenant-scoped object key for an upload. The tenant id is injected
+ * server-side (never from the client body), so one workspace can never write
+ * into another's prefix, and the filename is reduced to a single safe path
+ * segment: separators and other unsafe characters collapse to "_" and the
+ * length is capped, so a name like "../../etc/passwd" cannot traverse the key
+ * namespace. `now` is injectable for deterministic tests.
+ */
+export function buildUploadKey(input: {
+  purpose: UploadPurpose;
+  tenantId: string;
+  filename: string;
+  now?: Date;
+}): string {
+  const prefix = input.purpose === "branding-logo" ? "branding" : "gmb-images";
+  let safe = input.filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-100);
+  if (safe === "" || safe === "." || safe === "..") safe = "file";
+  const ts = (input.now ?? new Date()).getTime();
+  return `${prefix}/${input.tenantId}/${ts}-${safe}`;
+}
+
 async function findStorageEntry() {
   const entries = await listSecrets(PLATFORM_CTX, { provider: SecretProvider.CUSTOM });
   return entries.find((e) => e.label === STORAGE_VAULT_LABEL) ?? null;

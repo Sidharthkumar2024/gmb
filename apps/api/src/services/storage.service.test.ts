@@ -18,7 +18,7 @@ vi.mock("./secretVault.service", () => ({
   deleteSecret: deps.deleteSecret,
 }));
 
-import { getStorageConfig, presignUpload, saveStorageConfig } from "./storage.service";
+import { buildUploadKey, getStorageConfig, presignUpload, saveStorageConfig } from "./storage.service";
 
 const META = {
   provider: "S3" as const,
@@ -33,6 +33,44 @@ const ENTRY = { id: "sec-1", label: "Object storage", last4: "1234", metadata: M
 const AT = new Date("2026-01-02T03:04:05Z");
 
 beforeEach(() => vi.clearAllMocks());
+
+describe("buildUploadKey", () => {
+  const T = "tenant-9";
+
+  it("maps purpose to a prefix and scopes the key to the tenant", () => {
+    expect(buildUploadKey({ purpose: "branding-logo", tenantId: T, filename: "logo.png", now: AT }))
+      .toBe(`branding/${T}/${AT.getTime()}-logo.png`);
+    expect(buildUploadKey({ purpose: "gmb-image", tenantId: T, filename: "shop.jpg", now: AT }))
+      .toBe(`gmb-images/${T}/${AT.getTime()}-shop.jpg`);
+  });
+
+  it("neutralises path traversal — no separators survive into the key segment", () => {
+    const key = buildUploadKey({ purpose: "gmb-image", tenantId: T, filename: "../../etc/passwd", now: AT });
+    // Exactly the prefix + tenant + one filename segment: no extra "/" from the name.
+    expect(key.split("/")).toHaveLength(3);
+    expect(key).toBe(`gmb-images/${T}/${AT.getTime()}-.._.._etc_passwd`);
+  });
+
+  it("collapses spaces and other unsafe characters to underscores", () => {
+    const key = buildUploadKey({ purpose: "branding-logo", tenantId: T, filename: "my logo (v2)!.png", now: AT });
+    expect(key).toBe(`branding/${T}/${AT.getTime()}-my_logo__v2__.png`);
+  });
+
+  it("falls back to 'file' for empty or dot-only names", () => {
+    for (const filename of ["", ".", ".."]) {
+      expect(buildUploadKey({ purpose: "gmb-image", tenantId: T, filename, now: AT }))
+        .toBe(`gmb-images/${T}/${AT.getTime()}-file`);
+    }
+  });
+
+  it("caps the filename to its last 100 characters", () => {
+    const long = "a".repeat(150) + ".png";
+    const key = buildUploadKey({ purpose: "gmb-image", tenantId: T, filename: long, now: AT });
+    const seg = key.split("/")[2].replace(`${AT.getTime()}-`, "");
+    expect(seg).toHaveLength(100);
+    expect(seg.endsWith(".png")).toBe(true);
+  });
+});
 
 describe("getStorageConfig", () => {
   it("reports not configured when no entry exists", async () => {

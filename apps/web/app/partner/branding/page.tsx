@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { PartnerShell, PtnCard, PtnLabel, PtnPill } from "../../../src/components/gmb/PartnerShell";
 import { api, ApiClientError } from "../../../src/lib/api";
+import { uploadFile } from "../../../src/lib/upload";
 
 interface Branding {
   brandName: string | null;
@@ -38,6 +39,31 @@ export default function PartnerBrandingPage() {
   const [color, setColor] = useState("#5a4af0");
   const [logoUrl, setLogoUrl] = useState("");
   const [hidePoweredBy, setHidePoweredBy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  async function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const url = await uploadFile(file, "branding-logo");
+      setLogoUrl(url);
+      setNotice("Logo uploaded — remember to save.");
+    } catch (err) {
+      setError(
+        err instanceof ApiClientError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not upload the logo.",
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setError(null);
@@ -148,9 +174,21 @@ export default function PartnerBrandingPage() {
             </div>
 
             <label className="flex flex-col gap-1">
-              <PtnLabel>Logo URL</PtnLabel>
+              <PtnLabel>Logo</PtnLabel>
               <input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…/logo.png" className={`${inputCls} font-geist-mono text-xs2`} />
-              <span className="text-[11px] text-ptn-subtle">A hosted image URL; file upload arrives with platform storage.</span>
+              <div className="mt-1 flex items-center gap-2">
+                <label className="inline-flex cursor-pointer items-center rounded-control border border-ptn-line bg-ptn-bg px-3 py-1.5 text-[11px] font-medium text-ptn-ink hover:border-ptn-accent">
+                  {uploading ? "Uploading…" : "Upload image"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploading}
+                    onChange={onLogoFile}
+                  />
+                </label>
+                <span className="text-[11px] text-ptn-subtle">or paste a hosted image URL above.</span>
+              </div>
             </label>
 
             <label className="flex items-center gap-2.5">

@@ -1,7 +1,7 @@
 import { Router, type Response, type NextFunction } from "express";
 import { z } from "zod";
 import { requireAuth, requireTenantScope, type RequestWithAuth } from "../middleware/auth";
-import { presignUpload } from "../services/storage.service";
+import { buildUploadKey, presignUpload } from "../services/storage.service";
 
 // Direct-to-storage uploads. The browser asks for a short-lived presigned PUT
 // URL, uploads the bytes straight to S3/R2, then stores the returned public URL
@@ -23,9 +23,8 @@ router.post(
   async (req: RequestWithAuth, res: Response, next: NextFunction) => {
     try {
       const { filename, purpose } = presignSchema.parse(req.body);
-      const safe = filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-100) || "file";
-      const prefix = purpose === "branding-logo" ? "branding" : "gmb-images";
-      const key = `${prefix}/${req.tenantId}/${Date.now()}-${safe}`;
+      // tenantId is guaranteed by requireTenantScope above, never from the body.
+      const key = buildUploadKey({ purpose, tenantId: req.tenantId!, filename });
       const { uploadUrl, publicUrl } = await presignUpload({ key });
       res.json({ success: true, data: { uploadUrl, publicUrl, key } });
     } catch (err) {
