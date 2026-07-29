@@ -13,6 +13,8 @@ interface PresignResult {
 
 export type UploadPurpose = "gmb-image" | "branding-logo";
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+
 /**
  * Upload a file to object storage and return its public URL. Throws
  * ApiClientError with a 503 message when storage isn't configured, or an Error
@@ -22,6 +24,14 @@ export async function uploadFile(
   file: File,
   purpose: UploadPurpose = "gmb-image",
 ): Promise<string> {
+  // Fail fast client-side before spending a presign + upload round-trip.
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Please choose an image file.");
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error("That image is too large — the limit is 10 MB.");
+  }
+
   const { uploadUrl, publicUrl } = await api.post<PresignResult>(
     "/api/v1/uploads/presign",
     { filename: file.name, purpose },
