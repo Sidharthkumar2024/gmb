@@ -224,6 +224,48 @@ export async function assertWithinLocationLimit(tenantId: string): Promise<void>
   }
 }
 
+/**
+ * Throw if adding one more tracked keyword would exceed the plan limit.
+ * Null maxKeywords means unlimited. Mirrors assertWithinLocationLimit.
+ */
+export async function assertWithinKeywordLimit(tenantId: string): Promise<void> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { plan: { select: { name: true, maxKeywords: true } } },
+  });
+  const max = tenant?.plan?.maxKeywords;
+  if (max == null) return;
+  const count = await prisma.gmbTrackedKeyword.count({ where: { tenantId } });
+  if (count >= max) {
+    throw new ApiError(
+      ErrorCodes.FORBIDDEN,
+      403,
+      `Your ${tenant!.plan!.name} plan allows ${max} tracked keyword${max === 1 ? "" : "s"}. Upgrade to add more.`,
+    );
+  }
+}
+
+/**
+ * Throw if adding one more user to this workspace would exceed the plan limit.
+ * Null maxUsers means unlimited. Mirrors assertWithinLocationLimit.
+ */
+export async function assertWithinUserLimit(tenantId: string): Promise<void> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { plan: { select: { name: true, maxUsers: true } } },
+  });
+  const max = tenant?.plan?.maxUsers;
+  if (max == null) return;
+  const count = await prisma.user.count({ where: { tenantId } });
+  if (count >= max) {
+    throw new ApiError(
+      ErrorCodes.FORBIDDEN,
+      403,
+      `Your ${tenant!.plan!.name} plan allows ${max} user${max === 1 ? "" : "s"}. Upgrade to add more.`,
+    );
+  }
+}
+
 /** The plan a workspace is on, for read-only display (customer billing page). */
 export async function getTenantPlan(tenantId: string): Promise<
   (SafePlan & { locationsUsed: number }) | null

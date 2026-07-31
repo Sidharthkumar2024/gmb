@@ -1,6 +1,7 @@
 import { prisma } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { evaluateRankAlerts } from "./gmbRankAlert.service";
+import { assertWithinKeywordLimit } from "./plan.service";
 
 // =====================================================================
 // AdGrowly GMB — Local ranking tracker (planning PDF). Operators track
@@ -209,6 +210,8 @@ export async function addKeyword(tenantId: string, input: AddKeywordInput) {
   if (existing) {
     throw new ApiError(ErrorCodes.CONFLICT, 409, "That keyword is already tracked for this location.");
   }
+  // Enforce the workspace's plan keyword entitlement (null = unlimited).
+  await assertWithinKeywordLimit(tenantId);
   const row = await prisma.gmbTrackedKeyword.create({
     data: {
       tenantId,

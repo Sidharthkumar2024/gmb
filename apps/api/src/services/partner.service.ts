@@ -5,6 +5,7 @@ import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { issueAuthToken } from "./authToken.service";
 import { sendEmail, resolveSmtpSettings } from "./email.service";
 import { renderEmailTemplate } from "./emailTemplate.service";
+import { assertWithinUserLimit } from "./plan.service";
 
 // Partner (reseller / white-label) portal data. A partner is a tenant whose
 // child tenants (Tenant.parentTenantId) are its customers. Everything here is
@@ -455,6 +456,8 @@ export async function inviteStaff(input: InviteStaffInput): Promise<InviteResult
   if (existing) {
     throw new ApiError(ErrorCodes.CONFLICT, 409, "A user with that email already exists.");
   }
+  // Enforce the agency's plan user entitlement (null = unlimited).
+  await assertWithinUserLimit(input.partnerTenantId);
 
   // The account starts with an unguessable password; the invitee sets their
   // own via the standard reset flow, so no credential ever travels by email.
