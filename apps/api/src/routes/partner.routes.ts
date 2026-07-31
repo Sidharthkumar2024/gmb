@@ -23,8 +23,13 @@ import {
   updatePartnerPlan,
   deletePartnerPlan,
 } from "../services/partnerPlan.service";
-import { listPartnerTransactions, getPartnerStatement } from "../services/partnerBilling.service";
+import {
+  listPartnerTransactions,
+  getPartnerStatement,
+  refundPartnerPayment,
+} from "../services/partnerBilling.service";
 import { toCsv } from "../lib/csv";
+import { logAudit, extractRequestMeta } from "../services/audit.service";
 import {
   listPartnerInvoices,
   getPartnerInvoice,
@@ -276,6 +281,26 @@ router.get("/transactions/export", async (req: RequestWithAuth, res: Response, n
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", 'attachment; filename="transactions.csv"');
     res.send(csv);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Refund one of the partner's own customers' payments. Ownership-scoped to the
+// partner's children; the partner issues the money-back from its own gateway.
+router.post("/transactions/:id/refund", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const refunded = await refundPartnerPayment(req.tenantId!, req.params.id);
+    await logAudit({
+      tenantId: refunded.tenantId,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "Payment",
+      resourceId: refunded.id,
+      newValues: { status: "REFUNDED", credits: refunded.credits, by: "partner" },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: refunded });
   } catch (err) {
     next(err);
   }

@@ -39,13 +39,36 @@ function money(minor: number, currency: string): string {
 export default function PartnerTransactionsPage() {
   const [data, setData] = useState<Transactions | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
-  useEffect(() => {
-    void api
+  const load = () =>
+    api
       .get<Transactions>("/api/v1/partner/transactions")
       .then((d) => setData(d ?? { totals: { payments: 0, creditsSold: 0, collectedByCurrency: {} }, payments: [] }))
       .catch((e) => setError(e instanceof ApiClientError ? e.message : "Could not load transactions."));
+
+  useEffect(() => {
+    void load();
   }, []);
+
+  async function refund(p: PartnerPayment) {
+    if (
+      !window.confirm(
+        `Refund ${p.credits} credits to ${p.customerName}? This reverses the credits and marks the payment refunded. Issue the actual money-back in your ${p.provider} dashboard.`,
+      )
+    )
+      return;
+    setBusy(p.id);
+    setError(null);
+    try {
+      await api.post(`/api/v1/partner/transactions/${p.id}/refund`);
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not refund the payment.");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   const collected = data ? Object.entries(data.totals.collectedByCurrency) : [];
   const collectedLabel =
@@ -106,7 +129,7 @@ export default function PartnerTransactionsPage() {
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-ptn-line">
-                {["When", "Customer", "Gateway", "Credits", "Amount", "Status", "Payment id"].map((h) => (
+                {["When", "Customer", "Gateway", "Credits", "Amount", "Status", "Payment id", ""].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-3 font-geist-mono text-micro font-medium uppercase tracking-[0.1em] text-ptn-subtle"
@@ -135,6 +158,18 @@ export default function PartnerTransactionsPage() {
                   </td>
                   <td className="px-4 py-3 font-geist-mono text-micro text-ptn-subtle">
                     {p.providerPaymentId}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {p.status === "CAPTURED" && (
+                      <button
+                        type="button"
+                        disabled={busy === p.id}
+                        onClick={() => void refund(p)}
+                        className="rounded-control border border-ptn-line px-2.5 py-1 text-xs2 font-medium text-ptn-danger hover:bg-gmb-danger/10 disabled:opacity-50"
+                      >
+                        {busy === p.id ? "…" : "Refund"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

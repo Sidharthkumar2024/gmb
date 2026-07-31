@@ -1,4 +1,6 @@
 import { prisma, TenantStatus, PaymentStatus, type PaymentProvider } from "@nexaflow/db";
+import { ApiError, ErrorCodes } from "@nexaflow/shared";
+import { refundPayment } from "./payment.service";
 
 // Partner-scoped billing views. A partner's customers are its CHILD tenants
 // (Tenant.parentTenantId). Every query here is filtered to those children, so a
@@ -77,6 +79,24 @@ export async function listPartnerTransactions(
     totals: { payments: payments.length, creditsSold, collectedByCurrency },
     payments,
   };
+}
+
+/**
+ * Refund one of the partner's own customers' payments. Ownership-scoped: the
+ * payment's tenant must be a CHILD of this partner, so a partner can never
+ * refund another partner's or the platform's payment. Delegates to the shared
+ * refundPayment (reverse credits + mark REFUNDED, idempotent); the partner
+ * issues the actual money-back from its own gateway dashboard.
+ */
+export async function refundPartnerPayment(partnerTenantId: string, paymentId: string) {
+  const payment = await prisma.payment.findUnique({
+    where: { id: paymentId },
+    select: { tenant: { select: { parentTenantId: true } } },
+  });
+  if (!payment || payment.tenant.parentTenantId !== partnerTenantId) {
+    throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Payment not found.");
+  }
+  return refundPayment(paymentId);
 }
 
 // --- Monthly billing statement ----------------------------------------------

@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const deps = vi.hoisted(() => ({
   tenantFindMany: vi.fn(),
   paymentFindMany: vi.fn(),
+  paymentFindUnique: vi.fn(),
+  refundPayment: vi.fn(),
 }));
 
 vi.mock("@nexaflow/db", async (importOriginal) => {
@@ -14,12 +16,17 @@ vi.mock("@nexaflow/db", async (importOriginal) => {
     ...actual,
     prisma: {
       tenant: { findMany: deps.tenantFindMany },
-      payment: { findMany: deps.paymentFindMany },
+      payment: { findMany: deps.paymentFindMany, findUnique: deps.paymentFindUnique },
     },
   };
 });
+vi.mock("./payment.service", () => ({ refundPayment: deps.refundPayment }));
 
-import { listPartnerTransactions, getPartnerStatement } from "./partnerBilling.service";
+import {
+  listPartnerTransactions,
+  getPartnerStatement,
+  refundPartnerPayment,
+} from "./partnerBilling.service";
 
 afterEach(() => vi.clearAllMocks());
 
@@ -97,5 +104,27 @@ describe("getPartnerStatement", () => {
     const s = await getPartnerStatement("partner_1");
     expect(s.singleCurrency).toBeNull();
     expect(s.totals.wholesaleDueByCurrency).toEqual({ USD: 4900, INR: 50000 });
+  });
+});
+
+describe("refundPartnerPayment", () => {
+  it("refunds a payment made by one of the partner's own customers", async () => {
+    deps.paymentFindUnique.mockResolvedValue({ tenant: { parentTenantId: "partner_1" } });
+    deps.refundPayment.mockResolvedValue({ id: "pay_1", status: "REFUNDED" });
+    const out = await refundPartnerPayment("partner_1", "pay_1");
+    expect(deps.refundPayment).toHaveBeenCalledWith("pay_1");
+    expect(out.status).toBe("REFUNDED");
+  });
+
+  it("404s (and never refunds) when the payment isn't the partner's customer's", async () => {
+    deps.paymentFindUnique.mockResolvedValue({ tenant: { parentTenantId: "other_partner" } });
+    await expect(refundPartnerPayment("partner_1", "pay_x")).rejects.toThrow(/not found/i);
+    expect(deps.refundPayment).not.toHaveBeenCalled();
+  });
+
+  it("404s when the payment doesn't exist", async () => {
+    deps.paymentFindUnique.mockResolvedValue(null);
+    await expect(refundPartnerPayment("partner_1", "nope")).rejects.toThrow(/not found/i);
+    expect(deps.refundPayment).not.toHaveBeenCalled();
   });
 });
