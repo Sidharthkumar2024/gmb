@@ -114,7 +114,8 @@ export default function GmbDescriptionsPage() {
     setErr(null);
     setBusy("save");
     try {
-      await api.post("/api/v1/gmb/descriptions", reqBody());
+      // Persist exactly what was previewed (the AI text), not a template re-do.
+      await api.post("/api/v1/gmb/descriptions", { ...reqBody(), optimized: preview?.optimized });
       setNotice("Draft saved for approval.");
       setPreview(null);
       await refresh();

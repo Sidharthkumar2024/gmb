@@ -248,6 +248,14 @@ export interface CreateDescriptionInput {
   maxLength?: number;
   businessName?: string;
   tone?: "professional" | "friendly";
+  /**
+   * The already-previewed optimized text (the AI output the user saw from
+   * /descriptions/optimize). When present it is stored verbatim, so a saved
+   * draft keeps exactly what was previewed instead of silently re-running the
+   * deterministic template optimizer (which also can't re-bill the AI call).
+   * Omitted → falls back to the deterministic optimizer.
+   */
+  optimized?: string;
   locationId?: string;
   createdByUserId?: string;
 }
@@ -257,13 +265,22 @@ export async function createDescription(tenantId: string, input: CreateDescripti
     throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "A description to optimize is required.");
   }
   const keywords = (input.keywords ?? []).map((k) => k.trim()).filter(Boolean);
-  const result = optimizeDescription({
-    text: input.original,
-    keywords,
-    maxLength: input.maxLength,
-    businessName: input.businessName,
-    tone: input.tone,
-  });
+  // Persist the previewed optimized text when supplied; recompute its analysis
+  // server-side so the stored quality score stays objective regardless of source.
+  const previewed = input.optimized?.trim();
+  const result = previewed
+    ? {
+        optimized: previewed,
+        analysis: analyzeDescription(previewed, { keywords, maxLength: input.maxLength }),
+        changes: ["Saved the previewed optimized description."],
+      }
+    : optimizeDescription({
+        text: input.original,
+        keywords,
+        maxLength: input.maxLength,
+        businessName: input.businessName,
+        tone: input.tone,
+      });
 
   // Verify a supplied locationId belongs to this tenant before storing it,
   // matching the sibling create functions and avoiding a dangling reference.

@@ -1972,6 +1972,9 @@ const createDescriptionSchema = z.object({
   maxLength: z.number().int().min(20).max(20000).optional(),
   businessName: z.string().trim().max(160).optional(),
   tone: z.enum(["professional", "friendly"]).optional(),
+  // The previewed optimized text, stored verbatim so the saved draft keeps the
+  // AI output the user saw instead of a template re-do.
+  optimized: z.string().trim().max(20000).optional(),
   locationId: z.string().cuid().optional(),
 });
 
