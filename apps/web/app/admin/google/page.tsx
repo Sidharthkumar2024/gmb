@@ -33,9 +33,30 @@ const STATUS_TONE: Record<string, "ok" | "warn" | "danger"> = {
   ERROR: "danger",
 };
 
+const inputCls =
+  "rounded-control border border-adm-line bg-adm-bg px-3 py-2 text-sm2 text-adm-ink outline-none placeholder:text-adm-subtle focus:border-gmb-brand";
+
+interface GoogleConfig {
+  clientId: string;
+  redirectUri: string;
+  scope: string;
+  enabled: boolean;
+  hasSecret: boolean;
+  secretLast4: string | null;
+}
+
 export default function AdminGooglePage() {
   const [data, setData] = useState<GoogleApis | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const [cfg, setCfg] = useState<GoogleConfig | null>(null);
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [redirectUri, setRedirectUri] = useState("");
+  const [scope, setScope] = useState("");
+  const [enabled, setEnabled] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     void api
@@ -44,7 +65,42 @@ export default function AdminGooglePage() {
       .catch((e) =>
         setError(e instanceof ApiClientError ? e.message : "Could not load Google API status."),
       );
+    void api
+      .get<GoogleConfig>("/api/v1/admin/google-config")
+      .then((c) => {
+        setCfg(c);
+        setClientId(c.clientId ?? "");
+        setRedirectUri(c.redirectUri ?? "");
+        setScope(c.scope ?? "");
+        setEnabled(c.enabled);
+      })
+      .catch(() => undefined);
   }, []);
+
+  async function saveConfig(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const saved = await api.put<GoogleConfig>("/api/v1/admin/google-config", {
+        clientId: clientId.trim(),
+        ...(clientSecret.trim() ? { clientSecret: clientSecret.trim() } : {}),
+        redirectUri: redirectUri.trim(),
+        ...(scope.trim() ? { scope: scope.trim() } : {}),
+        enabled,
+      });
+      setCfg(saved);
+      setClientSecret("");
+      setNotice("Google OAuth client saved.");
+      const fresh = await api.get<GoogleApis>("/api/v1/admin/google-apis").catch(() => null);
+      if (fresh) setData(fresh);
+    } catch (e2) {
+      setError(e2 instanceof ApiClientError ? e2.message : "Could not save the Google client.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const counts = data?.last7d ?? {};
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -56,6 +112,82 @@ export default function AdminGooglePage() {
           {error}
         </div>
       )}
+      {notice && (
+        <div className="mb-3.5 rounded-control border border-adm-ok/30 bg-adm-ok/10 px-3 py-2 text-sm2 text-adm-ok">
+          {notice}
+        </div>
+      )}
+
+      <AdmCard className="mb-3.5">
+        <div className="flex items-center justify-between">
+          <AdmLabel>OAuth client configuration</AdmLabel>
+          {cfg && (
+            <AdmPill tone={cfg.hasSecret && cfg.enabled ? "ok" : "warn"}>
+              {cfg.hasSecret && cfg.enabled ? "Active" : "Incomplete"}
+            </AdmPill>
+          )}
+        </div>
+        <p className="mt-1 text-xs2 text-adm-muted">
+          Set the platform Google OAuth client so workspaces can connect their Business Profiles —
+          no redeploy needed. The secret is encrypted and never shown again.
+        </p>
+        <form onSubmit={saveConfig} className="mt-3 grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1 text-micro uppercase tracking-wide text-adm-subtle">
+            Client ID
+            <input
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              placeholder="…apps.googleusercontent.com"
+              className={inputCls}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-micro uppercase tracking-wide text-adm-subtle">
+            Client secret{" "}
+            {cfg?.secretLast4 && (
+              <span className="normal-case text-adm-muted">(stored ••••{cfg.secretLast4}; blank keeps it)</span>
+            )}
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+              placeholder={cfg?.hasSecret ? "••••••••" : "GOCSPX-…"}
+              className={inputCls}
+            />
+          </label>
+          <label className="col-span-2 flex flex-col gap-1 text-micro uppercase tracking-wide text-adm-subtle">
+            Redirect URI
+            <input
+              value={redirectUri}
+              onChange={(e) => setRedirectUri(e.target.value)}
+              placeholder="https://app.example.com/gmb-connect/callback"
+              className={inputCls}
+            />
+          </label>
+          <label className="col-span-2 flex flex-col gap-1 text-micro uppercase tracking-wide text-adm-subtle">
+            Scope <span className="normal-case text-adm-muted">(default business.manage)</span>
+            <input
+              value={scope}
+              onChange={(e) => setScope(e.target.value)}
+              placeholder="https://www.googleapis.com/auth/business.manage"
+              className={inputCls}
+            />
+          </label>
+          <label className="col-span-2 flex items-center gap-2 text-sm2 text-adm-ink">
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            Enabled — workspaces can connect Google
+          </label>
+          <div className="col-span-2">
+            <button
+              type="submit"
+              disabled={saving || !clientId.trim()}
+              className="rounded-control bg-gmb-brand px-4 py-2 text-sm2 font-semibold text-white hover:bg-gmb-brand-hover disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save Google client"}
+            </button>
+          </div>
+        </form>
+      </AdmCard>
 
       <div className="grid grid-cols-2 gap-3.5">
         <AdmCard>

@@ -25,7 +25,7 @@ import {
   deleteStorageConfig,
   type StorageProvider,
 } from "../services/storage.service";
-import { getSafeGoogleOAuthConfig } from "../services/googleOAuthConfig.service";
+import { getSafeGoogleOAuthConfig, saveGoogleOAuthConfig } from "../services/googleOAuthConfig.service";
 import {
   listProviders,
   createProvider,
@@ -555,6 +555,46 @@ router.get("/google-apis", async (_req: RequestWithAuth, res: Response, next: Ne
         })),
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Google OAuth client configuration (settable from the console) ----------
+// Lets a SUPER_ADMIN set the platform Google OAuth client id/secret/redirect
+// without a redeploy. The secret is encrypted at rest and never returned; the
+// service primes the sync cache so gmbGoogle.readClientConfig picks it up.
+
+const googleConfigSchema = z.object({
+  clientId: z.string().trim().max(300).optional(),
+  // Optional on update — blank/omitted preserves the stored secret.
+  clientSecret: z.string().trim().max(300).optional(),
+  redirectUri: z.string().trim().max(500).optional(),
+  scope: z.string().trim().max(500).optional(),
+  enabled: z.boolean().optional(),
+});
+
+router.get("/google-config", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getSafeGoogleOAuthConfig() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/google-config", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const body = googleConfigSchema.parse(req.body);
+    const saved = await saveGoogleOAuthConfig(body, req.userId);
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "GoogleOAuthConfig",
+      newValues: { enabled: saved.enabled, hasSecret: saved.hasSecret },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: saved });
   } catch (err) {
     next(err);
   }
