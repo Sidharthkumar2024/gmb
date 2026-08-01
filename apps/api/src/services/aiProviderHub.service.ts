@@ -5,7 +5,7 @@ import {
   AiProviderStatus,
 } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
-import { type SecretContext, safeParseMetadata } from "./secretVault.service";
+import { type SecretContext, safeParseMetadata, resolveSecretValue } from "./secretVault.service";
 
 // =====================================================================
 // AI Provider Hub service (Complete Planning PDF §2.10 / Phase 4).
@@ -362,4 +362,61 @@ export async function resolveProviderChain(
     secretId: row.secretId,
     hasKey: Boolean(row.secretId),
   }));
+}
+
+export interface AiProviderTestResult {
+  ok: boolean;
+  message: string;
+}
+
+/**
+ * Live connectivity test for a provider's stored key: a cheap authenticated GET
+ * against the provider's own API (OpenAI / Anthropic / Replicate list-style
+ * endpoints). Any non-2xx or network error is reported as a failure — it never
+ * throws for a bad key. Providers without a wired ping just confirm the key
+ * decrypts, so the button is honest about what it verified.
+ */
+export async function testAiProviderKey(
+  ctx: SecretContext,
+  id: string,
+): Promise<AiProviderTestResult> {
+  const cfg = await findOwnedOrThrow(ctx, id);
+  if (!cfg.secretId) return { ok: false, message: "No API key is attached to this provider." };
+  const key = await resolveSecretValue(ctx, cfg.secretId);
+  if (!key) return { ok: false, message: "Stored key is empty or could not be decrypted." };
+
+  const base = (u: string | null | undefined, fallback: string) =>
+    (u || fallback).replace(/\/+$/, "");
+  try {
+    if (cfg.provider === AiProviderKey.OPENAI) {
+      const res = await fetch(`${base(cfg.baseUrl, "https://api.openai.com")}/v1/models`, {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      return res.ok
+        ? { ok: true, message: "OpenAI key is valid." }
+        : { ok: false, message: `OpenAI rejected the key (HTTP ${res.status}).` };
+    }
+    if (cfg.provider === AiProviderKey.ANTHROPIC) {
+      const res = await fetch(`${base(cfg.baseUrl, "https://api.anthropic.com")}/v1/models`, {
+        headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
+      });
+      return res.ok
+        ? { ok: true, message: "Anthropic key is valid." }
+        : { ok: false, message: `Anthropic rejected the key (HTTP ${res.status}).` };
+    }
+    if (cfg.provider === AiProviderKey.REPLICATE) {
+      const res = await fetch("https://api.replicate.com/v1/account", {
+        headers: { Authorization: `Token ${key}` },
+      });
+      return res.ok
+        ? { ok: true, message: "Replicate key is valid." }
+        : { ok: false, message: `Replicate rejected the key (HTTP ${res.status}).` };
+    }
+    return {
+      ok: true,
+      message: `Key stored for ${cfg.provider}. Live validation isn't wired for this provider yet.`,
+    };
+  } catch (err) {
+    return { ok: false, message: `Could not reach the provider: ${(err as Error).message}` };
+  }
 }

@@ -32,6 +32,7 @@ import {
   updateProvider,
   setDefaultProvider,
   deleteProvider,
+  testAiProviderKey,
 } from "../services/aiProviderHub.service";
 import {
   listSecrets,
@@ -823,6 +824,16 @@ router.delete("/ai/providers/:id", async (req: RequestWithAuth, res: Response, n
 router.post("/ai/secrets/:id/test", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await testSecret(PLATFORM_CTX, req.params.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Live provider ping for a configured AI provider (validates the stored key
+// against the provider's own API).
+router.post("/ai/providers/:id/test", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await testAiProviderKey(PLATFORM_CTX, req.params.id) });
   } catch (err) {
     next(err);
   }

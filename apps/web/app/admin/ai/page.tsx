@@ -79,6 +79,24 @@ export default function AdminAiPage() {
     }
   }
 
+  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; message: string }>>({});
+
+  async function testProvider(id: string) {
+    setBusy(id);
+    setError(null);
+    try {
+      const r = await api.post<{ ok: boolean; message: string }>(
+        `/api/v1/admin/ai/providers/${id}/test`,
+        {},
+      );
+      setTestResult((t) => ({ ...t, [id]: r }));
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not test the key.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function addProvider(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -196,6 +214,16 @@ export default function AdminAiPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-1.5">
+                          {p.hasKey && (
+                            <button
+                              type="button"
+                              disabled={busy === p.id}
+                              onClick={() => void testProvider(p.id)}
+                              className="rounded-control border border-adm-line px-2.5 py-1.5 text-xs2 font-medium text-adm-muted hover:bg-adm-panel-hover disabled:opacity-50"
+                            >
+                              {busy === p.id ? "Testing…" : "Test"}
+                            </button>
+                          )}
                           {!p.isDefault && p.status === "ACTIVE" && (
                             <button
                               type="button"
@@ -234,6 +262,15 @@ export default function AdminAiPage() {
                             Delete
                           </button>
                         </div>
+                        {testResult[p.id] && (
+                          <div
+                            className={`mt-1.5 text-right text-xs2 ${
+                              testResult[p.id].ok ? "text-adm-ok" : "text-[#ff8f85]"
+                            }`}
+                          >
+                            {testResult[p.id].message}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
