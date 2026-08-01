@@ -72,6 +72,43 @@ router.get("/language-settings", async (req: RequestWithAuth, res: Response, nex
   }
 });
 
+// The effective white-label branding to apply to this workspace's UI. A customer
+// tenant inherits its parent partner's WhiteLabelConfig; a partner tenant uses
+// its own. Null fields mean "use the platform's own branding". Read-only and
+// safe to expose to any authenticated member (no secrets).
+router.get("/branding", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const brandingSelect = {
+      brandName: true,
+      brandColorHex: true,
+      logoUrl: true,
+      hidePoweredBy: true,
+    } as const;
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: req.tenantId! },
+      select: { parentTenantId: true, whiteLabelConfig: { select: brandingSelect } },
+    });
+    let cfg = tenant?.whiteLabelConfig ?? null;
+    if (!cfg && tenant?.parentTenantId) {
+      cfg = await prisma.whiteLabelConfig.findUnique({
+        where: { tenantId: tenant.parentTenantId },
+        select: brandingSelect,
+      });
+    }
+    res.json({
+      success: true,
+      data: {
+        brandName: cfg?.brandName ?? null,
+        brandColorHex: cfg?.brandColorHex ?? null,
+        logoUrl: cfg?.logoUrl ?? null,
+        hidePoweredBy: cfg?.hidePoweredBy ?? false,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 const languagePatch = z.object({
   languageCode: z.string().min(2),
   locale: z.string().optional(),
