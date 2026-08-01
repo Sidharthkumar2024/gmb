@@ -58,6 +58,15 @@ function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
 
+interface AlertRule {
+  id: string;
+  keywordId: string;
+  thresholdRank: number;
+  notifyEmail: string | null;
+  isActive: boolean;
+  keyword: { id: string; keyword: string; locationId: string };
+}
+
 export default function GmbRankingPage() {
   const [locations, setLocations] = useState<LocationLite[]>([]);
   const [locationId, setLocationId] = useState("");
@@ -68,6 +77,12 @@ export default function GmbRankingPage() {
   const [newKeyword, setNewKeyword] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [alerts, setAlerts] = useState<AlertRule[] | null>(null);
+  const [alertKeywordId, setAlertKeywordId] = useState("");
+  const [alertThreshold, setAlertThreshold] = useState("3");
+  const [alertEmail, setAlertEmail] = useState("");
+  const [alertBusy, setAlertBusy] = useState(false);
   // null = show our own ranks; otherwise the rival being overlaid.
   const [rivalIdx, setRivalIdx] = useState<number | null>(null);
 
@@ -98,6 +113,18 @@ export default function GmbRankingPage() {
   useEffect(() => {
     void loadKeywords();
   }, [loadKeywords]);
+
+  const loadAlerts = useCallback(async () => {
+    try {
+      setAlerts((await api.get<AlertRule[]>("/api/v1/gmb/rank-alerts")) ?? []);
+    } catch {
+      setAlerts([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAlerts();
+  }, [loadAlerts]);
 
   const loadSnapshot = useCallback(async () => {
     if (!selectedId) {
@@ -147,6 +174,45 @@ export default function GmbRankingPage() {
       setError(e instanceof ApiClientError ? e.message : "Could not remove the keyword.");
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function createAlert(e: React.FormEvent) {
+    e.preventDefault();
+    if (!alertKeywordId) return;
+    setAlertBusy(true);
+    setError(null);
+    try {
+      await api.post("/api/v1/gmb/rank-alerts", {
+        keywordId: alertKeywordId,
+        thresholdRank: Number(alertThreshold) || 3,
+        ...(alertEmail.trim() ? { notifyEmail: alertEmail.trim() } : {}),
+      });
+      setAlertKeywordId("");
+      setAlertEmail("");
+      await loadAlerts();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : "Could not create the alert rule.");
+    } finally {
+      setAlertBusy(false);
+    }
+  }
+
+  async function toggleAlert(rule: AlertRule) {
+    try {
+      await api.patch(`/api/v1/gmb/rank-alerts/${rule.id}`, { isActive: !rule.isActive });
+      await loadAlerts();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not update the rule.");
+    }
+  }
+
+  async function deleteAlert(id: string) {
+    try {
+      await api.delete(`/api/v1/gmb/rank-alerts/${id}`);
+      await loadAlerts();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not delete the rule.");
     }
   }
 
@@ -278,6 +344,79 @@ export default function GmbRankingPage() {
             {busy === "add" ? "Adding…" : "Track keyword"}
           </Button>
         </form>
+      </Card>
+
+      <Card className="mb-3.5">
+        <SectionLabel>Rank-drop alerts</SectionLabel>
+        <p className="mt-1 text-sm2 text-gmb-ink-muted">
+          Get emailed when a keyword falls out of your target rank. Rules evaluate on every rank capture.
+        </p>
+
+        <form onSubmit={createAlert} className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1 text-micro font-semibold uppercase tracking-wide text-gmb-ink-subtle">
+            Keyword
+            <select
+              value={alertKeywordId}
+              onChange={(e) => setAlertKeywordId(e.target.value)}
+              className="min-w-[180px] rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 font-normal normal-case tracking-normal text-gmb-ink outline-none"
+            >
+              <option value="">Select a keyword…</option>
+              {(keywords ?? []).map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.keyword}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-micro font-semibold uppercase tracking-wide text-gmb-ink-subtle">
+            Alert if worse than #
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={alertThreshold}
+              onChange={(e) => setAlertThreshold(e.target.value)}
+              className="w-24 rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 font-normal normal-case tracking-normal text-gmb-ink outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-micro font-semibold uppercase tracking-wide text-gmb-ink-subtle">
+            Notify email (optional)
+            <input
+              type="email"
+              value={alertEmail}
+              onChange={(e) => setAlertEmail(e.target.value)}
+              placeholder="owner@business.com"
+              className="min-w-[200px] rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 font-normal normal-case tracking-normal text-gmb-ink outline-none"
+            />
+          </label>
+          <Button type="submit" disabled={!alertKeywordId || alertBusy}>
+            {alertBusy ? "Adding…" : "Add rule"}
+          </Button>
+        </form>
+
+        {alerts && alerts.length > 0 && (
+          <div className="mt-3.5 flex flex-col gap-1.5">
+            {alerts.map((rule) => (
+              <div
+                key={rule.id}
+                className="flex items-center gap-2 rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2"
+              >
+                <span className="flex-1 truncate text-gmb-ink">
+                  <span className="font-medium">{rule.keyword.keyword}</span>
+                  <span className="text-gmb-ink-subtle"> — alert if worse than #{rule.thresholdRank}</span>
+                  {rule.notifyEmail && <span className="text-gmb-ink-subtle"> → {rule.notifyEmail}</span>}
+                </span>
+                <Pill tone={rule.isActive ? "ok" : "neutral"}>{rule.isActive ? "Active" : "Paused"}</Pill>
+                <Button variant="ghost" onClick={() => void toggleAlert(rule)}>
+                  {rule.isActive ? "Pause" : "Resume"}
+                </Button>
+                <Button variant="ghost" onClick={() => void deleteAlert(rule.id)}>
+                  Delete
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       {!selected ? (
