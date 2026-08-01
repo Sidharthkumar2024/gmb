@@ -25,6 +25,30 @@ export function normalizeSize(size?: string | null): ImageSize {
   return size && isAllowedSize(size) ? size : DEFAULT_SIZE;
 }
 
+/**
+ * Rough per-image provider cost in USD cents for the AiUsage ledger. Images
+ * have no token counts, so cost was previously logged as 0 — which made the
+ * admin AI-spend total silently exclude all image generation. Env-overridable;
+ * defaults track public list prices (DALL·E 3 standard/HD, larger canvases ~2x;
+ * Replicate Flux is a cheap flat estimate).
+ */
+export function estimateImageCostCents(
+  provider: "OPENAI" | "REPLICATE" | string,
+  size: string,
+  quality?: string | null,
+): number {
+  if (provider === "OPENAI") {
+    const large = /1792/.test(size);
+    const hd = (quality ?? "").toLowerCase() === "hd";
+    const cents = hd
+      ? Number(process.env.AI_IMAGE_COST_CENTS_OPENAI_HD ?? (large ? 12 : 8))
+      : Number(process.env.AI_IMAGE_COST_CENTS_OPENAI ?? (large ? 8 : 4));
+    return Number.isFinite(cents) && cents > 0 ? Math.round(cents) : large ? 8 : 4;
+  }
+  const cents = Number(process.env.AI_IMAGE_COST_CENTS_REPLICATE ?? 1);
+  return Number.isFinite(cents) && cents > 0 ? Math.round(cents) : 1;
+}
+
 /** Describe the aspect of an allowed size for UI hints. */
 export function describeAspect(size: string): "square" | "portrait" | "landscape" {
   const [w, h] = size.split("x").map((n) => Number(n));
@@ -376,7 +400,13 @@ export async function processImageRequest(tenantId: string, id: string) {
               feature: "gmb_image_generation",
               inputTokens: 0,
               outputTokens: 0,
-              costInCents: 0,
+              // Images have no tokens; record an estimated provider cost so the
+              // admin AI-spend total includes image generation (was 0).
+              costInCents: estimateImageCostCents(
+                String(cfg.provider),
+                normalizeSize(row.size),
+                row.quality,
+              ),
             },
           });
           await debitAi(tenantId, {

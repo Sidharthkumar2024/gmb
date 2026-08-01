@@ -22,11 +22,25 @@ import { GmbImageStatus } from "@nexaflow/db";
 import {
   buildImagePrompt,
   describeAspect,
+  estimateImageCostCents,
   isAllowedSize,
   normalizeSize,
   processImageRequest,
   toSafeImage,
 } from "./gmbImage.service";
+
+describe("estimateImageCostCents", () => {
+  it("prices OpenAI standard vs HD vs large canvas, and never returns 0", () => {
+    expect(estimateImageCostCents("OPENAI", "1024x1024", null)).toBe(4);
+    expect(estimateImageCostCents("OPENAI", "1024x1024", "hd")).toBe(8);
+    expect(estimateImageCostCents("OPENAI", "1792x1024", null)).toBe(8);
+    expect(estimateImageCostCents("OPENAI", "1792x1024", "hd")).toBe(12);
+  });
+  it("uses a cheap flat estimate for Replicate/other, still > 0", () => {
+    expect(estimateImageCostCents("REPLICATE", "1024x1024", null)).toBe(1);
+    expect(estimateImageCostCents("SOMETHING", "1024x1024", null)).toBe(1);
+  });
+});
 
 describe("size helpers", () => {
   it("validates and normalizes sizes", () => {
