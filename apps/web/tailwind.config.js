@@ -19,13 +19,15 @@ module.exports = {
           surface: "#ffffff",
           subtle: "#fafafc",
 
-          brand: "#5a4af0",
-          "brand-hover": "#4536d6",
-          "brand-light": "#6d5efc",
-          "brand-lighter": "#8b7bff",
-          "brand-tint": "#ece8ff",
-          "brand-wash": "#f7f5ff",
-          "brand-border": "#ded8ff",
+          // CSS-variable-backed so GmbShell can re-tint the suite per white-label
+          // partner; fallbacks are the original values (unchanged when unset).
+          brand: "var(--gmb-brand, #5a4af0)",
+          "brand-hover": "var(--gmb-brand-hover, #4536d6)",
+          "brand-light": "var(--gmb-brand-light, #6d5efc)",
+          "brand-lighter": "var(--gmb-brand-lighter, #8b7bff)",
+          "brand-tint": "var(--gmb-brand-tint, #ece8ff)",
+          "brand-wash": "var(--gmb-brand-wash, #f7f5ff)",
+          "brand-border": "var(--gmb-brand-border, #ded8ff)",
 
           ink: "#15131f",
           "ink-muted": "#56536a",

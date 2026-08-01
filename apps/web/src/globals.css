@@ -11,6 +11,18 @@
    branding). Default: indigo (Tailwind indigo scale).
    ========================================================================== */
 :root {
+  /* GMB Suite brand ramp as CSS variables so a white-label partner theme can
+     re-tint the whole suite by overriding --gmb-brand (GmbShell sets it from the
+     stored branding). Defaults are the original hard-coded palette, so the
+     look is unchanged when no partner colour is set. */
+  --gmb-brand: #5a4af0;
+  --gmb-brand-hover: #4536d6;
+  --gmb-brand-light: #6d5efc;
+  --gmb-brand-lighter: #8b7bff;
+  --gmb-brand-tint: #ece8ff;
+  --gmb-brand-wash: #f7f5ff;
+  --gmb-brand-border: #ded8ff;
+
   /* Adgrowly forest-green brand ramp (was indigo). #16753c is the mark. */
   --nx-primary-50: 245 250 246;
   --nx-primary-100: 233 242 236;

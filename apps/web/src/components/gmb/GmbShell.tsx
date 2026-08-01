@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { api } from "../../lib/api";
 import { useAuth } from "../../hooks/useAuth";
 import { ImpersonationBanner } from "./ImpersonationBanner";
@@ -109,18 +109,37 @@ export function GmbShell({
   const [userMenu, setUserMenu] = useState(false);
   const [branding, setBranding] = useState<{
     brandName: string | null;
+    brandColorHex: string | null;
     logoUrl: string | null;
     hidePoweredBy: boolean;
   } | null>(null);
 
   useEffect(() => {
     void api
-      .get<{ brandName: string | null; logoUrl: string | null; hidePoweredBy: boolean }>(
-        "/api/v1/branding",
-      )
+      .get<{
+        brandName: string | null;
+        brandColorHex: string | null;
+        logoUrl: string | null;
+        hidePoweredBy: boolean;
+      }>("/api/v1/branding")
       .then(setBranding)
       .catch(() => undefined);
   }, []);
+
+  // Re-tint the whole suite for a white-label partner by overriding the brand
+  // CSS variables; the derived shades follow via color-mix. Unset → defaults.
+  const c = branding?.brandColorHex;
+  const brandStyle: CSSProperties | undefined = c
+    ? ({
+        "--gmb-brand": c,
+        "--gmb-brand-hover": `color-mix(in srgb, ${c} 82%, #000)`,
+        "--gmb-brand-light": `color-mix(in srgb, ${c} 85%, #fff)`,
+        "--gmb-brand-lighter": `color-mix(in srgb, ${c} 65%, #fff)`,
+        "--gmb-brand-tint": `color-mix(in srgb, ${c} 14%, #fff)`,
+        "--gmb-brand-wash": `color-mix(in srgb, ${c} 6%, #fff)`,
+        "--gmb-brand-border": `color-mix(in srgb, ${c} 22%, #fff)`,
+      } as CSSProperties)
+    : undefined;
 
   // Auth lives in localStorage, so the server renders a signed-out shell while
   // the client renders a signed-in one. React treats that as a hydration
@@ -215,7 +234,7 @@ export function GmbShell({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gmb-canvas font-geist text-gmb-ink">
+    <div className="flex h-screen overflow-hidden bg-gmb-canvas font-geist text-gmb-ink" style={brandStyle}>
       <ImpersonationBanner />
       {/* ---------------- Sidebar ---------------- */}
       <aside className="flex w-[248px] flex-shrink-0 flex-col border-r border-gmb-line bg-gmb-surface">
