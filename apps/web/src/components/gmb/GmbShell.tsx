@@ -107,6 +107,20 @@ export function GmbShell({
   const [score, setScore] = useState<{ value: number; grade: string | null } | null>(null);
   const [locMenu, setLocMenu] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
+  const [branding, setBranding] = useState<{
+    brandName: string | null;
+    logoUrl: string | null;
+    hidePoweredBy: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    void api
+      .get<{ brandName: string | null; logoUrl: string | null; hidePoweredBy: boolean }>(
+        "/api/v1/branding",
+      )
+      .then(setBranding)
+      .catch(() => undefined);
+  }, []);
 
   // Auth lives in localStorage, so the server renders a signed-out shell while
   // the client renders a signed-in one. React treats that as a hydration
@@ -206,14 +220,27 @@ export function GmbShell({
       {/* ---------------- Sidebar ---------------- */}
       <aside className="flex w-[248px] flex-shrink-0 flex-col border-r border-gmb-line bg-gmb-surface">
         <div className="flex items-center gap-2.5 px-5 pb-4 pt-5">
-          <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-gradient-to-br from-gmb-brand-light to-gmb-brand-lighter text-sm font-bold text-white">
-            G
-          </div>
-          <div>
-            <div className="text-base font-bold leading-none tracking-[-0.01em]">GMB Suite</div>
-            <div className="mt-[3px] font-geist-mono text-micro uppercase tracking-[0.1em] text-gmb-ink-subtle">
-              by Adgrowly
+          {branding?.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={branding.logoUrl}
+              alt={branding.brandName ?? "Logo"}
+              className="h-[30px] w-[30px] rounded-[9px] object-cover"
+            />
+          ) : (
+            <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-gradient-to-br from-gmb-brand-light to-gmb-brand-lighter text-sm font-bold text-white">
+              {(branding?.brandName ?? "G").charAt(0).toUpperCase()}
             </div>
+          )}
+          <div>
+            <div className="text-base font-bold leading-none tracking-[-0.01em]">
+              {branding?.brandName ?? "GMB Suite"}
+            </div>
+            {!branding?.hidePoweredBy && (
+              <div className="mt-[3px] font-geist-mono text-micro uppercase tracking-[0.1em] text-gmb-ink-subtle">
+                by Adgrowly
+              </div>
+            )}
           </div>
         </div>
 
