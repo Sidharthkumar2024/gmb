@@ -133,20 +133,31 @@ router.get("/overview", async (_req: RequestWithAuth, res: Response, next: NextF
 router.get("/tenants", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-    const rows = await prisma.tenant.findMany({
-      where: q ? { name: { contains: q, mode: "insensitive" } } : undefined,
-      orderBy: { createdAt: "desc" },
-      take: 200,
-      include: {
-        _count: { select: { users: true, gmbLocations: true, gmbReviews: true, children: true } },
-        wallets: { select: { balanceCredits: true }, take: 1 },
-        plan: { select: { id: true, name: true } },
-        parentTenant: { select: { name: true } },
-      },
-    });
+    const pageSize = 50;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const where = q ? { name: { contains: q, mode: "insensitive" as const } } : undefined;
+    const [rows, total] = await Promise.all([
+      prisma.tenant.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          _count: { select: { users: true, gmbLocations: true, gmbReviews: true, children: true } },
+          wallets: { select: { balanceCredits: true }, take: 1 },
+          plan: { select: { id: true, name: true } },
+          parentTenant: { select: { name: true } },
+        },
+      }),
+      prisma.tenant.count({ where }),
+    ]);
     res.json({
       success: true,
-      data: rows.map((t) => ({
+      data: {
+        total,
+        page,
+        pageSize,
+        items: rows.map((t) => ({
         id: t.id,
         name: t.name,
         slug: t.slug,
@@ -162,7 +173,8 @@ router.get("/tenants", async (req: RequestWithAuth, res: Response, next: NextFun
         planId: t.plan?.id ?? null,
         planName: t.plan?.name ?? null,
         createdAt: t.createdAt,
-      })),
+        })),
+      },
     });
   } catch (err) {
     next(err);

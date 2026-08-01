@@ -40,22 +40,35 @@ export default function AdminAccountsPage() {
   const [rows, setRows] = useState<TenantRow[] | null>(null);
   const [plans, setPlans] = useState<PlanOption[]>([]);
   const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 50;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (query: string) => {
+  const load = useCallback(async (query: string, p: number) => {
     setError(null);
     try {
-      const qs = query ? `?q=${encodeURIComponent(query)}` : "";
-      setRows((await api.get<TenantRow[]>(`/api/v1/admin/tenants${qs}`)) ?? []);
+      const qs = new URLSearchParams({ page: String(p) });
+      if (query) qs.set("q", query);
+      const res = await api.get<{ items: TenantRow[]; total: number }>(
+        `/api/v1/admin/tenants?${qs.toString()}`,
+      );
+      setRows(res?.items ?? []);
+      setTotal(res?.total ?? 0);
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not load accounts.");
       setRows([]);
     }
   }, []);
 
+  function goTo(p: number) {
+    setPage(p);
+    void load(q, p);
+  }
+
   useEffect(() => {
-    void load("");
+    void load("", 1);
     // The plan list feeds the per-row assign dropdown; failure just leaves it
     // empty (no assignment possible) rather than breaking the accounts table.
     void api
@@ -69,7 +82,7 @@ export default function AdminAccountsPage() {
     setError(null);
     try {
       await api.post(`/api/v1/admin/tenants/${t.id}/plan`, { planId });
-      await load(q);
+      await load(q, page);
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not change the plan.");
     } finally {
@@ -106,7 +119,7 @@ export default function AdminAccountsPage() {
     setError(null);
     try {
       await api.patch(`/api/v1/admin/tenants/${t.id}`, { status });
-      await load(q);
+      await load(q, page);
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not update the workspace.");
     } finally {
@@ -126,7 +139,8 @@ export default function AdminAccountsPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void load(q);
+            setPage(1);
+            void load(q, 1);
           }}
           className="flex gap-2"
         >
@@ -263,6 +277,32 @@ export default function AdminAccountsPage() {
             </tbody>
           </table>
         </AdmCard>
+      )}
+
+      {total > pageSize && (
+        <div className="mt-3 flex items-center justify-between text-sm2 text-adm-muted">
+          <span>
+            {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total.toLocaleString()}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => goTo(page - 1)}
+              className="rounded-control border border-adm-line px-3 py-1.5 text-xs2 font-medium text-adm-muted hover:bg-adm-panel-hover disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={page * pageSize >= total}
+              onClick={() => goTo(page + 1)}
+              className="rounded-control border border-adm-line px-3 py-1.5 text-xs2 font-medium text-adm-muted hover:bg-adm-panel-hover disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       )}
 
       <div className="mt-3 flex items-center gap-2">
