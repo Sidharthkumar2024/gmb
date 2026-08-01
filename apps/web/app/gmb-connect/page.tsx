@@ -32,7 +32,10 @@ interface Connection {
 export default function GmbConnectPage() {
   const [conn, setConn] = useState<Connection | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -63,9 +66,52 @@ export default function GmbConnectPage() {
     }
   }
 
+  async function importLocations() {
+    setImporting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const r = await api.post<{ accounts: number; created: number; updated: number; total: number }>(
+        "/api/v1/gmb/google/sync-locations",
+        {},
+      );
+      setNotice(
+        r.total === 0
+          ? "No locations found on the connected Google account."
+          : `Imported ${r.total} location${r.total === 1 ? "" : "s"} — ${r.created} new, ${r.updated} updated.`,
+      );
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not import locations from Google.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function disconnect() {
+    if (!window.confirm("Disconnect Google Business Profile? Live sync stops until you reconnect.")) return;
+    setDisconnecting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.post("/api/v1/gmb/google/disconnect", {});
+      setNotice("Google disconnected.");
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not disconnect Google.");
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
   return (
     <GmbShell title="Connect Google">
       {error && <ErrorNote>{error}</ErrorNote>}
+      {notice && (
+        <div className="mb-3.5 max-w-[560px] rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 text-gmb-ink">
+          {notice}
+        </div>
+      )}
 
       {conn === null ? (
         <Skeleton className="h-[220px] max-w-[560px]" />
@@ -101,12 +147,18 @@ export default function GmbConnectPage() {
                       : "Not synced yet — import locations to pull your profiles."}
                   </div>
                 </div>
-                <div className="mt-4 flex gap-2">
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button onClick={() => void importLocations()} disabled={importing}>
+                    {importing ? "Importing…" : "Import locations from Google"}
+                  </Button>
                   <Link href="/gmb-locations" className="no-underline hover:no-underline">
-                    <Button>Go to locations</Button>
+                    <Button variant="ghost">Go to locations</Button>
                   </Link>
                   <Button variant="ghost" onClick={() => void startConnect()} disabled={starting}>
                     {starting ? "Redirecting…" : "Reconnect"}
+                  </Button>
+                  <Button variant="ghost" onClick={() => void disconnect()} disabled={disconnecting}>
+                    {disconnecting ? "Disconnecting…" : "Disconnect"}
                   </Button>
                 </div>
               </>
