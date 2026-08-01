@@ -47,6 +47,7 @@ interface Summary {
 interface LocationLite {
   id: string;
   name: string;
+  hasCredential?: boolean;
 }
 
 function num(n: number): string {
@@ -73,6 +74,7 @@ export default function GmbInsightsPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     void api
@@ -106,6 +108,22 @@ export default function GmbInsightsPage() {
   }, [load]);
 
   const hasData = summary && summary.periods > 0;
+  const selected = locations.find((l) => l.id === locationId);
+
+  async function syncFromGoogle() {
+    if (!locationId) return;
+    setSyncing(true);
+    setError(null);
+    try {
+      // Reuses the location live-sync, which refreshes the 30-day insights snapshot.
+      await api.post(`/api/v1/gmb/locations/${locationId}/sync`, { source: "GOOGLE" });
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not sync insights from Google.");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   return (
     <GmbShell title="Insights">
@@ -136,6 +154,11 @@ export default function GmbInsightsPage() {
                   </option>
                 ))}
               </select>
+            )}
+            {selected?.hasCredential && (
+              <Button variant="ghost" onClick={() => void syncFromGoogle()} disabled={syncing}>
+                {syncing ? "Syncing…" : "Sync from Google"}
+              </Button>
             )}
             <Button variant="ghost" onClick={() => void load()}>
               Refresh
