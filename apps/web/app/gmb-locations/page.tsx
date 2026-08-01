@@ -57,6 +57,7 @@ function isVerified(state: string | null): boolean {
 export default function GmbLocationsPage() {
   const [items, setItems] = useState<Location[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<Record<string, string>>({});
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", city: "", primaryCategory: "", phone: "" });
@@ -141,16 +142,31 @@ export default function GmbLocationsPage() {
     }
   }
 
-  async function sync(id: string) {
-    setBusy((b) => ({ ...b, [id]: "sync" }));
+  async function sync(l: Location) {
+    setBusy((b) => ({ ...b, [l.id]: "sync" }));
     setError(null);
+    setNotice(null);
     try {
-      await api.post(`/api/v1/gmb/locations/${id}/sync`, {});
+      // A connected location pulls live reviews + insights from Google; a manual
+      // one just refreshes its stored metadata.
+      const r = await api.post<{ syncSource?: string; importedReviews?: number; updatedReviews?: number }>(
+        `/api/v1/gmb/locations/${l.id}/sync`,
+        l.hasCredential ? { source: "GOOGLE" } : {},
+      );
+      if (l.hasCredential && r?.syncSource === "GOOGLE") {
+        const imp = r.importedReviews ?? 0;
+        const upd = r.updatedReviews ?? 0;
+        setNotice(
+          imp || upd
+            ? `Synced ${l.name} from Google — ${imp} new review${imp === 1 ? "" : "s"}, ${upd} updated.`
+            : `Synced ${l.name} from Google — no new reviews.`,
+        );
+      }
       await load();
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not sync this location.");
     } finally {
-      setBusy((b) => ({ ...b, [id]: "" }));
+      setBusy((b) => ({ ...b, [l.id]: "" }));
     }
   }
 
@@ -159,6 +175,11 @@ export default function GmbLocationsPage() {
   return (
     <GmbShell title="Locations">
       {error && <ErrorNote>{error}</ErrorNote>}
+      {notice && (
+        <div className="mb-3.5 rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 text-gmb-ink">
+          {notice}
+        </div>
+      )}
 
       <div className="mb-3.5 grid grid-cols-4 gap-3.5">
         <Card>
@@ -313,9 +334,13 @@ export default function GmbLocationsPage() {
                       <Button
                         variant="ghost"
                         disabled={Boolean(working)}
-                        onClick={() => void sync(l.id)}
+                        onClick={() => void sync(l)}
                       >
-                        {working === "sync" ? "Syncing…" : "Sync"}
+                        {working === "sync"
+                          ? "Syncing…"
+                          : l.hasCredential
+                            ? "Sync from Google"
+                            : "Sync"}
                       </Button>
                       <Button
                         variant="ghost"
