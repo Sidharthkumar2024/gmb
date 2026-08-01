@@ -7,9 +7,12 @@ import {
 // Decides, for a paying customer, whether the charge should be captured on its
 // parent PARTNER's own gateway account instead of the platform's. A customer is
 // routed to its partner only when: it has a parent tenant, that parent is a
-// WHITE_LABEL partner, and that partner has a fully-ready active gateway (API
-// keys present). Otherwise the platform gateway is used — routing is additive
-// and never blocks a top-up.
+// WHITE_LABEL partner, and that partner has a fully-ready active gateway — API
+// keys AND a webhook secret. The webhook secret is REQUIRED to route: without
+// it the per-partner webhook can't verify (and won't credit), so capturing the
+// payment on the partner's gateway would take the customer's money with no
+// credits. When not fully ready we fall back to the platform gateway, which can
+// credit — routing is additive and never blocks or breaks a top-up.
 
 export interface ResolvedPartnerGateway {
   partnerTenantId: string;
@@ -32,6 +35,10 @@ export async function resolvePartnerGatewayForTenant(
 
   const creds = await getActivePartnerGatewayCreds(parent.id);
   if (!creds) return null;
+  // Require the webhook secret: without it the partner's webhook can't credit,
+  // so routing here would take money the customer can never get credits for.
+  // Fall back to the platform gateway instead.
+  if (!creds.webhookSecret) return null;
   return { partnerTenantId: parent.id, creds };
 }
 

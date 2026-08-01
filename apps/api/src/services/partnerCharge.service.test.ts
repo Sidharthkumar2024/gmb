@@ -53,6 +53,13 @@ describe("resolvePartnerGatewayForTenant", () => {
     deps.getActiveCreds.mockResolvedValue(null);
     expect(await resolvePartnerGatewayForTenant("cust_1")).toBeNull();
   });
+
+  it("falls back to platform (null) when the partner has keys but NO webhook secret", async () => {
+    // Routing here would capture money the partner's webhook can't credit.
+    deps.tenantFindUnique.mockResolvedValue({ parentTenant: { id: "partner_1", type: "WHITE_LABEL" } });
+    deps.getActiveCreds.mockResolvedValue({ ...CREDS, webhookSecret: null });
+    expect(await resolvePartnerGatewayForTenant("cust_1")).toBeNull();
+  });
 });
 
 describe("isPartnerCustomer", () => {
