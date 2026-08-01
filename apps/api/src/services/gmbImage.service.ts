@@ -1,6 +1,6 @@
 import { prisma, GmbImageStatus, AiProviderKey, AiProviderKind, SecretScope } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
-import { assertCanAffordAi, debitAi } from "./billing.service";
+import { reserveAi, settleAi, releaseAi } from "./billing.service";
 import { resolveProviderChain } from "./aiProviderHub.service";
 import { resolveSecretValue, type SecretContext } from "./secretVault.service";
 
@@ -328,12 +328,16 @@ export async function processImageRequest(tenantId: string, id: string) {
   if (row.status !== GmbImageStatus.PENDING && row.status !== GmbImageStatus.FAILED) {
     throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Only pending or failed image requests can be generated.");
   }
-  await assertCanAffordAi(tenantId, "gmb_image_generation");
+  // Reserve the credits up front (atomic hold), so two DIFFERENT image gens that
+  // the wallet can only cover once can't both pass an affordability check and
+  // both hit the paid provider — the second is rejected with 402 here before it
+  // runs. Settled on success, released on any failure. Null when billing is off.
+  const reservation = await reserveAi(tenantId, "gmb_image_generation");
 
-  // Atomically claim the request so two concurrent generate calls (a double
-  // click, or a retry racing the first run) can't both hit the paid provider and
-  // both debit. Only the runner that flips PENDING/FAILED -> PROCESSING proceeds;
-  // it then becomes READY on success or FAILED on failure (both retryable).
+  // Atomically claim the request so two concurrent generate calls for the SAME
+  // request (a double click, or a retry racing the first run) can't both hit the
+  // paid provider. Only the runner that flips PENDING/FAILED -> PROCESSING
+  // proceeds; it then becomes READY on success or FAILED on failure (retryable).
   const claim = await prisma.gmbImageRequest.updateMany({
     where: {
       id,
@@ -343,6 +347,8 @@ export async function processImageRequest(tenantId: string, id: string) {
     data: { status: GmbImageStatus.PROCESSING },
   });
   if (claim.count !== 1) {
+    // Lost the claim — return the hold so it isn't leaked, then reject.
+    await releaseAi(reservation).catch(() => undefined);
     throw new ApiError(ErrorCodes.CONFLICT, 409, "This image is already being generated.");
   }
 
@@ -409,13 +415,14 @@ export async function processImageRequest(tenantId: string, id: string) {
               ),
             },
           });
-          await debitAi(tenantId, {
-            aiUsageId: usage.id,
-            feature: "gmb_image_generation",
-            reason: "AI image generation (GBP)",
-          });
+          // Convert the hold into an actual spend now the call succeeded.
+          await settleAi(reservation, { aiUsageId: usage.id });
         } catch (err) {
-          console.error("[gmb-image] failed to log usage/debit", err);
+          // Usage/settle failed — release the hold so credits aren't stuck
+          // reserved. The customer keeps their image uncharged (matches the
+          // prior behaviour where a failed debit was logged, not thrown).
+          await releaseAi(reservation).catch(() => undefined);
+          console.error("[gmb-image] failed to log usage/settle", err);
         }
         return toSafeImage(updated);
       } catch (e) {
@@ -424,6 +431,8 @@ export async function processImageRequest(tenantId: string, id: string) {
     }
   }
 
+  // Every provider failed — nothing was charged, so return the held credits.
+  await releaseAi(reservation).catch(() => undefined);
   const failed = await prisma.gmbImageRequest.update({
     where: { id },
     data: { status: GmbImageStatus.FAILED, error: lastError.slice(0, 500) },

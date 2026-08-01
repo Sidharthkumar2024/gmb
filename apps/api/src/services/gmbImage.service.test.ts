@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const deps = vi.hoisted(() => ({
   imageFindFirst: vi.fn(),
   imageUpdateMany: vi.fn(),
+  reserveAi: vi.fn(),
+  settleAi: vi.fn(),
+  releaseAi: vi.fn(),
 }));
 
 vi.mock("@nexaflow/db", async (importOriginal) => {
@@ -17,6 +20,13 @@ vi.mock("@nexaflow/db", async (importOriginal) => {
     },
   };
 });
+// Stub the credit engine so the claim tests don't need a live wallet. Default
+// reserveAi -> null (matches billing-off); a test can override it.
+vi.mock("./billing.service", () => ({
+  reserveAi: deps.reserveAi,
+  settleAi: deps.settleAi,
+  releaseAi: deps.releaseAi,
+}));
 
 import { GmbImageStatus } from "@nexaflow/db";
 import {
@@ -114,6 +124,9 @@ describe("processImageRequest claim", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.WALLET_BILLING_ENABLED; // billing off → affordability is a no-op
+    deps.reserveAi.mockResolvedValue(null); // no hold by default
+    deps.settleAi.mockResolvedValue(undefined); // return promises so `.catch` works
+    deps.releaseAi.mockResolvedValue(undefined);
   });
 
   it("rejects a request that isn't PENDING or FAILED (400)", async () => {
@@ -143,5 +156,22 @@ describe("processImageRequest claim", () => {
       },
       data: { status: GmbImageStatus.PROCESSING },
     });
+  });
+
+  it("reserves before claiming, and releases the hold when the claim is lost", async () => {
+    deps.imageFindFirst.mockResolvedValue({
+      id: "img-1",
+      tenantId: "t1",
+      status: GmbImageStatus.PENDING,
+    });
+    const reservation = { walletId: "w1", tenantId: "t1", feature: "gmb_image_generation", cost: 3 };
+    deps.reserveAi.mockResolvedValue(reservation); // billing on: a hold is taken
+    deps.imageUpdateMany.mockResolvedValue({ count: 0 }); // another run won the claim
+
+    await expect(processImageRequest("t1", "img-1")).rejects.toMatchObject({ statusCode: 409 });
+    // The hold must be returned, not leaked, and the provider never ran.
+    expect(deps.reserveAi).toHaveBeenCalledWith("t1", "gmb_image_generation");
+    expect(deps.releaseAi).toHaveBeenCalledWith(reservation);
+    expect(deps.settleAi).not.toHaveBeenCalled();
   });
 });
