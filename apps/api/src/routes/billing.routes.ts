@@ -7,7 +7,7 @@ import { verifyRazorpayWebhook, fetchRazorpayOrderNotes } from "../services/razo
 import { verifyStripeWebhook } from "../services/stripe.service";
 import { createTopUpOrder } from "../services/paymentGateway.service";
 import { recordPayment } from "../services/payment.service";
-import { getPartnerGatewayById } from "../services/partnerCharge.service";
+import { getPartnerGatewayById, isPartnerCustomer } from "../services/partnerCharge.service";
 
 const router = Router();
 
@@ -41,6 +41,25 @@ router.post(
 interface WebhookCreds {
   webhookSecret?: string | null;
   razorpayApi?: { keyId?: string; keySecret: string };
+  // When set (per-partner endpoint), the resolved tenant MUST be this partner's
+  // customer before we credit — the partner controls its own webhook secret and
+  // order notes, so without this it could name (and credit) any tenant.
+  scopePartnerId?: string;
+}
+
+/**
+ * A partner-routed webhook may only credit that partner's own customers. Returns
+ * true when crediting is allowed (no partner scope = platform webhook = allowed).
+ */
+async function creditAllowed(creds: WebhookCreds | undefined, tenantId: string): Promise<boolean> {
+  if (!creds?.scopePartnerId) return true;
+  const ok = await isPartnerCustomer(creds.scopePartnerId, tenantId);
+  if (!ok) {
+    console.warn(
+      `[billing] partner ${creds.scopePartnerId} webhook resolved non-customer tenant ${tenantId}; refusing to credit.`,
+    );
+  }
+  return ok;
 }
 
 /**
@@ -99,7 +118,7 @@ async function handleRazorpay(
         tenantId = orderNotes?.tenantId ?? tenantId;
         credits = Number(orderNotes?.credits ?? credits);
       }
-      if (tenantId && credits > 0 && payment?.id) {
+      if (tenantId && credits > 0 && payment?.id && (await creditAllowed(creds, tenantId))) {
         await grantCredits(tenantId, credits, {
           reason: "Razorpay top-up",
           idempotencyKey: `razorpay:${payment.id}`,
@@ -139,7 +158,7 @@ async function handleStripe(
     );
     // A verified-but-uninteresting event (or a bad signature) both return null;
     // ack with 200 so Stripe stops retrying, but only credit on a real result.
-    if (result) {
+    if (result && (await creditAllowed(creds, result.tenantId))) {
       await grantCredits(result.tenantId, result.credits, {
         reason: "Stripe top-up",
         idempotencyKey: `stripe:${result.paymentId}`,
@@ -181,6 +200,7 @@ async function loadPartnerCreds(
   return {
     webhookSecret: creds.webhookSecret,
     razorpayApi: provider === "razorpay" ? { keyId: creds.keyId, keySecret: creds.apiSecret } : undefined,
+    scopePartnerId: partnerId,
   };
 }
 

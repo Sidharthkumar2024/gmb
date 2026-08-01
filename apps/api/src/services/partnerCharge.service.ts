@@ -50,3 +50,19 @@ export async function getPartnerGatewayById(
   if (!partner || partner.type !== TenantType.WHITE_LABEL) return null;
   return getActivePartnerGatewayCreds(partnerTenantId);
 }
+
+/**
+ * Is `tenantId` a customer (child) of this partner? Used to scope a per-partner
+ * webhook: the partner controls its own gateway + webhook secret, so it could
+ * name any tenant in the order notes — we only ever credit its own customers.
+ */
+export async function isPartnerCustomer(
+  partnerTenantId: string,
+  tenantId: string,
+): Promise<boolean> {
+  const child = await prisma.tenant.findFirst({
+    where: { id: tenantId, parentTenantId: partnerTenantId },
+    select: { id: true },
+  });
+  return Boolean(child);
+}

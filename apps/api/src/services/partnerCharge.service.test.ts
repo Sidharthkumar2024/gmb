@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const deps = vi.hoisted(() => ({
   tenantFindUnique: vi.fn(),
+  tenantFindFirst: vi.fn(),
   getActiveCreds: vi.fn(),
 }));
 
@@ -13,14 +14,14 @@ vi.mock("@nexaflow/db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@nexaflow/db")>();
   return {
     ...actual,
-    prisma: { tenant: { findUnique: deps.tenantFindUnique } },
+    prisma: { tenant: { findUnique: deps.tenantFindUnique, findFirst: deps.tenantFindFirst } },
   };
 });
 vi.mock("./partnerGateway.service", () => ({
   getActivePartnerGatewayCreds: deps.getActiveCreds,
 }));
 
-import { resolvePartnerGatewayForTenant } from "./partnerCharge.service";
+import { resolvePartnerGatewayForTenant, isPartnerCustomer } from "./partnerCharge.service";
 
 const CREDS = { provider: "razorpay", apiSecret: "sec", keyId: "rzp_x", webhookSecret: "wh" };
 
@@ -51,5 +52,20 @@ describe("resolvePartnerGatewayForTenant", () => {
     deps.tenantFindUnique.mockResolvedValue({ parentTenant: { id: "partner_1", type: "WHITE_LABEL" } });
     deps.getActiveCreds.mockResolvedValue(null);
     expect(await resolvePartnerGatewayForTenant("cust_1")).toBeNull();
+  });
+});
+
+describe("isPartnerCustomer", () => {
+  it("is true only when the tenant is a child of the partner (scoped by parentTenantId)", async () => {
+    deps.tenantFindFirst.mockResolvedValue({ id: "cust_1" });
+    expect(await isPartnerCustomer("partner_1", "cust_1")).toBe(true);
+    expect(deps.tenantFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "cust_1", parentTenantId: "partner_1" } }),
+    );
+  });
+
+  it("is false when the tenant isn't the partner's child (blocks a webhook crediting a foreign tenant)", async () => {
+    deps.tenantFindFirst.mockResolvedValue(null);
+    expect(await isPartnerCustomer("partner_1", "someone_elses_tenant")).toBe(false);
   });
 });
