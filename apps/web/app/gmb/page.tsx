@@ -73,6 +73,8 @@ export default function GmbPostsPage() {
   const [tone, setTone] = useState<(typeof TONES)[number]>("friendly");
   const [niche, setNiche] = useState("");
   const [summary, setSummary] = useState("");
+  const [locations, setLocations] = useState<Array<{ name: string }>>([]);
+  const [location, setLocation] = useState("");
 
   // Per-post schedule input
   const [scheduleAt, setScheduleAt] = useState<Record<string, string>>({});
@@ -98,7 +100,11 @@ export default function GmbPostsPage() {
     // a real name to write with instead of a placeholder.
     void api
       .get<Array<{ name: string }>>("/api/v1/gmb/locations")
-      .then((l) => setBusinessName(l?.[0]?.name ?? ""))
+      .then((l) => {
+        setLocations(l ?? []);
+        setBusinessName(l?.[0]?.name ?? "");
+        setLocation(l?.[0]?.name ?? "");
+      })
       .catch(() => undefined);
   }, [load]);
 
@@ -118,6 +124,7 @@ export default function GmbPostsPage() {
         tone,
         ...(topic.trim() ? { topic: topic.trim() } : {}),
         ...(niche ? { niche } : {}),
+        ...(location ? { locationLabel: location } : {}),
       });
       setSummary(created.summary);
       setTopic("");
@@ -135,7 +142,11 @@ export default function GmbPostsPage() {
     setBusy((b) => ({ ...b, __new: "1" }));
     setError(null);
     try {
-      await api.post("/api/v1/gmb/posts", { type, summary: text });
+      await api.post("/api/v1/gmb/posts", {
+        type,
+        summary: text,
+        ...(location ? { locationLabel: location } : {}),
+      });
       setSummary("");
       setOpen(false);
       await load();
@@ -256,6 +267,26 @@ export default function GmbPostsPage() {
                 </select>
               </label>
             </div>
+
+            {locations.length > 0 && (
+              <label className="mt-2.5 block text-micro font-semibold uppercase tracking-wide text-gmb-ink-subtle">
+                Location
+                <select
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="mt-1 w-full rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 font-normal normal-case tracking-normal text-gmb-ink outline-none"
+                >
+                  {locations.map((l) => (
+                    <option key={l.name} value={l.name}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-[11px] normal-case tracking-normal text-gmb-ink-subtle">
+                  A connected location publishes to Google on approval; others stay local-only.
+                </span>
+              </label>
+            )}
 
             <div className="mt-2.5 flex gap-2.5">
               <input
