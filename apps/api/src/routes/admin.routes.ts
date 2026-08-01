@@ -288,26 +288,38 @@ router.patch("/tenants/:id", async (req: RequestWithAuth, res: Response, next: N
 router.get("/users", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-    const rows = await prisma.user.findMany({
-      where: q ? { email: { contains: q, mode: "insensitive" } } : undefined,
-      orderBy: { createdAt: "desc" },
-      take: 200,
-      include: { tenant: { select: { name: true } } },
-    });
+    const pageSize = 50;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const where = q ? { email: { contains: q, mode: "insensitive" as const } } : undefined;
+    const [rows, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { tenant: { select: { name: true } } },
+      }),
+      prisma.user.count({ where }),
+    ]);
     res.json({
       success: true,
-      data: rows.map((u) => ({
-        id: u.id,
-        email: u.email,
-        name: u.name,
-        role: u.role,
-        isActive: u.isActive,
-        emailVerified: u.emailVerified,
-        tenantName: u.tenant.name,
-        tenantId: u.tenantId,
-        lastLoginAt: u.lastLoginAt,
-        createdAt: u.createdAt,
-      })),
+      data: {
+        total,
+        page,
+        pageSize,
+        items: rows.map((u) => ({
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          role: u.role,
+          isActive: u.isActive,
+          emailVerified: u.emailVerified,
+          tenantName: u.tenant.name,
+          tenantId: u.tenantId,
+          lastLoginAt: u.lastLoginAt,
+          createdAt: u.createdAt,
+        })),
+      },
     });
   } catch (err) {
     next(err);

@@ -30,22 +30,35 @@ const ROLE_TONE: Record<string, "brand" | "neutral" | "ok"> = {
 export default function AdminUsersPage() {
   const [rows, setRows] = useState<UserRow[] | null>(null);
   const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 50;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (query: string) => {
+  const load = useCallback(async (query: string, p: number) => {
     setError(null);
     try {
-      const qs = query ? `?q=${encodeURIComponent(query)}` : "";
-      setRows((await api.get<UserRow[]>(`/api/v1/admin/users${qs}`)) ?? []);
+      const qs = new URLSearchParams({ page: String(p) });
+      if (query) qs.set("q", query);
+      const res = await api.get<{ items: UserRow[]; total: number }>(
+        `/api/v1/admin/users?${qs.toString()}`,
+      );
+      setRows(res?.items ?? []);
+      setTotal(res?.total ?? 0);
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not load users.");
       setRows([]);
     }
   }, []);
 
+  function goTo(p: number) {
+    setPage(p);
+    void load(q, p);
+  }
+
   useEffect(() => {
-    void load("");
+    void load("", 1);
   }, [load]);
 
   async function toggleActive(u: UserRow) {
@@ -55,7 +68,7 @@ export default function AdminUsersPage() {
     setError(null);
     try {
       await api.patch(`/api/v1/admin/users/${u.id}`, { isActive: !u.isActive });
-      await load(q);
+      await load(q, page);
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not update the user.");
     } finally {
@@ -75,7 +88,8 @@ export default function AdminUsersPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void load(q);
+            setPage(1);
+            void load(q, 1);
           }}
           className="flex gap-2"
         >
@@ -158,6 +172,32 @@ export default function AdminUsersPage() {
             </tbody>
           </table>
         </AdmCard>
+      )}
+
+      {total > pageSize && (
+        <div className="mt-3 flex items-center justify-between text-sm2 text-adm-muted">
+          <span>
+            {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total.toLocaleString()}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => goTo(page - 1)}
+              className="rounded-control border border-adm-line px-3 py-1.5 text-xs2 font-medium text-adm-muted hover:bg-adm-panel-hover disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={page * pageSize >= total}
+              onClick={() => goTo(page + 1)}
+              className="rounded-control border border-adm-line px-3 py-1.5 text-xs2 font-medium text-adm-muted hover:bg-adm-panel-hover disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       )}
     </AdminShell>
   );
