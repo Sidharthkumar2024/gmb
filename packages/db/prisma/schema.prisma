@@ -69,6 +69,9 @@ model SupportTicket {
   subject  String
   status   TicketStatus   @default(OPEN)
   priority TicketPriority @default(NORMAL)
+  /// Optional platform user currently responsible for the ticket. Kept as a
+  /// scalar so deleting an operator never deletes or invalidates support history.
+  assignedToUserId String?
 
   // Denormalised for cheap list rendering without loading the thread.
   lastReplyAt DateTime     @default(now())
@@ -81,6 +84,7 @@ model SupportTicket {
 
   @@index([tenantId, status])
   @@index([status])
+  @@index([assignedToUserId])
 }
 
 model SupportTicketMessage {
@@ -91,6 +95,8 @@ model SupportTicketMessage {
   author       TicketAuthor
   authorUserId String?
   body         String
+  /// Staff-only note. Customer ticket reads never return these messages.
+  internal     Boolean @default(false)
 
   createdAt DateTime @default(now())
 
@@ -109,13 +115,19 @@ model WhiteLabelConfig {
   brandName     String?
   customDomain  String?
   domainVerified Boolean @default(false)
+  domainVerificationToken String?
+  domainVerifiedAt DateTime?
   brandColorHex String  @default("#5a4af0")
   logoUrl       String?
   hidePoweredBy Boolean @default(false)
+  senderName    String?
+  senderEmail   String?
 
   updatedByUserId String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@unique([customDomain])
 }
 
 /// Customisable transactional email (Admin → Email templates). `key` names a
@@ -223,10 +235,24 @@ model PartnerInvoice {
 
   snapshot Json
 
+  status            PartnerInvoiceStatus @default(OPEN)
+  dueAt             DateTime?
+  paidAt            DateTime?
+  provider          PaymentProvider?
+  providerPaymentId String?
+  paymentUrl        String?
+
   issuedAt DateTime @default(now())
 
   @@unique([partnerTenantId, year, month])
   @@index([partnerTenantId, issuedAt])
+}
+
+enum PartnerInvoiceStatus {
+  OPEN
+  PAID
+  OVERDUE
+  VOID
 }
 
 enum UserRole {
@@ -562,8 +588,54 @@ model Payment {
 
   createdAt DateTime @default(now())
 
+  taxInvoice TaxInvoice?
+
   @@index([tenantId, createdAt])
   @@index([createdAt])
+}
+
+/// Buyer details used on GST/tax invoices. A tenant may update these without
+/// changing its workspace display name.
+model BillingProfile {
+  id             String @id @default(cuid())
+  tenantId       String @unique
+  legalName      String?
+  billingAddress String?
+  gstin          String?
+  placeOfSupply  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+/// Immutable accounting snapshot created one-per captured Payment. Numbering
+/// is allocated from a PostgreSQL sequence in invoice.service, never derived
+/// from a random id, so documents are sequential and webhook-safe.
+model TaxInvoice {
+  id        String  @id @default(cuid())
+  paymentId String  @unique
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  tenantId  String
+  number    String  @unique
+
+  subtotalMinor Int
+  taxMinor      Int
+  totalMinor    Int
+  taxRateBps    Int @default(0)
+  currency      String
+
+  sellerName    String
+  sellerAddress String?
+  sellerGstin   String?
+  sellerEmail   String?
+  buyerName     String
+  buyerAddress  String?
+  buyerGstin    String?
+  placeOfSupply String?
+
+  issuedAt DateTime @default(now())
+
+  @@index([tenantId, issuedAt])
+  @@index([issuedAt])
 }
 
 // Append-only credit ledger: one row per balance/reservation change, so every
@@ -942,6 +1014,7 @@ model GmbPlaceAction {
   /// Whether this link has been pushed to the Google profile (Place Actions
   /// API write — gated on a live connection). Local-only until then.
   publishedToGoogle Boolean @default(false)
+  googlePlaceActionName String?
 
   createdByUserId String?
 
@@ -972,6 +1045,9 @@ model GmbQuestion {
   status     GmbQuestionStatus @default(NEW)
   answerText String?
   answeredAt DateTime?
+  answerPublishedToGoogle Boolean @default(false)
+  googleAnswerName String?
+  lastSyncedAt DateTime?
 
   createdByUserId String?
 
@@ -1077,6 +1153,21 @@ model GmbRankSnapshot {
 
   @@index([keywordId, checkedAt])
   @@index([tenantId])
+}
+
+/// Opt-in cadence for lightweight single-keyword rank captures. The worker
+/// checks the centre point only; grid scans remain explicitly user-triggered.
+model GmbRankSchedule {
+  id           String   @id @default(cuid())
+  tenantId     String   @unique
+  enabled      Boolean  @default(false)
+  cadenceHours Int      @default(24)
+  lastRunAt    DateTime?
+  lastError    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([enabled])
 }
 
 model GmbRankGridSnapshot {
@@ -1269,6 +1360,8 @@ model GmbDescription {
   analysis  Json?
 
   status GmbDescriptionStatus @default(DRAFT)
+  publishedToGoogle Boolean @default(false)
+  publishedAt       DateTime?
 
   createdByUserId String?
 
@@ -1345,6 +1438,9 @@ model GmbReportSchedule {
   enabled   Boolean       @default(false)
   frequency GmbReportType @default(MONTHLY)
   lastRunAt DateTime?
+  recipientEmails String[] @default([])
+  lastDeliveredAt DateTime?
+  lastDeliveryError String?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 

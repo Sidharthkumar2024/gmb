@@ -94,8 +94,8 @@ export async function listPartnerTransactions(
  * Refund one of the partner's own customers' payments. Ownership-scoped: the
  * payment's tenant must be a CHILD of this partner, so a partner can never
  * refund another partner's or the platform's payment. Delegates to the shared
- * refundPayment (reverse credits + mark REFUNDED, idempotent); the partner
- * issues the actual money-back from its own gateway dashboard.
+ * refundPayment, which issues the gateway refund with the partner's historical
+ * provider credentials before reversing credits.
  */
 export async function refundPartnerPayment(partnerTenantId: string, paymentId: string) {
   const payment = await prisma.payment.findUnique({

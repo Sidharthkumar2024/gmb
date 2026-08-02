@@ -37,6 +37,7 @@ interface Description {
   optimized: string | null;
   keywords: string[];
   status: "DRAFT" | "APPROVED" | "REJECTED";
+  publishedToGoogle: boolean;
   analysis: Analysis | null;
 }
 
@@ -146,6 +147,20 @@ export default function GmbDescriptionsPage() {
       await refresh();
     } catch (e) {
       setErr(e instanceof ApiClientError ? e.message : "Unable to delete.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function publish(id: string) {
+    setBusy(id);
+    setErr(null);
+    try {
+      await api.post(`/api/v1/gmb/descriptions/${id}/publish`, {});
+      setNotice("Business description published to Google.");
+      await refresh();
+    } catch (e) {
+      setErr(e instanceof ApiClientError ? e.message : "Unable to publish to Google.");
     } finally {
       setBusy(null);
     }
@@ -337,6 +352,17 @@ export default function GmbDescriptionsPage() {
                         >
                           Reject
                         </Button>
+                      </div>
+                    )}
+                    {d.status === "APPROVED" && d.target === "BUSINESS" && (
+                      <div className="mt-3 flex items-center gap-2">
+                        {d.publishedToGoogle ? (
+                          <Pill tone="ok">Published on Google</Pill>
+                        ) : (
+                          <Button disabled={busy === d.id} onClick={() => void publish(d.id)}>
+                            {busy === d.id ? "Publishing…" : "Publish to Google"}
+                          </Button>
+                        )}
                       </div>
                     )}
                   </Card>

@@ -19,6 +19,7 @@ import { ApiError, ErrorCodes, Permissions } from "@nexaflow/shared";
 import {
   requireAuth,
   requireTenantScope,
+  requireVerifiedEmailForMutation,
   RequestWithAuth,
 } from "../middleware/auth";
 import { requirePermission } from "../middleware/rbac";
@@ -98,6 +99,7 @@ import {
   getDescription,
   listDescriptions,
   optimizeDescriptionWithAi,
+  publishDescriptionToGoogle,
   updateDescription,
 } from "../services/gmbDescription.service";
 import {
@@ -136,11 +138,13 @@ import {
   ingestQuestion,
   listQuestions,
   summarizeQuestions,
+  syncGoogleQuestions,
   updateQuestionStatus,
 } from "../services/gmbQuestion.service";
 import {
   deletePlaceAction,
   listPlaceActions,
+  publishPlaceAction,
   setPlaceActionActive,
   suggestPlaceActions,
   upsertPlaceAction,
@@ -172,8 +176,9 @@ import {
 import { renderGmbReportPdf } from "../services/gmbReportPdf.service";
 import { checkGmbSchema } from "../services/gmbHealth.service";
 import { listGmbAiCosts } from "../services/billing.service";
-import { getReportSchedule, setReportSchedule } from "../services/gmbReportScheduler.service";
+import { deliverReportByEmail, getReportSchedule, setReportSchedule } from "../services/gmbReportScheduler.service";
 import { decryptTokenIfNeeded } from "../lib/tokenCrypto";
+import { getRankSchedule, setRankSchedule } from "../services/gmbRankScheduler.service";
 
 // GMB AI Manager routes (Complete Planning PDF §2.19). Tenant-scoped post
 // drafting + scheduling, gated by GMB_MANAGE. Mutations audited.
@@ -189,6 +194,7 @@ router.use(
   requireAuth,
   requireTenantScope,
   requirePermission(Permissions.GMB_MANAGE),
+  requireVerifiedEmailForMutation,
 );
 
 // Schema self-check: probes every GMB table so un-applied migrations (DB behind
@@ -1276,6 +1282,36 @@ router.delete("/rank-alerts/:id", async (req: RequestWithAuth, res: Response, ne
   }
 });
 
+router.get("/rank-schedule", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getRankSchedule(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/rank-schedule", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = z.object({
+      enabled: z.boolean(),
+      cadenceHours: z.number().int().min(6).max(168),
+    }).parse(req.body);
+    const data = await setRankSchedule(req.tenantId!, input);
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "GmbRankSchedule",
+      resourceId: req.tenantId!,
+      newValues: input,
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // --- GBP Q&A (Adgrowly GMB Panel — "Q&A API") ------------------------------
 // Mirrors the reviews pipeline: sync/log a question → AI draft → approve →
 // answer. Answers are approval-first (never auto-posted), matching Google's
@@ -1308,6 +1344,24 @@ router.get("/questions/summary", async (req: RequestWithAuth, res: Response, nex
   try {
     const { locationId } = questionListSchema.parse(req.query);
     res.json({ success: true, data: await summarizeQuestions(req.tenantId!, locationId) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/questions/sync", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { locationId } = z.object({ locationId: z.string().cuid() }).parse(req.body);
+    const result = await syncGoogleQuestions(req.tenantId!, locationId);
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "GmbQuestion",
+      newValues: result,
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }
@@ -1458,6 +1512,24 @@ router.patch("/place-actions/:id", async (req: RequestWithAuth, res: Response, n
   try {
     const { isActive } = placeActionToggleSchema.parse(req.body);
     const action = await setPlaceActionActive(req.tenantId!, req.params.id, isActive);
+    res.json({ success: true, data: action });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/place-actions/:id/publish", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const action = await publishPlaceAction(req.tenantId!, req.params.id);
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "GmbPlaceAction",
+      resourceId: action.id,
+      newValues: { publishedToGoogle: true },
+      ...extractRequestMeta(req),
+    });
     res.json({ success: true, data: action });
   } catch (err) {
     next(err);
@@ -1709,7 +1781,8 @@ router.get("/citations/recommended", async (req: RequestWithAuth, res: Response,
   }
 });
 
-// Scan a location's citations for NAP inconsistencies + missing directories.
+// Compare manually tracked citation NAP against the canonical location and
+// return recommended directories absent from that checklist. No web crawl.
 const citationScanSchema = z.object({
   locationId: z.string().cuid(),
   niche: z.string().trim().max(40).optional(),
@@ -1834,6 +1907,27 @@ router.post("/reports/generate", async (req: RequestWithAuth, res: Response, nex
 router.get("/reports/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await getReport(req.tenantId!, req.params.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/reports/:id/email", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { recipients } = z.object({
+      recipients: z.array(z.string().email().max(254)).min(1).max(10),
+    }).parse(req.body);
+    const result = await deliverReportByEmail(req.tenantId!, req.params.id, recipients);
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "GmbReport",
+      resourceId: req.params.id,
+      newValues: { recipients: result.delivered },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }
@@ -2035,6 +2129,24 @@ router.post("/descriptions", async (req: RequestWithAuth, res: Response, next: N
 router.get("/descriptions", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await listDescriptions(req.tenantId!, descriptionListSchema.parse(req.query)) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/descriptions/:id/publish", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const description = await publishDescriptionToGoogle(req.tenantId!, req.params.id);
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "GmbDescription",
+      resourceId: description.id,
+      newValues: { publishedToGoogle: true },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: description });
   } catch (err) {
     next(err);
   }
@@ -2255,6 +2367,42 @@ router.patch("/images/:id", async (req: RequestWithAuth, res: Response, next: Ne
   }
 });
 
+// An approved image becomes an editable Google-post draft; publication still
+// uses the normal explicit post approval/publish flow.
+router.post("/images/:id/create-post", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const image = await getImageRequest(req.tenantId!, req.params.id);
+    if (image.status !== GmbImageStatus.APPROVED || !image.resultUrl) {
+      throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Approve a generated image before creating a post.");
+    }
+    const location = image.locationId
+      ? await prisma.gmbLocation.findFirst({
+          where: { id: image.locationId, tenantId: req.tenantId! },
+          select: { name: true },
+        })
+      : null;
+    const post = await createPost(req.tenantId!, {
+      type: GmbPostType.UPDATE,
+      summary: image.subject,
+      mediaUrl: image.resultUrl,
+      locationLabel: location?.name,
+      createdByUserId: req.userId,
+    });
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "CREATE",
+      resource: "GmbPost",
+      resourceId: post.id,
+      newValues: { sourceImageId: image.id },
+      ...extractRequestMeta(req),
+    });
+    res.status(201).json({ success: true, data: post });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Run the generation for a pending/failed request via the admin's IMAGE
 // provider chain. Credit-gated; lands in READY or FAILED with the reason.
 router.post("/images/:id/generate", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
@@ -2361,6 +2509,7 @@ router.get("/report-schedule", async (req: RequestWithAuth, res: Response, next:
 const reportScheduleSchema = z.object({
   enabled: z.boolean(),
   frequency: z.nativeEnum(GmbReportType).optional(),
+  recipientEmails: z.array(z.string().email().max(254)).max(10).optional(),
 });
 
 router.put("/report-schedule", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
@@ -2373,7 +2522,7 @@ router.put("/report-schedule", async (req: RequestWithAuth, res: Response, next:
       action: "UPDATE",
       resource: "GmbReportSchedule",
       resourceId: req.tenantId!,
-      newValues: { enabled: data.enabled, frequency: data.frequency },
+      newValues: { enabled: data.enabled, frequency: data.frequency, recipients: data.recipientEmails.length },
       ...extractRequestMeta(req),
     });
     res.json({ success: true, data });

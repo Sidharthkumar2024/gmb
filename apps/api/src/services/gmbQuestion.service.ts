@@ -1,6 +1,7 @@
 import { prisma, GmbQuestionStatus } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { runTenantLlmJson } from "./ai.service";
+import { listGoogleQuestions, upsertGoogleQuestionAnswer } from "./gmbGoogle.service";
 
 // GBP Q&A (Adgrowly GMB Panel — "Q&A API"). Mirrors the reviews pipeline:
 // a public question on the Business Profile is synced/logged, an answer is
@@ -10,11 +11,8 @@ import { runTenantLlmJson } from "./ai.service";
 // matches Google's policy (no automated public changes without the customer's
 // specific, express consent) and the reviews module's own default.
 //
-// The Google Q&A *write* (posting the approved answer back to the profile)
-// lands when the Business Profile Q&A endpoint is wired — it needs a live
-// customer connection to exercise. Until then the approval flow is fully
-// functional and `publishedToGoogle` reports false, exactly like a review
-// reply on a manually-logged (non-Google) question.
+// Google-sourced questions publish an approved answer through answers:upsert.
+// Manually logged questions remain local and report publishedToGoogle=false.
 
 type QuestionRow = {
   id: string;
@@ -26,6 +24,9 @@ type QuestionRow = {
   status: GmbQuestionStatus;
   answerText: string | null;
   answeredAt: Date | null;
+  answerPublishedToGoogle: boolean;
+  googleAnswerName: string | null;
+  lastSyncedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -40,6 +41,8 @@ export function toSafeQuestion(row: QuestionRow) {
     status: row.status,
     answerText: row.answerText,
     answeredAt: row.answeredAt?.toISOString() ?? null,
+    publishedToGoogle: row.answerPublishedToGoogle,
+    lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
     isFromGoogle: Boolean(row.externalQuestionId),
     createdAt: row.createdAt.toISOString(),
   };
@@ -94,7 +97,7 @@ async function findQuestionOrThrow(tenantId: string, id: string) {
 async function findLocationOrThrow(tenantId: string, locationId: string) {
   const loc = await prisma.gmbLocation.findFirst({
     where: { id: locationId, tenantId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, placeId: true, secretId: true },
   });
   if (!loc) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Location not found.");
   return loc;
@@ -115,6 +118,54 @@ export async function listQuestions(tenantId: string, filter: ListQuestionsFilte
     orderBy: [{ askedAt: "desc" }, { createdAt: "desc" }],
   });
   return rows.map(toSafeQuestion);
+}
+
+/** Pull public questions (and the top/owner answer Google returns) into the local queue. */
+export async function syncGoogleQuestions(tenantId: string, locationId: string) {
+  const location = await findLocationOrThrow(tenantId, locationId);
+  if (!location.placeId || !location.secretId) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Connect and sync this Google location first.");
+  }
+  const questions = await listGoogleQuestions({
+    tenantId,
+    locationId,
+    locationResourceName: location.placeId,
+    secretId: location.secretId,
+  });
+  const syncedAt = new Date();
+  let created = 0;
+  let updated = 0;
+  for (const question of questions) {
+    const existing = await prisma.gmbQuestion.findUnique({
+      where: { locationId_externalQuestionId: { locationId, externalQuestionId: question.name } },
+      select: { id: true },
+    });
+    const data = {
+      authorName: question.authorName,
+      questionText: question.text,
+      askedAt: question.createTime ? new Date(question.createTime) : null,
+      lastSyncedAt: syncedAt,
+      ...(question.topAnswer?.isMerchant
+        ? {
+            answerText: question.topAnswer.text,
+            answeredAt: question.topAnswer.updateTime ? new Date(question.topAnswer.updateTime) : syncedAt,
+            status: GmbQuestionStatus.ANSWERED,
+            answerPublishedToGoogle: true,
+            googleAnswerName: question.topAnswer.name,
+          }
+        : {}),
+    };
+    if (existing) {
+      await prisma.gmbQuestion.update({ where: { id: existing.id }, data });
+      updated += 1;
+    } else {
+      await prisma.gmbQuestion.create({
+        data: { tenantId, locationId, externalQuestionId: question.name, ...data },
+      });
+      created += 1;
+    }
+  }
+  return { received: questions.length, created, updated, syncedAt: syncedAt.toISOString() };
 }
 
 export interface IngestQuestionInput {
@@ -166,25 +217,40 @@ export async function generateAnswerDraft(tenantId: string, id: string) {
 }
 
 /**
- * Save an approved answer and mark the question ANSWERED. The Google Q&A write
- * is gated on a live customer connection + the Q&A endpoint (Phase 2); today
- * `publishedToGoogle` is false and the answer is stored for the record.
+ * Save an approved answer and mark the question ANSWERED. Google-sourced
+ * questions are published first; a provider failure leaves local state intact.
  */
 export async function answerQuestion(tenantId: string, id: string, text: string) {
   const answer = text.trim();
   if (!answer) {
     throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Answer text is required.");
   }
-  await findQuestionOrThrow(tenantId, id);
+  const question = await findQuestionOrThrow(tenantId, id);
+  const location = await findLocationOrThrow(tenantId, question.locationId);
+  let published: { name: string | null; text: string; updateTime: string | null } | null = null;
+  if (question.externalQuestionId) {
+    if (!location.secretId) {
+      throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Reconnect Google before publishing this answer.");
+    }
+    published = await upsertGoogleQuestionAnswer({
+      tenantId,
+      locationId: question.locationId,
+      secretId: location.secretId,
+      questionName: question.externalQuestionId,
+      text: answer,
+    });
+  }
   const row = await prisma.gmbQuestion.update({
     where: { id },
     data: {
       answerText: answer,
       status: GmbQuestionStatus.ANSWERED,
       answeredAt: new Date(),
+      answerPublishedToGoogle: Boolean(published),
+      googleAnswerName: published?.name ?? question.googleAnswerName,
     },
   });
-  return { ...toSafeQuestion(row), publishedToGoogle: false };
+  return toSafeQuestion(row);
 }
 
 export async function updateQuestionStatus(

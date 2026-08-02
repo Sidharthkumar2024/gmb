@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { resolveCname, resolveTxt } from "node:dns/promises";
 import bcrypt from "bcryptjs";
 import { prisma, TenantStatus, UserRole, AuthTokenPurpose } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
@@ -9,9 +10,9 @@ import { assertWithinUserLimit } from "./plan.service";
 
 // Partner (reseller / white-label) portal data. A partner is a tenant whose
 // child tenants (Tenant.parentTenantId) are its customers. Everything here is
-// derived from real records — customer counts, locations, plans. Revenue and
-// commission are deliberately ABSENT: this build has no payment ledger, so a
-// number there would be fabricated. They appear once billing is wired.
+// derived from real records — customer counts, locations and plans. Revenue,
+// commission and settlement live in the dedicated partner billing services and
+// are always derived from captured Payment rows.
 
 export interface PartnerCustomer {
   id: string;
@@ -318,18 +319,28 @@ export interface Branding {
   brandName: string | null;
   customDomain: string | null;
   domainVerified: boolean;
+  domainVerificationToken: string | null;
+  domainVerifiedAt: Date | null;
+  cnameTarget: string;
   brandColorHex: string;
   logoUrl: string | null;
   hidePoweredBy: boolean;
+  senderName: string | null;
+  senderEmail: string | null;
 }
 
 const DEFAULT_BRANDING: Branding = {
   brandName: null,
   customDomain: null,
   domainVerified: false,
+  domainVerificationToken: null,
+  domainVerifiedAt: null,
+  cnameTarget: process.env.WHITE_LABEL_CNAME_TARGET ?? "app.adgrowly.ca",
   brandColorHex: "#5a4af0",
   logoUrl: null,
   hidePoweredBy: false,
+  senderName: null,
+  senderEmail: null,
 };
 
 export async function getBranding(partnerTenantId: string): Promise<Branding> {
@@ -339,9 +350,14 @@ export async function getBranding(partnerTenantId: string): Promise<Branding> {
     brandName: row.brandName,
     customDomain: row.customDomain,
     domainVerified: row.domainVerified,
+    domainVerificationToken: row.domainVerificationToken,
+    domainVerifiedAt: row.domainVerifiedAt,
+    cnameTarget: process.env.WHITE_LABEL_CNAME_TARGET ?? "app.adgrowly.ca",
     brandColorHex: row.brandColorHex,
     logoUrl: row.logoUrl,
     hidePoweredBy: row.hidePoweredBy,
+    senderName: row.senderName,
+    senderEmail: row.senderEmail,
   };
 }
 
@@ -351,6 +367,8 @@ export interface SaveBrandingInput {
   brandColorHex?: string;
   logoUrl?: string | null;
   hidePoweredBy?: boolean;
+  senderName?: string | null;
+  senderEmail?: string | null;
   updatedByUserId?: string;
 }
 
@@ -375,22 +393,82 @@ export async function saveBranding(
   // proven yet, so it must not inherit the old one's verified flag.
   const existing = await prisma.whiteLabelConfig.findUnique({
     where: { tenantId: partnerTenantId },
-    select: { customDomain: true },
+    select: { customDomain: true, domainVerificationToken: true },
   });
-  const domainChanged = existing ? existing.customDomain !== customDomain : customDomain !== null;
+  const domainChanged = input.customDomain !== undefined && (
+    existing ? existing.customDomain !== customDomain : customDomain !== null
+  );
+  if (customDomain) {
+    const claimed = await prisma.whiteLabelConfig.findFirst({
+      where: { customDomain, tenantId: { not: partnerTenantId } },
+      select: { id: true },
+    });
+    if (claimed) throw new ApiError(ErrorCodes.CONFLICT, 409, "That custom domain is already connected.");
+  }
+  const effectiveDomain = input.customDomain !== undefined ? customDomain : existing?.customDomain ?? null;
+  const clearDomain = input.customDomain !== undefined && !customDomain;
+  const resetDomainVerification = Boolean(
+    effectiveDomain && (domainChanged || !existing?.domainVerificationToken),
+  );
+  const senderEmail = input.senderEmail?.trim().toLowerCase() || null;
+  if (senderEmail) {
+    const senderDomain = senderEmail.split("@")[1];
+    if (!senderDomain || !effectiveDomain || senderDomain !== effectiveDomain) {
+      throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Sender email must use the verified brand domain.");
+    }
+  }
 
   const data = {
     ...(input.brandName !== undefined ? { brandName: input.brandName?.trim() || null } : {}),
-    ...(input.customDomain !== undefined ? { customDomain, ...(domainChanged ? { domainVerified: false } : {}) } : {}),
+    ...(input.customDomain !== undefined ? { customDomain } : {}),
+    ...(clearDomain
+      ? { domainVerified: false, domainVerifiedAt: null, domainVerificationToken: null }
+      : resetDomainVerification
+        ? {
+            domainVerified: false,
+            domainVerifiedAt: null,
+            domainVerificationToken: randomBytes(24).toString("hex"),
+          }
+        : {}),
     ...(brandColorHex ? { brandColorHex } : {}),
     ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl?.trim() || null } : {}),
     ...(input.hidePoweredBy !== undefined ? { hidePoweredBy: input.hidePoweredBy } : {}),
+    ...(input.senderName !== undefined ? { senderName: input.senderName?.trim() || null } : {}),
+    ...(input.senderEmail !== undefined ? { senderEmail } : {}),
     updatedByUserId: input.updatedByUserId ?? null,
   };
   await prisma.whiteLabelConfig.upsert({
     where: { tenantId: partnerTenantId },
     create: { tenantId: partnerTenantId, ...data },
     update: data,
+  });
+  return getBranding(partnerTenantId);
+}
+
+/** Prove DNS control with either the displayed TXT token or deployment CNAME. */
+export async function verifyBrandingDomain(partnerTenantId: string): Promise<Branding> {
+  const row = await prisma.whiteLabelConfig.findUnique({ where: { tenantId: partnerTenantId } });
+  if (!row?.customDomain || !row.domainVerificationToken) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Save a custom domain before verifying DNS.");
+  }
+  const target = (process.env.WHITE_LABEL_CNAME_TARGET ?? "app.adgrowly.ca").toLowerCase().replace(/\.$/, "");
+  const expectedTxt = `adgrowly-verification=${row.domainVerificationToken}`;
+  const [txt, cnames] = await Promise.all([
+    resolveTxt(`_adgrowly.${row.customDomain}`).catch(() => [] as string[][]),
+    resolveCname(row.customDomain).catch(() => [] as string[]),
+  ]);
+  const txtOk = txt.some((parts) => parts.join("").trim() === expectedTxt);
+  const cnameOk = cnames.some((name) => name.toLowerCase().replace(/\.$/, "") === target);
+  if (!txtOk && !cnameOk) {
+    throw new ApiError(
+      ErrorCodes.BAD_REQUEST,
+      400,
+      `DNS is not verified yet. Add TXT ${expectedTxt} or point the CNAME to ${target}.`,
+    );
+  }
+  await prisma.whiteLabelConfig.update({
+    where: { tenantId: partnerTenantId },
+    data: { domainVerified: true, domainVerifiedAt: new Date() },
   });
   return getBranding(partnerTenantId);
 }

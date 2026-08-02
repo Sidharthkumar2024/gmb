@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AdminShell, AdmCard, AdmLabel, AdmPill } from "../../../src/components/gmb/AdminShell";
 import { api, ApiClientError } from "../../../src/lib/api";
 import { downloadAuthed } from "../../../src/lib/download";
@@ -19,6 +19,10 @@ interface Payment {
   status: "CAPTURED" | "REFUNDED";
   createdAt: string;
 }
+interface PageResult<T> {
+  items: T[];
+  pagination: { page: number; pageSize: number; total: number; pages: number };
+}
 
 function money(minor: number, currency: string): string {
   try {
@@ -32,24 +36,41 @@ export default function AdminPaymentsPage() {
   const [rows, setRows] = useState<Payment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [status, setStatus] = useState<"" | "CAPTURED" | "REFUNDED">("");
+  const [provider, setProvider] = useState<"" | "RAZORPAY" | "STRIPE">("");
+  const [search, setSearch] = useState("");
 
-  const load = () =>
+  const load = useCallback(() => {
+    const qs = new URLSearchParams({ page: String(page), pageSize: "25" });
+    if (status) qs.set("status", status);
+    if (provider) qs.set("provider", provider);
+    if (search.trim()) qs.set("search", search.trim());
+    return (
     api
-      .get<Payment[]>("/api/v1/admin/payments")
-      .then((r) => setRows(r ?? []))
+      .get<PageResult<Payment>>(`/api/v1/admin/payments?${qs.toString()}`)
+      .then((r) => {
+        setRows(r?.items ?? []);
+        setPages(r?.pagination.pages ?? 1);
+        setTotal(r?.pagination.total ?? 0);
+      })
       .catch((e) => {
         setError(e instanceof ApiClientError ? e.message : "Could not load payments.");
         setRows([]);
-      });
+      })
+    );
+  }, [page, provider, search, status]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   async function refund(p: Payment) {
     if (
       !window.confirm(
-        `Refund ${p.credits} credits to ${p.tenantName}? This reverses the credits in the ledger and marks the payment refunded. Issue the actual money-back in your ${p.provider} dashboard.`,
+        `Refund ${p.credits} credits to ${p.tenantName}? The app will issue the ${p.provider} refund first, then reverse credits.`,
       )
     )
       return;
@@ -92,12 +113,22 @@ export default function AdminPaymentsPage() {
         </div>
       )}
 
+      <div className="mb-3 flex flex-wrap gap-2">
+        <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Workspace or payment id" className="rounded-control border border-adm-line bg-adm-panel px-3 py-2 text-xs2 text-adm-ink outline-none" />
+        <select value={provider} onChange={(e) => { setProvider(e.target.value as typeof provider); setPage(1); }} className="rounded-control border border-adm-line bg-adm-panel px-3 py-2 text-xs2 text-adm-ink">
+          <option value="">All gateways</option><option value="RAZORPAY">Razorpay</option><option value="STRIPE">Stripe</option>
+        </select>
+        <select value={status} onChange={(e) => { setStatus(e.target.value as typeof status); setPage(1); }} className="rounded-control border border-adm-line bg-adm-panel px-3 py-2 text-xs2 text-adm-ink">
+          <option value="">All statuses</option><option value="CAPTURED">Captured</option><option value="REFUNDED">Refunded</option>
+        </select>
+      </div>
+
       <div className="mb-3.5 grid grid-cols-3 gap-3.5">
         {(
           [
-            ["Payments", rows?.length, "captured top-ups"],
-            ["Credits sold", rows ? creditsSold : null, "across all workspaces"],
-            ["Workspaces paying", rows ? new Set(captured.map((r) => r.tenantName)).size : null, "with a payment"],
+            ["Payments", rows ? total : null, "matching this view"],
+            ["Credits sold", rows ? creditsSold : null, "on this page"],
+            ["Workspaces paying", rows ? new Set(captured.map((r) => r.tenantName)).size : null, "on this page"],
           ] as const
         ).map(([label, value, caption]) => (
           <AdmCard key={label}>
@@ -172,6 +203,13 @@ export default function AdminPaymentsPage() {
             </tbody>
           </table>
         </AdmCard>
+      )}
+      {rows && total > 0 && (
+        <div className="mt-3 flex items-center justify-end gap-2 text-xs2 text-adm-muted">
+          <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} className="rounded-control border border-adm-line px-3 py-1.5 disabled:opacity-40">Previous</button>
+          Page {page} of {pages}
+          <button disabled={page >= pages} onClick={() => setPage((value) => value + 1)} className="rounded-control border border-adm-line px-3 py-1.5 disabled:opacity-40">Next</button>
+        </div>
       )}
     </AdminShell>
   );

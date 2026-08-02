@@ -250,3 +250,26 @@ export async function getActivePartnerGatewayCreds(
     webhookSecret,
   };
 }
+
+/** Resolve the historical payment provider even when the partner later switches its active gateway. */
+export async function getPartnerGatewayCreds(
+  partnerTenantId: string,
+  provider: PartnerProvider,
+): Promise<PartnerGatewayCreds | null> {
+  const ctx = ctxFor(partnerTenantId);
+  const all = await entries(partnerTenantId);
+  const keyEntry = all.find(
+    (entry) => entry.label === KEY_LABELS[provider] && entry.status === SecretStatus.ACTIVE,
+  );
+  if (!keyEntry) return null;
+  const apiSecret = (await revealSecret(ctx, keyEntry.id)).value;
+  const webhookEntry = all.find(
+    (entry) => entry.label === WEBHOOK_LABELS[provider] && entry.status === SecretStatus.ACTIVE,
+  );
+  return {
+    provider,
+    apiSecret,
+    keyId: provider === "razorpay" ? (keyEntry.metadata as RazorpayMeta | null)?.keyId : undefined,
+    webhookSecret: webhookEntry ? (await revealSecret(ctx, webhookEntry.id)).value : null,
+  };
+}

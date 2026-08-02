@@ -24,6 +24,8 @@ template. Copy `.env.example` to `.env` and fill it as you go.
   this makes stored secrets unreadable.
 - `WEB_URL` — public URL of the web app (used in invite/receipt links + Stripe
   return URLs). `API_PORT` — API listen port.
+- `WHITE_LABEL_CNAME_TARGET` — deployment hostname shown in partner DNS setup;
+  route this host and each verified custom hostname to the web deployment.
 
 ## 2. Payment gateways (Razorpay and/or Stripe)
 
@@ -82,8 +84,19 @@ row appears in `/admin/payments`, and a replay leaves the balance unchanged.
 - Without SMTP, auth / invite / receipt emails are **skipped, never silently
   "sent"** — the UI reports `emailSent: false` and shows the invite link to copy
   manually. Templates are editable at `/admin/email-templates`.
+- A partner may configure a branded sender only after its custom domain passes
+  the portal's DNS verification. The sender email must use that exact domain.
 
-## 6. Object storage (S3 / R2)
+## 6. Tax invoice identity
+
+- Set `INVOICE_SELLER_NAME`, `INVOICE_PRODUCT_NAME`, `INVOICE_SELLER_EMAIL`,
+  `INVOICE_SELLER_ADDRESS` and `INVOICE_SELLER_GSTIN`. GST stays off when the
+  seller GSTIN is blank. `INVOICE_GST_RATE_BPS` defaults to `1800` (18%).
+- Customers save legal name, address, GSTIN and place of supply on `/gmb-billing`.
+  The values are snapshotted when an invoice is issued and never rewrite an
+  earlier document. PDF invoices are available from the same screen.
+
+## 7. Object storage (S3 / R2)
 
 - Configured by the super admin at `/admin/storage` (bucket/region/keys stored in
   the vault), not via env. Needed for real image uploads (e.g. the partner branding
@@ -91,26 +104,30 @@ row appears in `/admin/payments`, and a replay leaves the balance unchanged.
   the upload surfaces a "not configured" message and partners can still paste a
   hosted image URL.
 
-## 7. Workers
+## 8. Workers
 
 - `ENABLE_WORKERS=true` — runs the schedulers: GMB auto-sync, autopilot, post
-  publisher, scheduled reports, and **monthly partner-invoice finalisation**. Off
-  by default. Run on at least one instance. Intervals are tunable via the
+  publisher, scheduled reports, scheduled keyword ranks, and **monthly
+  partner-invoice finalisation**. Off by default. Run on at least one instance. Intervals are tunable via the
   `*_INTERVAL_MS` vars (sane defaults otherwise).
 
-## 8. Launch verification
+## 9. Launch verification
 
 - [ ] `npm run db:deploy` clean; app boots (no placeholder-secret error).
 - [ ] Log in as the super admin; change the seeded password.
 - [ ] `/admin/gateways` shows the intended active provider as **Configured**.
 - [ ] A real (or test-mode) top-up credits the wallet; `/admin/payments` shows it;
       the customer sees a **receipt** at `/gmb-billing`.
-- [ ] A refund from `/admin/payments` flips the payment to REFUNDED and reverses
-      the credits (then issue the money-back in the gateway dashboard).
+- [ ] A refund from `/admin/payments` first succeeds at the gateway, then flips
+      the payment to REFUNDED and reverses the credits; a replay is a no-op.
 - [ ] Partner flow: onboard a customer at `/partner`, set a resale plan, connect
       the partner gateway + webhook, confirm a child top-up routes to the partner.
 - [ ] SMTP: trigger a password reset; confirm the email arrives.
 - [ ] Google: connect a Business Profile; the rank grid populates.
+- [ ] Google: sync Q&A, publish an approved answer, publish a Place Action and
+      explicitly publish an approved business description.
+- [ ] White label: save a custom domain, add the shown TXT/CNAME records, verify
+      it, then configure deployment host routing/TLS for that hostname.
 - [ ] Workers on: a scheduled report / partner invoice finalises on cadence.
 - [ ] Rotate the exposed Google secret (§4).
 

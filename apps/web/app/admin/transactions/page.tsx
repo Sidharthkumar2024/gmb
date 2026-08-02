@@ -21,6 +21,7 @@ interface Txn {
   reason: string | null;
   createdAt: string;
 }
+interface PageResult<T> { items: T[]; pagination: { page: number; pageSize: number; total: number; pages: number } }
 
 const FILTERS: Array<"ALL" | TxnType> = ["ALL", "GRANT", "SETTLE", "RESERVE", "RELEASE", "REFUND"];
 const TYPE_TONE: Record<TxnType, "ok" | "warn" | "neutral"> = {
@@ -35,17 +36,26 @@ export default function AdminTransactionsPage() {
   const [rows, setRows] = useState<Txn[] | null>(null);
   const [filter, setFilter] = useState<"ALL" | TxnType>("ALL");
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
 
   const load = useCallback(async (f: "ALL" | TxnType) => {
     setError(null);
     try {
-      const qs = f === "ALL" ? "" : `?type=${f}`;
-      setRows((await api.get<Txn[]>(`/api/v1/admin/transactions${qs}`)) ?? []);
+      const qs = new URLSearchParams({ page: String(page), pageSize: "25" });
+      if (f !== "ALL") qs.set("type", f);
+      if (search.trim()) qs.set("search", search.trim());
+      const result = await api.get<PageResult<Txn>>(`/api/v1/admin/transactions?${qs.toString()}`);
+      setRows(result?.items ?? []);
+      setPages(result?.pagination.pages ?? 1);
+      setTotal(result?.pagination.total ?? 0);
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not load transactions.");
       setRows([]);
     }
-  }, []);
+  }, [page, search]);
 
   useEffect(() => {
     void load(filter);
@@ -68,7 +78,7 @@ export default function AdminTransactionsPage() {
             <button
               key={f}
               type="button"
-              onClick={() => setFilter(f)}
+              onClick={() => { setFilter(f); setPage(1); }}
               className={`rounded-full px-3 py-1 text-xs2 font-semibold transition ${
                 filter === f
                   ? "bg-gmb-brand text-white"
@@ -90,6 +100,10 @@ export default function AdminTransactionsPage() {
             Export CSV
           </button>
         </div>
+      </div>
+
+      <div className="mb-3">
+        <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Search workspace or detail" className="rounded-control border border-adm-line bg-adm-panel px-3 py-2 text-xs2 text-adm-ink outline-none" />
       </div>
 
       {rows === null ? (
@@ -141,6 +155,13 @@ export default function AdminTransactionsPage() {
             </tbody>
           </table>
         </AdmCard>
+      )}
+      {rows && total > 0 && (
+        <div className="mt-3 flex items-center justify-end gap-2 text-xs2 text-adm-muted">
+          <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} className="rounded-control border border-adm-line px-3 py-1.5 disabled:opacity-40">Previous</button>
+          Page {page} of {pages} · {total.toLocaleString()} entries
+          <button disabled={page >= pages} onClick={() => setPage((value) => value + 1)} className="rounded-control border border-adm-line px-3 py-1.5 disabled:opacity-40">Next</button>
+        </div>
       )}
     </AdminShell>
   );

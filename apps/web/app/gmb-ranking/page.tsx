@@ -66,6 +66,12 @@ interface AlertRule {
   isActive: boolean;
   keyword: { id: string; keyword: string; locationId: string };
 }
+interface RankSchedule {
+  enabled: boolean;
+  cadenceHours: number;
+  lastRunAt: string | null;
+  lastError: string | null;
+}
 
 export default function GmbRankingPage() {
   const [locations, setLocations] = useState<LocationLite[]>([]);
@@ -85,6 +91,24 @@ export default function GmbRankingPage() {
   const [alertBusy, setAlertBusy] = useState(false);
   // null = show our own ranks; otherwise the rival being overlaid.
   const [rivalIdx, setRivalIdx] = useState<number | null>(null);
+  const [schedule, setSchedule] = useState<RankSchedule | null>(null);
+  const [scheduleBusy, setScheduleBusy] = useState(false);
+
+  useEffect(() => {
+    void api.get<RankSchedule>("/api/v1/gmb/rank-schedule").then(setSchedule).catch(() => undefined);
+  }, []);
+
+  async function saveRankSchedule(enabled: boolean, cadenceHours: number) {
+    setScheduleBusy(true);
+    setError(null);
+    try {
+      setSchedule(await api.put<RankSchedule>("/api/v1/gmb/rank-schedule", { enabled, cadenceHours }));
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not update rank scheduling.");
+    } finally {
+      setScheduleBusy(false);
+    }
+  }
 
   useEffect(() => {
     void api
@@ -264,6 +288,44 @@ export default function GmbRankingPage() {
   return (
     <GmbShell title="Rank tracker">
       {error && <ErrorNote>{error}</ErrorNote>}
+
+      <Card className="mb-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <SectionLabel>Scheduled centre-point checks</SectionLabel>
+            <div className="mt-1 text-sm2 text-gmb-ink-muted">
+              One lightweight Places lookup per active keyword; full 7×7 grids stay manual.
+            </div>
+            {schedule?.lastRunAt && (
+              <div className="mt-1 font-geist-mono text-micro text-gmb-ink-subtle">
+                Last run {new Date(schedule.lastRunAt).toLocaleString()}
+              </div>
+            )}
+            {schedule?.lastError && <div className="mt-1 text-xs2 text-gmb-danger">{schedule.lastError}</div>}
+          </div>
+          {schedule && (
+            <div className="flex items-center gap-2">
+              <select
+                value={schedule.cadenceHours}
+                disabled={scheduleBusy}
+                onChange={(e) => void saveRankSchedule(schedule.enabled, Number(e.target.value))}
+                className="rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 outline-none"
+              >
+                <option value={12}>Every 12 hours</option>
+                <option value={24}>Daily</option>
+                <option value={168}>Weekly</option>
+              </select>
+              <Button
+                variant={schedule.enabled ? "ghost" : "primary"}
+                disabled={scheduleBusy}
+                onClick={() => void saveRankSchedule(!schedule.enabled, schedule.cadenceHours)}
+              >
+                {scheduleBusy ? "Saving…" : schedule.enabled ? "Turn off" : "Turn on"}
+              </Button>
+            </div>
+          )}
+        </div>
+      </Card>
 
       {/* Keyword bar */}
       <Card className="mb-3.5">

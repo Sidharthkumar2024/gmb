@@ -7,6 +7,9 @@ const deps = vi.hoisted(() => ({
   paymentFindUnique: vi.fn(),
   paymentUpdate: vi.fn(),
   reverseCredits: vi.fn(),
+  refundRazorpay: vi.fn(),
+  refundStripe: vi.fn(),
+  getPartnerGatewayCreds: vi.fn(),
 }));
 
 vi.mock("@nexaflow/db", async (importOriginal) => {
@@ -19,13 +22,16 @@ vi.mock("@nexaflow/db", async (importOriginal) => {
   };
 });
 vi.mock("./billing.service", () => ({ reverseCredits: deps.reverseCredits }));
+vi.mock("./razorpay.service", () => ({ refundRazorpayPayment: deps.refundRazorpay }));
+vi.mock("./stripe.service", () => ({ refundStripeCheckoutSession: deps.refundStripe }));
+vi.mock("./partnerGateway.service", () => ({ getPartnerGatewayCreds: deps.getPartnerGatewayCreds }));
 
 import { refundPayment } from "./payment.service";
 
 const base = {
   id: "pay_1",
   tenantId: "t1",
-  tenant: { name: "Acme" },
+  tenant: { name: "Acme", parentTenantId: null },
   provider: "RAZORPAY",
   providerPaymentId: "rzp_1",
   credits: 500,
@@ -46,6 +52,7 @@ describe("refundPayment", () => {
   it("reverses credits (keyed on refund:<id>) and marks REFUNDED on first refund", async () => {
     deps.paymentFindUnique.mockResolvedValue({ ...base, status: "CAPTURED" });
     const out = await refundPayment("pay_1");
+    expect(deps.refundRazorpay).toHaveBeenCalledWith("rzp_1", "refund_pay_1", undefined);
     expect(deps.reverseCredits).toHaveBeenCalledWith(
       "t1",
       500,

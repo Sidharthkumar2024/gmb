@@ -1,12 +1,18 @@
 import { prisma, GmbPlaceActionType } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
+import {
+  createGooglePlaceAction,
+  deleteGooglePlaceAction,
+  updateGooglePlaceAction,
+  type GooglePlaceActionType,
+} from "./gmbGoogle.service";
 
 // GBP Place Actions (Adgrowly GMB Panel — "Place Actions API"). Manages the
 // action links on a Business Profile (Book / Appointment / Reserve / Order /
 // Dining). Pre-fillable from the tenant's own public booking page.
 //
-// The Google Place Actions *write* is gated on a live connection (like reviews
-// and Q&A); `publishedToGoogle` reports the local state until it's wired.
+// Google writes are explicit: local edits become out-of-sync until the operator
+// publishes them, and hide/delete removes an already-published remote resource.
 
 type PlaceActionRow = {
   id: string;
@@ -15,6 +21,7 @@ type PlaceActionRow = {
   url: string;
   isActive: boolean;
   publishedToGoogle: boolean;
+  googlePlaceActionName: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -54,10 +61,24 @@ export function isValidActionUrl(url: string): boolean {
 async function findLocationOrThrow(tenantId: string, locationId: string) {
   const loc = await prisma.gmbLocation.findFirst({
     where: { id: locationId, tenantId },
-    select: { id: true },
+    select: { id: true, placeId: true, secretId: true },
   });
   if (!loc) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Location not found.");
   return loc;
+}
+
+export function toGooglePlaceActionType(type: GmbPlaceActionType): GooglePlaceActionType {
+  switch (type) {
+    case GmbPlaceActionType.ORDER_ONLINE:
+      return "FOOD_ORDERING";
+    case GmbPlaceActionType.RESERVE:
+    case GmbPlaceActionType.DINING_RESERVATION:
+      return "DINING_RESERVATION";
+    case GmbPlaceActionType.BOOK:
+    case GmbPlaceActionType.APPOINTMENT:
+    default:
+      return "APPOINTMENT";
+  }
 }
 
 export async function listPlaceActions(tenantId: string, locationId?: string) {
@@ -135,21 +156,80 @@ export async function upsertPlaceAction(tenantId: string, input: UpsertPlaceActi
 export async function setPlaceActionActive(tenantId: string, id: string, isActive: boolean) {
   const existing = await prisma.gmbPlaceAction.findFirst({
     where: { id, tenantId },
-    select: { id: true },
+    include: { location: { select: { secretId: true } } },
   });
   if (!existing) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Action link not found.");
+  if (!isActive && existing.googlePlaceActionName && existing.location.secretId) {
+    await deleteGooglePlaceAction({
+      tenantId,
+      locationId: existing.locationId,
+      secretId: existing.location.secretId,
+      name: existing.googlePlaceActionName,
+    });
+  }
   const row = await prisma.gmbPlaceAction.update({
     where: { id },
-    data: { isActive },
+    data: {
+      isActive,
+      ...(!isActive ? { publishedToGoogle: false, googlePlaceActionName: null } : {}),
+    },
   });
   return toSafePlaceAction(row);
+}
+
+/** Create or patch the Google resource and only then mark the local row live. */
+export async function publishPlaceAction(tenantId: string, id: string) {
+  const action = await prisma.gmbPlaceAction.findFirst({
+    where: { id, tenantId },
+    include: { location: { select: { placeId: true, secretId: true } } },
+  });
+  if (!action) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Action link not found.");
+  if (!action.isActive) throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Show this action link before publishing it.");
+  if (!action.location.placeId || !action.location.secretId) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Connect and sync this Google location first.");
+  }
+  const googleType = toGooglePlaceActionType(action.actionType);
+  const remote = action.googlePlaceActionName
+    ? await updateGooglePlaceAction({
+        tenantId,
+        locationId: action.locationId,
+        secretId: action.location.secretId,
+        name: action.googlePlaceActionName,
+        uri: action.url,
+        placeActionType: googleType,
+      })
+    : await createGooglePlaceAction({
+        tenantId,
+        locationId: action.locationId,
+        locationResourceName: action.location.placeId,
+        secretId: action.location.secretId,
+        uri: action.url,
+        placeActionType: googleType,
+      });
+  if (!remote.name) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Google did not return an action-link reference.");
+  }
+  return toSafePlaceAction(
+    await prisma.gmbPlaceAction.update({
+      where: { id },
+      data: { publishedToGoogle: true, googlePlaceActionName: remote.name },
+    }),
+  );
 }
 
 export async function deletePlaceAction(tenantId: string, id: string) {
   const existing = await prisma.gmbPlaceAction.findFirst({
     where: { id, tenantId },
-    select: { id: true },
+    include: { location: { select: { secretId: true } } },
   });
   if (!existing) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Action link not found.");
+  if (existing.googlePlaceActionName && existing.location.secretId) {
+    await deleteGooglePlaceAction({
+      tenantId,
+      locationId: existing.locationId,
+      secretId: existing.location.secretId,
+      name: existing.googlePlaceActionName,
+    });
+  }
   await prisma.gmbPlaceAction.delete({ where: { id } });
 }

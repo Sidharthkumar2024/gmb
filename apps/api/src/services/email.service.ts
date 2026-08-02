@@ -1,5 +1,5 @@
 import nodemailer, { type Transporter } from "nodemailer";
-import { SecretProvider, SecretScope } from "@nexaflow/db";
+import { prisma, SecretProvider, SecretScope } from "@nexaflow/db";
 import { listSecrets, resolveSecretValue } from "./secretVault.service";
 
 // Outbound email for the standalone GMB app.
@@ -118,7 +118,7 @@ function buildTransporter(s: SmtpSettings): Transporter {
   });
 }
 
-function formatFrom(s: SmtpSettings): string {
+function formatFrom(s: Pick<SmtpSettings, "fromName" | "fromEmail">): string {
   return s.fromName ? `"${s.fromName}" <${s.fromEmail}>` : s.fromEmail;
 }
 
@@ -131,8 +131,41 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
     return;
   }
 
+  let sender: Pick<SmtpSettings, "fromName" | "fromEmail"> = settings;
+  if (payload.tenantId) {
+    try {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: payload.tenantId },
+        select: {
+          parentTenantId: true,
+          whiteLabelConfig: {
+            select: { customDomain: true, domainVerified: true, senderName: true, senderEmail: true },
+          },
+        },
+      });
+      const config = tenant?.whiteLabelConfig ?? (tenant?.parentTenantId
+        ? await prisma.whiteLabelConfig.findUnique({
+            where: { tenantId: tenant.parentTenantId },
+            select: { customDomain: true, domainVerified: true, senderName: true, senderEmail: true },
+          })
+        : null);
+      const senderDomain = config?.senderEmail?.split("@")[1]?.toLowerCase();
+      const allowed = Boolean(
+        config?.domainVerified &&
+          config.customDomain &&
+          senderDomain &&
+          senderDomain === config.customDomain,
+      );
+      if (allowed && config?.senderEmail) {
+        sender = { fromEmail: config.senderEmail, fromName: config.senderName };
+      }
+    } catch (err) {
+      console.error("[email] branded sender lookup failed; using platform sender", err);
+    }
+  }
+
   await buildTransporter(settings).sendMail({
-    from: formatFrom(settings),
+    from: formatFrom(sender),
     to: payload.to,
     subject: payload.subject,
     text: payload.text,

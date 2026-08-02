@@ -5,9 +5,9 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AdminShell, AdmCard } from "../../../../src/components/gmb/AdminShell";
 import { api, ApiClientError } from "../../../../src/lib/api";
+import { downloadAuthed } from "../../../../src/lib/download";
 
-// Printable invoice detail. Derived from a single Payment; "Print" uses the
-// browser's own print dialog (no PDF service). Read-only.
+// Immutable tax-invoice detail with print and authenticated server PDF.
 
 interface InvoiceLine {
   description: string;
@@ -21,12 +21,13 @@ interface Invoice {
   status: "PAID" | "REFUNDED";
   issuedAt: string;
   currency: string;
-  seller: { name: string; product: string; supportEmail: string };
-  buyer: { tenantId: string; name: string };
+  seller: { name: string; product: string; supportEmail: string; address: string | null; gstin: string | null };
+  buyer: { tenantId: string; name: string; address: string | null; gstin: string | null; placeOfSupply: string | null };
   payment: { provider: string; providerPaymentId: string };
   lines: InvoiceLine[];
   subtotalMinor: number;
   taxMinor: number;
+  taxRateBps: number;
   totalMinor: number;
 }
 
@@ -67,13 +68,10 @@ export default function AdminInvoiceDetailPage() {
           ← All invoices
         </Link>
         {inv && (
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="ml-auto rounded-control bg-gmb-brand px-3 py-1.5 text-xs2 font-semibold text-white hover:opacity-90"
-          >
-            Print
-          </button>
+          <div className="ml-auto flex gap-2">
+            <button type="button" onClick={() => void downloadAuthed(`/api/v1/admin/invoices/${inv.id}/pdf`, `${inv.number}.pdf`).catch(() => setError("Could not download invoice PDF."))} className="rounded-control border border-adm-line px-3 py-1.5 text-xs2 font-semibold text-adm-ink hover:bg-adm-panel-hover">Download PDF</button>
+            <button type="button" onClick={() => window.print()} className="rounded-control bg-gmb-brand px-3 py-1.5 text-xs2 font-semibold text-white hover:opacity-90">Print</button>
+          </div>
         )}
       </div>
 
@@ -96,6 +94,8 @@ export default function AdminInvoiceDetailPage() {
               <div className="mt-1 font-geist-mono text-micro text-adm-subtle">
                 {inv.seller.supportEmail}
               </div>
+              {inv.seller.address && <div className="mt-1 max-w-sm whitespace-pre-line text-micro text-adm-subtle">{inv.seller.address}</div>}
+              {inv.seller.gstin && <div className="mt-1 font-geist-mono text-micro text-adm-subtle">GSTIN {inv.seller.gstin}</div>}
             </div>
             <div className="text-right">
               <div className="font-geist-mono text-sm2 font-semibold text-adm-ink">{inv.number}</div>
@@ -119,6 +119,9 @@ export default function AdminInvoiceDetailPage() {
               Billed to
             </div>
             <div className="mt-1 text-sm2 text-adm-ink">{inv.buyer.name}</div>
+            {inv.buyer.address && <div className="mt-1 whitespace-pre-line text-xs2 text-adm-muted">{inv.buyer.address}</div>}
+            {inv.buyer.gstin && <div className="mt-1 font-geist-mono text-micro text-adm-subtle">GSTIN {inv.buyer.gstin}</div>}
+            {inv.buyer.placeOfSupply && <div className="mt-1 text-micro text-adm-subtle">Place of supply: {inv.buyer.placeOfSupply}</div>}
           </div>
 
           <table className="w-full border-collapse text-left">
@@ -160,7 +163,7 @@ export default function AdminInvoiceDetailPage() {
               <span className="font-geist-mono">{money(inv.subtotalMinor, inv.currency)}</span>
             </div>
             <div className="flex justify-between text-adm-muted">
-              <span>Tax</span>
+              <span>Tax{inv.taxRateBps > 0 ? ` (${(inv.taxRateBps / 100).toFixed(2)}%)` : ""}</span>
               <span className="font-geist-mono">{money(inv.taxMinor, inv.currency)}</span>
             </div>
             <div className="flex justify-between border-t border-adm-line pt-1.5 text-sm2 font-semibold text-adm-ink">

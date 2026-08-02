@@ -1,5 +1,5 @@
 import { Worker } from "bullmq";
-import { prisma, TenantType } from "@nexaflow/db";
+import { prisma, PartnerInvoiceStatus, PaymentProvider, TenantType } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import {
   getQueueConnection,
@@ -9,6 +9,9 @@ import {
   type PartnerInvoiceJobData,
 } from "../lib/queue";
 import { getPartnerStatement, type PartnerStatement } from "./partnerBilling.service";
+import { getActiveProvider } from "./paymentGateway.service";
+import { createRazorpayAmountOrder } from "./razorpay.service";
+import { createStripeAmountCheckout } from "./stripe.service";
 
 // Finalised partner invoices. A monthly job snapshots each partner's statement
 // for the just-finished month into an immutable PartnerInvoice, so the document
@@ -29,6 +32,11 @@ export interface PartnerInvoiceView {
   month: number; // 1-based
   issuedAt: Date;
   statement: PartnerStatement;
+  status: PartnerInvoiceStatus;
+  dueAt: Date | null;
+  paidAt: Date | null;
+  provider: PaymentProvider | null;
+  paymentUrl: string | null;
 }
 
 function toView(row: {
@@ -38,6 +46,11 @@ function toView(row: {
   month: number;
   issuedAt: Date;
   snapshot: unknown;
+  status: PartnerInvoiceStatus;
+  dueAt: Date | null;
+  paidAt: Date | null;
+  provider: PaymentProvider | null;
+  paymentUrl: string | null;
 }): PartnerInvoiceView {
   return {
     id: row.id,
@@ -46,6 +59,11 @@ function toView(row: {
     month: row.month,
     issuedAt: row.issuedAt,
     statement: row.snapshot as PartnerStatement,
+    status: row.status,
+    dueAt: row.dueAt,
+    paidAt: row.paidAt,
+    provider: row.provider,
+    paymentUrl: row.paymentUrl,
   };
 }
 
@@ -72,9 +90,74 @@ export async function finalisePartnerInvoice(
       month,
       number: invoiceNumber(partnerTenantId, year, month),
       snapshot: statement as unknown as object,
+      dueAt: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
     },
   });
   return toView(row);
+}
+
+export async function createPartnerInvoiceCheckout(partnerTenantId: string, id: string) {
+  const invoice = await prisma.partnerInvoice.findFirst({ where: { id, partnerTenantId } });
+  if (!invoice) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Invoice not found.");
+  if (invoice.status === PartnerInvoiceStatus.PAID) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "This invoice is already paid.");
+  }
+  const statement = invoice.snapshot as unknown as PartnerStatement;
+  const currency = statement.singleCurrency;
+  if (!currency) throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Mixed-currency invoices require manual settlement.");
+  const amountMinor = statement.totals.wholesaleDueByCurrency[currency] ?? 0;
+  if (amountMinor <= 0) throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "This invoice has no amount due.");
+  const provider = await getActiveProvider();
+  if ((provider === "razorpay" && currency !== "INR") || (provider === "stripe" && currency !== "USD")) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, `The active ${provider} settlement checkout does not support ${currency}.`);
+  }
+  if (provider === "stripe") {
+    const checkout = await createStripeAmountCheckout({
+      amountCents: amountMinor,
+      currency,
+      productName: `Partner invoice ${invoice.number}`,
+      metadata: { kind: "partner_settlement", tenantId: partnerTenantId, invoiceId: invoice.id },
+      successPath: "/partner/invoices?settlement=success",
+      cancelPath: "/partner/invoices?settlement=cancelled",
+    });
+    await prisma.partnerInvoice.update({
+      where: { id },
+      data: { provider: PaymentProvider.STRIPE, providerPaymentId: checkout.sessionId, paymentUrl: checkout.checkoutUrl },
+    });
+    return { provider: "stripe" as const, checkoutUrl: checkout.checkoutUrl };
+  }
+  const order = await createRazorpayAmountOrder({
+    amountPaisa: amountMinor,
+    notes: { kind: "partner_settlement", tenantId: partnerTenantId, invoiceId: invoice.id },
+  });
+  await prisma.partnerInvoice.update({
+    where: { id },
+    data: { provider: PaymentProvider.RAZORPAY, providerPaymentId: order.orderId, paymentUrl: null },
+  });
+  return { provider: "razorpay" as const, razorpay: order };
+}
+
+export async function markPartnerInvoicePaid(input: {
+  invoiceId: string;
+  partnerTenantId: string;
+  provider: PaymentProvider;
+  providerPaymentId: string;
+}) {
+  const invoice = await prisma.partnerInvoice.findFirst({
+    where: { id: input.invoiceId, partnerTenantId: input.partnerTenantId },
+  });
+  if (!invoice) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Partner invoice not found.");
+  if (invoice.status === PartnerInvoiceStatus.PAID) return;
+  await prisma.partnerInvoice.update({
+    where: { id: invoice.id },
+    data: {
+      status: PartnerInvoiceStatus.PAID,
+      paidAt: new Date(),
+      provider: input.provider,
+      providerPaymentId: input.providerPaymentId,
+      paymentUrl: null,
+    },
+  });
 }
 
 export interface InvoiceSweepResult {
@@ -88,6 +171,10 @@ export interface InvoiceSweepResult {
  * top of each month. Idempotent, so a repeated run in the same month is a no-op.
  */
 export async function sweepPartnerInvoices(now = new Date()): Promise<InvoiceSweepResult> {
+  await prisma.partnerInvoice.updateMany({
+    where: { status: PartnerInvoiceStatus.OPEN, dueAt: { lt: now } },
+    data: { status: PartnerInvoiceStatus.OVERDUE },
+  });
   // Previous month (UTC).
   const y = now.getUTCFullYear();
   const m0 = now.getUTCMonth();

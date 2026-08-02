@@ -26,6 +26,7 @@ const BUSINESS_INFO_BASE = "https://mybusinessbusinessinformation.googleapis.com
 const MY_BUSINESS_BASE = "https://mybusiness.googleapis.com/v4";
 const PERFORMANCE_BASE = "https://businessprofileperformance.googleapis.com/v1";
 const VERIFICATIONS_BASE = "https://mybusinessverifications.googleapis.com/v1";
+const PLACE_ACTIONS_BASE = "https://mybusinessplaceactions.googleapis.com/v1";
 
 export const GBP_SCOPES = ["https://www.googleapis.com/auth/business.manage"] as const;
 
@@ -1194,4 +1195,199 @@ export async function createGoogleLocalPost(input: GoogleLocalPostInput) {
     state: body.state ?? null,
     createTime: body.createTime ?? null,
   };
+}
+
+// --- Google Q&A ------------------------------------------------------------
+
+export interface GoogleQuestionRow {
+  name: string;
+  authorName: string | null;
+  text: string;
+  createTime: string | null;
+  topAnswer: { name: string | null; text: string; updateTime: string | null; isMerchant: boolean } | null;
+}
+
+/** Read every Google Q&A page for one account-scoped location resource. */
+export async function listGoogleQuestions(input: {
+  tenantId: string;
+  locationId: string;
+  locationResourceName: string;
+  secretId: string;
+}): Promise<GoogleQuestionRow[]> {
+  const parent = input.locationResourceName.trim().replace(/\/+$/, "");
+  if (!/^accounts\/[^/]+\/locations\/[^/]+$/.test(parent)) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Sync this location from Google before syncing Q&A.");
+  }
+
+  interface ApiQuestion {
+    name?: string;
+    text?: string;
+    createTime?: string;
+    author?: { displayName?: string };
+    topAnswers?: Array<{
+      name?: string;
+      text?: string;
+      updateTime?: string;
+      author?: { type?: string };
+    }>;
+  }
+  const rows: GoogleQuestionRow[] = [];
+  let pageToken: string | undefined;
+  do {
+    const qs = new URLSearchParams({ pageSize: "100", answersPerQuestion: "1" });
+    if (pageToken) qs.set("pageToken", pageToken);
+    const body = await googleJson<{ questions?: ApiQuestion[]; nextPageToken?: string }>({
+      tenantId: input.tenantId,
+      locationId: input.locationId,
+      secretId: input.secretId,
+      operation: "GBP_LIST_QUESTIONS",
+      url: `${MY_BUSINESS_BASE}/${parent}/questions?${qs.toString()}`,
+    });
+    for (const q of body.questions ?? []) {
+      if (!q.name || !q.text?.trim()) continue;
+      const answer = q.topAnswers?.[0];
+      rows.push({
+        name: q.name,
+        authorName: q.author?.displayName?.trim() || null,
+        text: q.text.trim(),
+        createTime: q.createTime ?? null,
+        topAnswer: answer?.text
+          ? {
+              name: answer.name ?? null,
+              text: answer.text,
+              updateTime: answer.updateTime ?? null,
+              isMerchant: answer.author?.type === "MERCHANT",
+            }
+          : null,
+      });
+    }
+    pageToken = body.nextPageToken;
+  } while (pageToken);
+  return rows;
+}
+
+/** Publish the approved owner answer. Google permits one owner answer per question. */
+export async function upsertGoogleQuestionAnswer(input: {
+  tenantId: string;
+  locationId: string;
+  secretId: string;
+  questionName: string;
+  text: string;
+}) {
+  const questionName = input.questionName.trim().replace(/\/+$/, "");
+  if (!/^accounts\/[^/]+\/locations\/[^/]+\/questions\/[^/]+$/.test(questionName)) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "This question is missing its Google resource name.");
+  }
+  const body = await googleJson<{ name?: string; text?: string; updateTime?: string }>({
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    secretId: input.secretId,
+    operation: "GBP_UPSERT_QUESTION_ANSWER",
+    method: "POST",
+    url: `${MY_BUSINESS_BASE}/${questionName}/answers:upsert`,
+    body: { answer: { text: input.text } },
+  });
+  return { name: body.name ?? null, text: body.text ?? input.text, updateTime: body.updateTime ?? null };
+}
+
+// --- Google Place Actions --------------------------------------------------
+
+export type GooglePlaceActionType =
+  | "APPOINTMENT"
+  | "DINING_RESERVATION"
+  | "FOOD_ORDERING"
+  | "SHOP_ONLINE";
+
+function placeActionsLocation(resourceName: string): string {
+  const name = toGoogleVerificationLocationName(resourceName);
+  if (!name) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Sync this location from Google before publishing an action link.");
+  }
+  return name;
+}
+
+export async function createGooglePlaceAction(input: {
+  tenantId: string;
+  locationId: string;
+  locationResourceName: string;
+  secretId: string;
+  uri: string;
+  placeActionType: GooglePlaceActionType;
+}) {
+  const parent = placeActionsLocation(input.locationResourceName);
+  return googleJson<{ name?: string; uri?: string; placeActionType?: string; isPreferred?: boolean }>({
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    secretId: input.secretId,
+    operation: "GBP_CREATE_PLACE_ACTION",
+    method: "POST",
+    url: `${PLACE_ACTIONS_BASE}/${parent}/placeActionLinks`,
+    body: { uri: input.uri, placeActionType: input.placeActionType, isPreferred: true },
+  });
+}
+
+export async function updateGooglePlaceAction(input: {
+  tenantId: string;
+  locationId: string;
+  secretId: string;
+  name: string;
+  uri: string;
+  placeActionType: GooglePlaceActionType;
+}) {
+  const name = input.name.trim();
+  if (!/^locations\/[^/]+\/placeActionLinks\/[^/]+$/.test(name)) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Google action-link reference is invalid.");
+  }
+  return googleJson<{ name?: string; uri?: string; placeActionType?: string; isPreferred?: boolean }>({
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    secretId: input.secretId,
+    operation: "GBP_UPDATE_PLACE_ACTION",
+    method: "PATCH",
+    url: `${PLACE_ACTIONS_BASE}/${name}?updateMask=uri,placeActionType,isPreferred`,
+    body: { name, uri: input.uri, placeActionType: input.placeActionType, isPreferred: true },
+  });
+}
+
+export async function deleteGooglePlaceAction(input: {
+  tenantId: string;
+  locationId: string;
+  secretId: string;
+  name: string;
+}) {
+  const name = input.name.trim();
+  if (!/^locations\/[^/]+\/placeActionLinks\/[^/]+$/.test(name)) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Google action-link reference is invalid.");
+  }
+  await googleJson<Record<string, never>>({
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    secretId: input.secretId,
+    operation: "GBP_DELETE_PLACE_ACTION",
+    method: "DELETE",
+    url: `${PLACE_ACTIONS_BASE}/${name}`,
+  });
+}
+
+/** Update the Business Profile description after an explicit approval. */
+export async function updateGoogleBusinessDescription(input: {
+  tenantId: string;
+  locationId: string;
+  locationResourceName: string;
+  secretId: string;
+  description: string;
+}) {
+  const name = input.locationResourceName.trim().replace(/\/+$/, "");
+  if (!/^accounts\/[^/]+\/locations\/[^/]+$/.test(name)) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Sync this location from Google before publishing its description.");
+  }
+  return googleJson<{ name?: string; profile?: { description?: string } }>({
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    secretId: input.secretId,
+    operation: "GBP_UPDATE_BUSINESS_DESCRIPTION",
+    method: "PATCH",
+    url: `${BUSINESS_INFO_BASE}/${name}?updateMask=profile.description`,
+    body: { name, profile: { description: input.description } },
+  });
 }

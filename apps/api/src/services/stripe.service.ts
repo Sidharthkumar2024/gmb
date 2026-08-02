@@ -36,6 +36,40 @@ export interface StripeCheckout {
   credits: number;
 }
 
+export async function createStripeAmountCheckout(args: {
+  amountCents: number;
+  currency: string;
+  productName: string;
+  metadata: Record<string, string>;
+  successPath: string;
+  cancelPath: string;
+}, secretOverride?: string) {
+  const key = secretKey(secretOverride);
+  const webUrl = process.env.WEB_URL ?? "http://localhost:3000";
+  const form = new URLSearchParams();
+  form.set("mode", "payment");
+  form.set("success_url", `${webUrl}${args.successPath}`);
+  form.set("cancel_url", `${webUrl}${args.cancelPath}`);
+  form.set("line_items[0][quantity]", "1");
+  form.set("line_items[0][price_data][currency]", args.currency.toLowerCase());
+  form.set("line_items[0][price_data][unit_amount]", String(args.amountCents));
+  form.set("line_items[0][price_data][product_data][name]", args.productName);
+  for (const [keyName, value] of Object.entries(args.metadata)) {
+    form.set(`metadata[${keyName}]`, value);
+    form.set(`payment_intent_data[metadata][${keyName}]`, value);
+  }
+  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
+  });
+  const body = (await res.json().catch(() => ({}))) as { id?: string; url?: string; error?: { message?: string } };
+  if (!res.ok || !body.url || !body.id) {
+    throw new ApiError(ErrorCodes.INTERNAL_SERVER_ERROR, 502, body.error?.message ?? "Stripe checkout creation failed.");
+  }
+  return { sessionId: body.id, checkoutUrl: body.url, amountCents: args.amountCents, currency: args.currency.toLowerCase() };
+}
+
 /**
  * Create a Stripe Checkout Session for `credits`. tenantId + credits ride in the
  * session metadata so the webhook credits the right wallet without trusting the
@@ -48,46 +82,16 @@ export async function createStripeCheckout(
   },
   secretOverride?: string,
 ): Promise<StripeCheckout> {
-  const key = secretKey(secretOverride);
   const amountCents = args.credits * stripeCreditPriceCents();
-  const webUrl = process.env.WEB_URL ?? "http://localhost:3000";
-
-  // Stripe expects application/x-www-form-urlencoded with bracketed nesting.
-  const form = new URLSearchParams();
-  form.set("mode", "payment");
-  form.set("success_url", `${webUrl}/gmb-billing?topup=success`);
-  form.set("cancel_url", `${webUrl}/gmb-billing?topup=cancelled`);
-  form.set("line_items[0][quantity]", "1");
-  form.set("line_items[0][price_data][currency]", "usd");
-  form.set("line_items[0][price_data][unit_amount]", String(amountCents));
-  form.set("line_items[0][price_data][product_data][name]", `${args.credits} AI credits`);
-  form.set("metadata[tenantId]", args.tenantId);
-  form.set("metadata[credits]", String(args.credits));
-  // Mirror onto the PaymentIntent so it survives to the webhook event too.
-  form.set("payment_intent_data[metadata][tenantId]", args.tenantId);
-  form.set("payment_intent_data[metadata][credits]", String(args.credits));
-
-  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: form.toString(),
-  });
-  if (!res.ok) {
-    const detail = (await res.text()).slice(0, 300);
-    throw new ApiError(
-      ErrorCodes.INTERNAL_SERVER_ERROR,
-      502,
-      `Stripe checkout creation failed (${res.status}): ${detail}`,
-    );
-  }
-  const session = (await res.json()) as { url?: string };
-  if (!session.url) {
-    throw new ApiError(ErrorCodes.INTERNAL_SERVER_ERROR, 502, "Stripe returned no checkout URL.");
-  }
-  return { checkoutUrl: session.url, amountCents, currency: "usd", credits: args.credits };
+  const session = await createStripeAmountCheckout({
+    amountCents,
+    currency: "usd",
+    productName: `${args.credits} AI credits`,
+    metadata: { tenantId: args.tenantId, credits: String(args.credits), kind: "topup" },
+    successPath: "/gmb-billing?topup=success",
+    cancelPath: "/gmb-billing?topup=cancelled",
+  }, secretOverride);
+  return { checkoutUrl: session.checkoutUrl, amountCents, currency: "usd", credits: args.credits };
 }
 
 export interface StripeWebhookResult {
@@ -96,6 +100,8 @@ export interface StripeWebhookResult {
   credits: number;
   amountMinor: number;
   currency: string;
+  kind: "topup" | "partner_settlement";
+  invoiceId?: string;
 }
 
 /**
@@ -156,16 +162,58 @@ export function verifyStripeWebhook(
     // credits for a payment that may still fail.
     if (obj?.payment_status !== "paid") return null;
     const tenantId = obj?.metadata?.tenantId;
+    const kind = obj?.metadata?.kind === "partner_settlement" ? "partner_settlement" : "topup";
     const credits = Number(obj?.metadata?.credits ?? 0);
-    if (!obj?.id || !tenantId || !(credits > 0)) return null;
+    if (!obj?.id || !tenantId || (kind === "topup" && !(credits > 0))) return null;
+    if (kind === "partner_settlement" && !obj?.metadata?.invoiceId) return null;
     return {
       paymentId: obj.id,
       tenantId,
       credits,
       amountMinor: Number(obj.amount_total ?? credits * stripeCreditPriceCents()),
       currency: (obj.currency ?? "usd").toUpperCase(),
+      kind,
+      ...(obj.metadata?.invoiceId ? { invoiceId: obj.metadata.invoiceId } : {}),
     };
   } catch {
     return null;
   }
+}
+
+/** Refund the PaymentIntent behind the stored Checkout Session id. */
+export async function refundStripeCheckoutSession(
+  checkoutSessionId: string,
+  idempotencyKey: string,
+  secretOverride?: string,
+) {
+  const key = secretKey(secretOverride);
+  const sessionRes = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(checkoutSessionId)}`, {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  const session = (await sessionRes.json().catch(() => ({}))) as {
+    payment_intent?: string;
+    error?: { message?: string };
+  };
+  if (!sessionRes.ok || !session.payment_intent) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 502, session.error?.message ?? "Stripe Checkout session has no refundable PaymentIntent.");
+  }
+  const form = new URLSearchParams({ payment_intent: session.payment_intent, reason: "requested_by_customer" });
+  const refundRes = await fetch("https://api.stripe.com/v1/refunds", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: form.toString(),
+  });
+  const refund = (await refundRes.json().catch(() => ({}))) as {
+    id?: string;
+    status?: string;
+    error?: { message?: string };
+  };
+  if (!refundRes.ok || !refund.id) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 502, refund.error?.message ?? `Stripe refund failed (${refundRes.status}).`);
+  }
+  return { refundId: refund.id, status: refund.status ?? null };
 }

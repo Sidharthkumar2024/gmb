@@ -1,6 +1,6 @@
 import { Router, type Response, type NextFunction } from "express";
 import { z } from "zod";
-import { requireAuth, requireTenantScope, type RequestWithAuth } from "../middleware/auth";
+import { requireAuth, requireTenantScope, requireVerifiedEmailForMutation, type RequestWithAuth } from "../middleware/auth";
 import { buildUploadKey, presignUpload } from "../services/storage.service";
 
 // Direct-to-storage uploads. The browser asks for a short-lived presigned PUT
@@ -20,6 +20,7 @@ router.post(
   "/presign",
   requireAuth,
   requireTenantScope,
+  requireVerifiedEmailForMutation,
   async (req: RequestWithAuth, res: Response, next: NextFunction) => {
     try {
       const { filename, purpose } = presignSchema.parse(req.body);

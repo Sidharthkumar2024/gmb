@@ -414,6 +414,36 @@ export async function captureGridSnapshot(args: {
   };
 }
 
+/** One Places request at the business coordinates for scheduled trend checks. */
+export async function captureKeywordRank(tenantId: string, keywordId: string) {
+  const keyword = await prisma.gmbTrackedKeyword.findFirst({
+    where: { id: keywordId, tenantId, isActive: true },
+    include: {
+      location: {
+        select: { name: true, addressLine: true, latitude: true, longitude: true },
+      },
+    },
+  });
+  if (!keyword) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Active tracked keyword not found.");
+  if (keyword.location.latitude == null || keyword.location.longitude == null) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Set location coordinates before scheduled ranking.");
+  }
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "GOOGLE_PLACES_API_KEY is not configured.");
+  const places = await searchPlacesAtPoint({
+    apiKey,
+    keyword: keyword.keyword,
+    lat: keyword.location.latitude,
+    lng: keyword.location.longitude,
+  });
+  const rank = rankInPlaces(places, keyword.location);
+  const snapshot = await prisma.gmbRankSnapshot.create({
+    data: { tenantId, keywordId, rank, source: "SCHEDULED_PLACES" },
+  });
+  await evaluateRankAlerts(tenantId, keywordId, rank);
+  return { keywordId, rank, checkedAt: snapshot.checkedAt };
+}
+
 export async function getLatestGridSnapshot(
   tenantId: string,
   keywordId: string,

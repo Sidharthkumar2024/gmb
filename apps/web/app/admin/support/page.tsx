@@ -21,16 +21,19 @@ interface TicketRow {
   lastReplyBy: Author;
   createdAt: string;
   messageCount?: number;
+  assignedToUserId: string | null;
 }
 interface Message {
   id: string;
   author: Author;
   body: string;
   createdAt: string;
+  internal: boolean;
 }
 interface TicketDetail extends TicketRow {
   messages: Message[];
 }
+interface Assignee { id: string; name: string | null; email: string }
 
 const STATUS_TONE: Record<Status, "ok" | "warn" | "neutral"> = {
   OPEN: "warn",
@@ -57,6 +60,12 @@ export default function AdminSupportPage() {
   const [error, setError] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
+  const [internal, setInternal] = useState(false);
+  const [assignees, setAssignees] = useState<Assignee[]>([]);
+
+  useEffect(() => {
+    void api.get<Assignee[]>("/api/v1/admin/tickets/assignees").then((rows) => setAssignees(rows ?? [])).catch(() => undefined);
+  }, []);
 
   const loadList = useCallback(async (f: "ALL" | Status) => {
     setError(null);
@@ -91,8 +100,12 @@ export default function AdminSupportPage() {
     setBusy(true);
     setError(null);
     try {
-      setDetail(await api.post<TicketDetail>(`/api/v1/admin/tickets/${openId}/reply`, { body: reply.trim() }));
+      setDetail(await api.post<TicketDetail>(`/api/v1/admin/tickets/${openId}/reply`, {
+        body: reply.trim(),
+        internal,
+      }));
       setReply("");
+      setInternal(false);
       await loadList(filter);
     } catch (e2) {
       setError(e2 instanceof ApiClientError ? e2.message : "Could not send the reply.");
@@ -101,12 +114,17 @@ export default function AdminSupportPage() {
     }
   }
 
-  async function patch(id: string, body: { status?: Status; priority?: Priority }) {
+  async function patch(id: string, body: { status?: Status; priority?: Priority; assignedToUserId?: string | null }) {
     setBusy(true);
     setError(null);
     try {
       const updated = await api.patch<TicketDetail>(`/api/v1/admin/tickets/${id}`, body);
-      setDetail((d) => (d ? { ...d, status: updated.status, priority: updated.priority } : d));
+      setDetail((d) => (d ? {
+        ...d,
+        status: updated.status,
+        priority: updated.priority,
+        assignedToUserId: updated.assignedToUserId,
+      } : d));
       await loadList(filter);
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not update the ticket.");
@@ -149,6 +167,18 @@ export default function AdminSupportPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <select
+                    aria-label="Assignee"
+                    value={detail.assignedToUserId ?? ""}
+                    disabled={busy}
+                    onChange={(e) => void patch(detail.id, { assignedToUserId: e.target.value || null })}
+                    className={inputCls}
+                  >
+                    <option value="">Unassigned</option>
+                    {assignees.map((user) => (
+                      <option key={user.id} value={user.id}>{user.name || user.email}</option>
+                    ))}
+                  </select>
+                  <select
                     value={detail.priority}
                     disabled={busy}
                     onChange={(e) => void patch(detail.id, { priority: e.target.value as Priority })}
@@ -181,14 +211,16 @@ export default function AdminSupportPage() {
                 <div
                   key={m.id}
                   className={`rounded-card border px-4 py-3 ${
-                    m.author === "STAFF"
+                    m.internal
+                      ? "border-adm-line bg-adm-bg"
+                      : m.author === "STAFF"
                       ? "border-gmb-brand/40 bg-gmb-brand/10"
                       : "border-adm-line bg-adm-panel"
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-xs2 font-semibold text-adm-ink">
-                      {m.author === "STAFF" ? "You (Adgrowly)" : detail.tenantName ?? "Customer"}
+                      {m.internal ? "Internal note" : m.author === "STAFF" ? "You (Adgrowly)" : detail.tenantName ?? "Customer"}
                     </span>
                     <span className="font-geist-mono text-micro text-adm-subtle">
                       {new Date(m.createdAt).toLocaleString()}
@@ -203,7 +235,7 @@ export default function AdminSupportPage() {
 
             <AdmCard>
               <form onSubmit={sendReply} className="flex flex-col gap-2">
-                <AdmLabel>Reply as Adgrowly</AdmLabel>
+                <AdmLabel>{internal ? "Internal note" : "Reply as Adgrowly"}</AdmLabel>
                 <textarea
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}
@@ -211,13 +243,17 @@ export default function AdminSupportPage() {
                   placeholder="Type your reply…"
                   className={`${inputCls} w-full`}
                 />
-                <div className="flex justify-end">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 text-xs2 text-adm-muted">
+                    <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />
+                    Staff-only note (not emailed or shown to customer)
+                  </label>
                   <button
                     type="submit"
                     disabled={busy || !reply.trim()}
                     className="rounded-control bg-gmb-brand px-4 py-2 text-sm2 font-semibold text-white hover:bg-gmb-brand-hover disabled:opacity-50"
                   >
-                    {busy ? "Sending…" : "Send reply"}
+                    {busy ? "Saving…" : internal ? "Add note" : "Send reply"}
                   </button>
                 </div>
               </form>

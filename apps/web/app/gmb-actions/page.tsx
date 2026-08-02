@@ -114,6 +114,19 @@ export default function GmbActionsPage() {
     }
   }
 
+  async function publish(a: PlaceAction) {
+    setBusy((b) => ({ ...b, [a.actionType]: "publish" }));
+    setError(null);
+    try {
+      await api.post(`/api/v1/gmb/place-actions/${a.id}/publish`, {});
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not publish the link to Google.");
+    } finally {
+      setBusy((b) => ({ ...b, [a.actionType]: "" }));
+    }
+  }
+
   async function remove(a: PlaceAction) {
     setBusy((b) => ({ ...b, [a.actionType]: "delete" }));
     try {
@@ -139,7 +152,7 @@ export default function GmbActionsPage() {
             <SectionLabel>Buttons on your Google profile</SectionLabel>
             <div className="mt-1 max-w-xl text-sm2 text-gmb-ink-muted">
               One link per action type. Links must be <strong>https</strong>. They are saved here
-              and pushed to your profile once your Google connection is live.
+              locally first; use Publish to send the exact link to Google.
             </div>
           </div>
           {locations.length > 1 && (
@@ -192,6 +205,11 @@ export default function GmbActionsPage() {
                   </div>
                   {existing && (
                     <div className="flex gap-1.5">
+                      {existing.isActive && !existing.publishedToGoogle && !changed && (
+                        <Button disabled={Boolean(working)} onClick={() => void publish(existing)}>
+                          {working === "publish" ? "Publishing…" : "Publish to Google"}
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         disabled={Boolean(working)}

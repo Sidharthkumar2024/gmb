@@ -1,11 +1,12 @@
 import { Router, type NextFunction, type Response } from "express";
 import { z } from "zod";
-import { requireAuth, type RequestWithAuth } from "../middleware/auth";
+import { requireAuth, requireVerifiedEmailForMutation, type RequestWithAuth } from "../middleware/auth";
 import { requireRole } from "../middleware/rbac";
 import {
   getPartnerOverview,
   getBranding,
   saveBranding,
+  verifyBrandingDomain,
   listTeam,
   inviteStaff,
   setStaffRole,
@@ -22,6 +23,7 @@ import {
   createPartnerPlan,
   updatePartnerPlan,
   deletePartnerPlan,
+  reorderPartnerPlans,
 } from "../services/partnerPlan.service";
 import {
   listPartnerTransactions,
@@ -34,6 +36,7 @@ import {
   listPartnerInvoices,
   getPartnerInvoice,
   finalisePartnerInvoice,
+  createPartnerInvoiceCheckout,
 } from "../services/partnerInvoice.service";
 import {
   getPartnerGatewayStatus,
@@ -49,7 +52,7 @@ import { UserRole, PlanStatus } from "@nexaflow/db";
 // same boundary the rest of the app uses.
 
 const router = Router();
-router.use(requireAuth, requireRole("WHITE_LABEL_ADMIN"));
+router.use(requireAuth, requireRole("WHITE_LABEL_ADMIN"), requireVerifiedEmailForMutation);
 
 router.get("/overview", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
@@ -124,6 +127,16 @@ const brandingSchema = z.object({
   brandColorHex: z.string().max(7).optional(),
   logoUrl: z.string().url().max(500).nullable().optional(),
   hidePoweredBy: z.boolean().optional(),
+  senderName: z.string().max(120).nullable().optional(),
+  senderEmail: z.string().email().max(254).nullable().optional(),
+});
+
+router.post("/branding/verify-domain", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await verifyBrandingDomain(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.put("/branding", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
@@ -232,6 +245,15 @@ router.post("/plans", async (req: RequestWithAuth, res: Response, next: NextFunc
   }
 });
 
+router.post("/plans/reorder", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { orderedIds } = z.object({ orderedIds: z.array(z.string().cuid()).max(100) }).parse(req.body);
+    res.json({ success: true, data: await reorderPartnerPlans(req.tenantId!, orderedIds) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.patch("/plans/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     const input = planSchema.parse(req.body);
@@ -328,6 +350,14 @@ router.get("/invoices", async (req: RequestWithAuth, res: Response, next: NextFu
 router.get("/invoices/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await getPartnerInvoice(req.tenantId!, req.params.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/invoices/:id/checkout", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await createPartnerInvoiceCheckout(req.tenantId!, req.params.id) });
   } catch (err) {
     next(err);
   }

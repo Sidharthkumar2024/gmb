@@ -1,12 +1,13 @@
 import { Router, type Response, type NextFunction } from "express";
 import { z } from "zod";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
-import { requireAuth, requireTenantScope, type RequestWithAuth } from "../middleware/auth";
+import { requireAuth, requireTenantScope, requireVerifiedEmailForMutation, type RequestWithAuth } from "../middleware/auth";
 import { grantCredits } from "../services/billing.service";
 import { verifyRazorpayWebhook, fetchRazorpayOrderNotes } from "../services/razorpay.service";
 import { verifyStripeWebhook } from "../services/stripe.service";
 import { createTopUpOrder } from "../services/paymentGateway.service";
 import { recordPayment } from "../services/payment.service";
+import { markPartnerInvoicePaid } from "../services/partnerInvoice.service";
 import { getPartnerGatewayById, isPartnerCustomer } from "../services/partnerCharge.service";
 
 const router = Router();
@@ -25,6 +26,7 @@ router.post(
   "/top-up",
   requireAuth,
   requireTenantScope,
+  requireVerifiedEmailForMutation,
   async (req: RequestWithAuth, res: Response, next: NextFunction) => {
     try {
       const { credits } = topUpSchema.parse(req.body);
@@ -108,17 +110,25 @@ async function handleRazorpay(
       // account, so the order fetch uses the partner's API keys.
       let tenantId = payment?.notes?.tenantId;
       let credits = Number(payment?.notes?.credits ?? 0);
+      let orderNotes = payment?.notes;
       if ((!tenantId || !(credits > 0)) && payment?.order_id) {
-        const orderNotes = await fetchRazorpayOrderNotes(
+        orderNotes = (await fetchRazorpayOrderNotes(
           payment.order_id,
           creds?.razorpayApi?.keyId
             ? { keyId: creds.razorpayApi.keyId, keySecret: creds.razorpayApi.keySecret }
             : undefined,
-        );
+        )) ?? undefined;
         tenantId = orderNotes?.tenantId ?? tenantId;
         credits = Number(orderNotes?.credits ?? credits);
       }
-      if (tenantId && credits > 0 && payment?.id && (await creditAllowed(creds, tenantId))) {
+      if (orderNotes?.kind === "partner_settlement" && orderNotes.invoiceId && tenantId && payment?.id && !creds?.scopePartnerId) {
+        await markPartnerInvoicePaid({
+          invoiceId: orderNotes.invoiceId,
+          partnerTenantId: tenantId,
+          provider: "RAZORPAY",
+          providerPaymentId: payment.id,
+        });
+      } else if (tenantId && credits > 0 && payment?.id && (await creditAllowed(creds, tenantId))) {
         await grantCredits(tenantId, credits, {
           reason: "Razorpay top-up",
           idempotencyKey: `razorpay:${payment.id}`,
@@ -158,7 +168,14 @@ async function handleStripe(
     );
     // A verified-but-uninteresting event (or a bad signature) both return null;
     // ack with 200 so Stripe stops retrying, but only credit on a real result.
-    if (result && (await creditAllowed(creds, result.tenantId))) {
+    if (result?.kind === "partner_settlement" && result.invoiceId && !creds?.scopePartnerId) {
+      await markPartnerInvoicePaid({
+        invoiceId: result.invoiceId,
+        partnerTenantId: result.tenantId,
+        provider: "STRIPE",
+        providerPaymentId: result.paymentId,
+      });
+    } else if (result && (await creditAllowed(creds, result.tenantId))) {
       await grantCredits(result.tenantId, result.credits, {
         reason: "Stripe top-up",
         idempotencyKey: `stripe:${result.paymentId}`,

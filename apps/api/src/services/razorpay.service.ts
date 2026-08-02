@@ -42,6 +42,26 @@ export interface TopUpOrder {
   keyId: string; // public key the browser checkout widget needs
 }
 
+export async function createRazorpayAmountOrder(args: {
+  amountPaisa: number;
+  notes: Record<string, string>;
+}, override?: RazorpayCreds) {
+  const { keyId, keySecret } = credentials(override);
+  const res = await fetch("https://api.razorpay.com/v1/orders", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ amount: args.amountPaisa, currency: "INR", notes: args.notes }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { id?: string; error?: { description?: string } };
+  if (!res.ok || !body.id) {
+    throw new ApiError(ErrorCodes.INTERNAL_SERVER_ERROR, 502, body.error?.description ?? "Razorpay order creation failed.");
+  }
+  return { orderId: body.id, amountPaisa: args.amountPaisa, currency: "INR" as const, keyId };
+}
+
 /**
  * Create a Razorpay order for `credits` worth of top-up. The tenant + credit
  * count are stored in the order `notes`, so the webhook can credit the right
@@ -54,33 +74,12 @@ export async function createRazorpayOrder(
   },
   override?: RazorpayCreds,
 ): Promise<TopUpOrder> {
-  const { keyId, keySecret } = credentials(override);
   const amountPaisa = args.credits * creditPricePaisa();
-
-  const res = await fetch("https://api.razorpay.com/v1/orders", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      amount: amountPaisa,
-      currency: "INR",
-      notes: { tenantId: args.tenantId, credits: String(args.credits) },
-    }),
-  });
-
-  if (!res.ok) {
-    const detail = (await res.text()).slice(0, 300);
-    throw new ApiError(
-      ErrorCodes.INTERNAL_SERVER_ERROR,
-      502,
-      `Razorpay order creation failed (${res.status}): ${detail}`,
-    );
-  }
-
-  const order = (await res.json()) as { id: string };
-  return { orderId: order.id, amountPaisa, currency: "INR", credits: args.credits, keyId };
+  const order = await createRazorpayAmountOrder({
+    amountPaisa,
+    notes: { tenantId: args.tenantId, credits: String(args.credits), kind: "topup" },
+  }, override);
+  return { ...order, credits: args.credits };
 }
 
 /**
@@ -122,4 +121,27 @@ export async function fetchRazorpayOrderNotes(
   if (!res.ok) return null;
   const order = (await res.json()) as { notes?: Record<string, string> };
   return order.notes ?? null;
+}
+
+/** Full gateway refund. The stable payment-derived idempotency key makes retries safe. */
+export async function refundRazorpayPayment(
+  paymentId: string,
+  idempotencyKey: string,
+  override?: RazorpayCreds,
+) {
+  const { keyId, keySecret } = credentials(override);
+  const res = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
+      "Content-Type": "application/json",
+      "X-Refund-Idempotency": idempotencyKey.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
+    },
+    body: JSON.stringify({ speed: "normal", notes: { source: "adgrowly" } }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { id?: string; status?: string; error?: { description?: string } };
+  if (!res.ok || !body.id) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 502, body.error?.description ?? `Razorpay refund failed (${res.status}).`);
+  }
+  return { refundId: body.id, status: body.status ?? null };
 }

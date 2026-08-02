@@ -49,6 +49,21 @@ interface FinalisedInvoice {
   month: number;
   issuedAt: string;
   statement: Statement;
+  status: "OPEN" | "PAID" | "OVERDUE" | "VOID";
+  dueAt: string | null;
+  paidAt: string | null;
+}
+
+function loadRazorpay(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const current = window as unknown as { Razorpay?: unknown };
+    if (current.Razorpay) return resolve(true);
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
 }
 
 export default function PartnerInvoicesPage() {
@@ -56,6 +71,7 @@ export default function PartnerInvoicesPage() {
   const [invoices, setInvoices] = useState<FinalisedInvoice[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
+  const [paying, setPaying] = useState<string | null>(null);
 
   const loadInvoices = () =>
     api
@@ -81,6 +97,41 @@ export default function PartnerInvoicesPage() {
       setError(e instanceof ApiClientError ? e.message : "Could not close the month.");
     } finally {
       setClosing(false);
+    }
+  };
+
+  const payInvoice = async (invoice: FinalisedInvoice) => {
+    setPaying(invoice.id);
+    setError(null);
+    try {
+      const checkout = await api.post<{
+        provider: "stripe" | "razorpay";
+        checkoutUrl?: string;
+        razorpay?: { orderId: string; amountPaisa: number; currency: string; keyId: string };
+      }>(`/api/v1/partner/invoices/${invoice.id}/checkout`, {});
+      if (checkout.provider === "stripe" && checkout.checkoutUrl) {
+        window.location.assign(checkout.checkoutUrl);
+        return;
+      }
+      if (checkout.razorpay) {
+        if (!(await loadRazorpay())) throw new Error("Could not load Razorpay Checkout.");
+        const gateway = window as unknown as {
+          Razorpay: new (options: Record<string, unknown>) => { open: () => void };
+        };
+        new gateway.Razorpay({
+          key: checkout.razorpay.keyId,
+          order_id: checkout.razorpay.orderId,
+          amount: checkout.razorpay.amountPaisa,
+          currency: checkout.razorpay.currency,
+          name: "Adgrowly",
+          description: invoice.number,
+          handler: () => { window.setTimeout(() => void loadInvoices(), 2000); },
+        }).open();
+      }
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : e instanceof Error ? e.message : "Could not start settlement checkout.");
+    } finally {
+      setPaying(null);
     }
   };
 
@@ -198,7 +249,7 @@ export default function PartnerInvoicesPage() {
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-ptn-line">
-                {["Invoice", "Period", "Issued", "Margin", ""].map((h) => (
+                {["Invoice", "Period", "Issued", "Status", "Margin", ""].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-3 font-geist-mono text-micro font-medium uppercase tracking-[0.1em] text-ptn-subtle"
@@ -216,10 +267,23 @@ export default function PartnerInvoicesPage() {
                   <td className="whitespace-nowrap px-4 py-3 font-geist-mono text-micro text-ptn-subtle">
                     {new Date(inv.issuedAt).toLocaleDateString()}
                   </td>
+                  <td className="px-4 py-3">
+                    <PtnPill tone={inv.status === "PAID" ? "ok" : "warn"}>{inv.status}</PtnPill>
+                  </td>
                   <td className="px-4 py-3 font-geist-mono text-xs2 text-ptn-muted">
                     {byCurrency(inv.statement.totals.marginByCurrency)}
                   </td>
                   <td className="px-4 py-3 text-right">
+                    {inv.status === "OPEN" && (
+                      <button
+                        type="button"
+                        disabled={paying === inv.id}
+                        onClick={() => void payInvoice(inv)}
+                        className="mr-1.5 rounded-control bg-ptn-accent px-2.5 py-1 text-xs2 font-semibold text-ptn-bg disabled:opacity-50"
+                      >
+                        {paying === inv.id ? "…" : "Pay"}
+                      </button>
+                    )}
                     <Link
                       href={`/partner/invoices/${inv.id}`}
                       className="rounded-control border border-ptn-line px-2.5 py-1 text-xs2 font-medium text-ptn-muted no-underline hover:bg-ptn-panel-hover hover:no-underline"

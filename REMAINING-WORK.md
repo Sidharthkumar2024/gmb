@@ -4,18 +4,20 @@ _Original audit generated from all 59 screens, 55 services, and 7 route modules 
 
 ## Current status
 
-All branch-only work has been integrated into `main`. The complete launch-critical set from the original
-Bucket 1 and Bucket 2 audit is now implemented, including plan enforcement, live Google sync controls,
-Google OAuth configuration, provider-key tests, accurate image charging, durable generated-image storage,
-cross-process worker health, queue recovery controls, rank alerts, and corrected money aggregates.
+All branch-only work has been integrated into `main`. The launch-critical set from the original Bucket 1
+and Bucket 2 audit is implemented, including plan enforcement, live Google sync controls, Google OAuth
+configuration, provider-key tests, accurate image charging, durable generated-image storage, cross-process
+worker health, queue recovery controls, rank alerts, and corrected money aggregates.
 
 Google profile verification now uses Google's live verification-options, start, and PIN-completion APIs;
 the app no longer marks a profile verified from a local code alone. Public `/features`, `/pricing`, and
 `/agencies` routes now follow the supplied designs, and pricing comes from the active database catalog.
 
-The items still requiring work are the product-decision and go-live configuration items below. White-label
-logo/colour/powered-by settings are applied in the suite, but custom-domain DNS/serving remains an infrastructure
-decision. Admin accounts, users, and audit logs are paginated; further list pagination is scale-dependent.
+The code-completable Bucket 3 workflows are now implemented as configuration-ready features: DNS-verified
+white-label domains and senders, Google Q&A and Place Actions writes, provider refunds, immutable tax invoices,
+partner settlement checkout, approved-content publishing, scheduled report email, support workflow, money-list
+pagination, scheduled rank captures, email mutation gating, and resale-plan archive/reorder. Production remains
+fail-closed until the required provider credentials, DNS routing and seller identity are supplied.
 
 ## Original audit baseline (historical)
 
@@ -58,27 +60,27 @@ _High ROI: the hard part is already written and tested; it just needs a button +
 
 ---
 
-## Bucket 3 — Big features gated on YOUR product decision (≈ 233h)
-_These are real builds; doing them the wrong way wastes days, so they need a yes/no first._
+## Bucket 3 — Product workflows (implementation status)
+_External-provider features fail closed until their production access and credentials are configured._
 
-| # | Feature | What "done" means | Decision needed | Est |
-|---|---------|-------------------|-----------------|-----|
-| A | **Real citation scanning** | Actually crawl Justdial/Zomato/Bing/Apple etc. | Needs a paid aggregator (Yext/BrightLocal $$) OR relabel as manual NAP tracker | 20h |
-| B | **White-label actually applied** | Logo/colour/hide-powered-by re-skin customer workspaces + custom-domain serving + DNS verify | Full re-skin + domain infra, or portal-preview MVP? | 32h |
-| C | **Google Q&A sync** | Read questions from Google + post approved answers back | In scope for launch? Needs GBP API | 10h |
-| D | **Google Verifications API** | Implemented; production use still needs Google API allow-listing | Supply/confirm API access | Code complete |
-| E | **Google Place Actions API** | Book/Order/Reserve links actually publish to Google | Needs GBP API | 10h |
-| F | **Turn ON billing** | `WALLET_BILLING_ENABLED=true`, plan `priceCents` actually charged (subscription) | When to start charging? Final prices? | 20h |
-| G | **Auto gateway refunds** | Refund hits Razorpay/Stripe API (today: ledger reversal only, manual money-back) | Auto or stay manual? | 8h |
-| H | **Tax/GST invoices** | Stored `Invoice` model, sequential numbering, GST breakdown, real seller identity, server-side PDF | Compliance requirement? | 24h |
-| I | **Platform→partner settlement** | Actually collect the monthly wholesale from partners (dunning/suspend) | Auto-charge or manual invoice? | 20h |
-| J | Approved AI images/descriptions **auto-push to Google** profile/posts | vs manual copy/download | Auto or manual? | 12h |
-| K | Real **report PDF** (charts, branded A4) + **email/WhatsApp delivery** of scheduled reports | pdfkit is not even a dependency yet | Styled PDF + delivery? | 15h |
-| L | Support reply → **email the customer**; internal notes; assignee; state machine | Notify + workflow? | 12h |
-| M | Pagination + filtering on admin lists (audit, accounts, users, money) for scale | Needed at your scale? | 16h |
-| N | Single-keyword rank tracker on a schedule (grid is on-demand only) | Scheduled rank worker? | 6h |
-| O | Enforced email verification gate; per-tenant sender domains | Gate login/paid actions? | 6h |
-| P | Resale-plan archive/reorder; misc partner polish | — | 8h |
+| # | Feature | Status |
+|---|---------|--------|
+| A | Citation scanning | Complete as an honestly labelled manual NAP tracker; paid aggregator crawling is not simulated. |
+| B | White-label domain and sender | Complete: DNS TXT/CNAME verification, domain uniqueness, tenant branding lookup, dynamic CORS and verified-domain sender enforcement. TLS/host routing is deployment infrastructure. |
+| C | Google Q&A sync | Complete: live question sync and explicit merchant-answer publish through the official GBP API. |
+| D | Google Verifications API | Complete; production use requires Google's API allow-listing. |
+| E | Google Place Actions API | Complete: explicit create/update/delete against the official API. |
+| F | Turn on paid subscriptions | Financial switch remains intentionally off until the final price catalog and start-charging approval are supplied. Credit top-ups and plan entitlements are live. |
+| G | Gateway refunds | Complete: Stripe and Razorpay provider refund happens before the credit-ledger reversal, with idempotency. |
+| H | Tax/GST invoices | Complete: immutable snapshots, financial-year sequential numbers, tax-inclusive GST split, billing profile and authenticated server PDF. Requires seller identity env values. |
+| I | Platform→partner settlement | Complete: monthly frozen invoice lifecycle, due/overdue state and one-currency Razorpay/Stripe settlement checkout/webhook. |
+| J | Approved AI content publishing | Complete as explicit operator-controlled publish: descriptions update the GBP profile and images create editable Google post drafts. |
+| K | Scheduled reports | Branded PDF generation and SMTP email delivery complete with observable delivery errors. WhatsApp requires a selected BSP/API account. |
+| L | Support workflow | Complete: customer email notification, private staff notes, assignee, priority and state controls. |
+| M | Admin pagination | Complete for accounts, users, audit and money lists, including filters/search/CSV where applicable. |
+| N | Scheduled single-keyword ranks | Complete: opt-in cadence, BullMQ worker and visible last-run/error state. |
+| O | Email verification and branded sender | Complete: unverified users are read-only for protected mutations; verified tenant domains may send branded mail. |
+| P | Resale-plan polish | Complete: archive, restore and deterministic reorder. |
 
 ---
 
@@ -101,10 +103,11 @@ for auto-sync/autopilot/scheduled posts & reports.
 I can compress calendar time heavily by fanning out with parallel agents (Ultracode) — realistically the
 launch-critical set can land in a few focused days.
 
-## Recommended next order
-1. Greenlight the required **Bucket 3** product choices.
-2. Supply the **Bucket 4** credentials and infrastructure values.
-3. Run real-provider end-to-end acceptance tests in the deployment environment.
+## Go-live order
+1. Supply the **Bucket 4** credentials, invoice seller identity and custom-domain routing/TLS.
+2. Confirm final subscription prices and the date charging may start; then enable the billing switch.
+3. Choose a WhatsApp BSP if WhatsApp report delivery is required.
+4. Run real-provider end-to-end acceptance tests in the deployment environment.
 
 ## Branch policy
 `main` is the integration and delivery branch. Feature/test branch histories have been merged into it; new

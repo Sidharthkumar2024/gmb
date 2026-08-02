@@ -49,6 +49,7 @@ describe("verifyStripeWebhook", () => {
       credits: 500,
       amountMinor: 500,
       currency: "USD",
+      kind: "topup",
     });
   });
 

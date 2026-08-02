@@ -58,8 +58,8 @@ export default function GmbCitationsPage() {
   const [summary, setSummary] = useState<{ total: number; consistent: number; consistencyScore: number } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Directories the scan says you are NOT on yet. This is the most actionable
-  // thing the scan returns for a new profile, so it gets its own panel rather
+  // Recommended directories not present in the manually tracked list. This is
+  // the most actionable gap for a new profile, so it gets its own panel rather
   // than being dropped on the floor.
   const [missing, setMissing] = useState<string[]>([]);
 
@@ -109,13 +109,13 @@ export default function GmbCitationsPage() {
       setMissing(result?.missingRecommended ?? []);
       await load();
     } catch (e) {
-      setError(e instanceof ApiClientError ? e.message : "Could not run the scan.");
+      setError(e instanceof ApiClientError ? e.message : "Could not check the tracked NAP records.");
     } finally {
       setBusy(null);
     }
   }
 
-  /** Record a listing on a directory the scan flagged as missing. */
+  /** Add a recommended directory to the manual tracking checklist. */
   async function addDirectory(directory: string) {
     setBusy(directory);
     setError(null);
@@ -193,13 +193,13 @@ export default function GmbCitationsPage() {
           </div>
         </Card>
         <Card>
-          <SectionLabel>Scan directories</SectionLabel>
+          <SectionLabel>Check tracked NAP</SectionLabel>
           <div className="mt-1 text-xs2 text-gmb-ink-muted">
             Checks the directories that matter for your category.
           </div>
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
             <Button variant="dark" disabled={busy === "scan" || !locationId} onClick={() => void scan()}>
-              {busy === "scan" ? "Scanning…" : "Run scan"}
+              {busy === "scan" ? "Checking…" : "Check records"}
             </Button>
             {locations.length > 1 && (
               <select
@@ -218,7 +218,7 @@ export default function GmbCitationsPage() {
         </Card>
       </div>
 
-      {/* Directories the scan says you're absent from — the actionable gap. */}
+      {/* Recommended directories absent from the manual checklist. */}
       {missing.length > 0 && (
         <Card className="mb-3.5 border-gmb-warn/30 bg-gmb-warn-bg">
           <div className="flex items-center gap-2">
@@ -254,10 +254,10 @@ export default function GmbCitationsPage() {
       ) : items.length === 0 ? (
         <EmptyState
           title="No listings tracked yet"
-          body="Run a scan to check the directories Google cross-references for your category — mismatched name, address or phone details quietly cost you rankings."
+          body="Add the listings you manage, then compare their saved name, address and phone against the canonical profile. This is a manual NAP tracker; it does not crawl paid directory databases."
           action={
             <Button variant="dark" disabled={!locationId} onClick={() => void scan()}>
-              Run first scan
+              Check recommended directories
             </Button>
           }
         />

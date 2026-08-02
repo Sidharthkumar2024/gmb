@@ -13,6 +13,7 @@ const deps = vi.hoisted(() => ({
   update: vi.fn(),
   msgCreate: vi.fn(),
   transaction: vi.fn(),
+  userFindFirst: vi.fn(),
 }));
 
 vi.mock("@nexaflow/db", async (importOriginal) => {
@@ -28,10 +29,12 @@ vi.mock("@nexaflow/db", async (importOriginal) => {
         update: deps.update,
       },
       supportTicketMessage: { create: deps.msgCreate },
+      user: { findFirst: deps.userFindFirst, findUnique: vi.fn() },
       $transaction: deps.transaction,
     },
   };
 });
+vi.mock("./email.service", () => ({ sendEmail: vi.fn() }));
 
 import { createTicket, getTicket, replyToTicket, updateTicket } from "./supportTicket.service";
 
@@ -110,6 +113,7 @@ describe("replyToTicket", () => {
       .mockResolvedValueOnce({ id: "tk-1", status: TicketStatus.RESOLVED }) // ownership check
       .mockResolvedValueOnce(ticketRow({ lastReplyBy: TicketAuthor.STAFF })); // final getTicket read
     deps.transaction.mockResolvedValue([]);
+    deps.userFindFirst.mockResolvedValue(null);
     await replyToTicket({ ticketId: "tk-1", tenantId: null, author: TicketAuthor.STAFF, body: "on it" });
 
     expect(deps.transaction).toHaveBeenCalledOnce();

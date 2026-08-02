@@ -167,6 +167,18 @@ export default function GmbImagesPage() {
     }
   }
 
+  async function createPost(id: string) {
+    setBusy(id);
+    setError(null);
+    try {
+      await api.post(`/api/v1/gmb/images/${id}/create-post`, {});
+      window.location.assign("/gmb-posts");
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not create a post draft.");
+      setBusy(null);
+    }
+  }
+
   return (
     <GmbShell title="Photos">
       {error && <ErrorNote>{error}</ErrorNote>}
@@ -340,6 +352,11 @@ export default function GmbImagesPage() {
                           Reject
                         </Button>
                       </>
+                    )}
+                    {img.status === "APPROVED" && img.resultUrl && (
+                      <Button disabled={working} onClick={() => void createPost(img.id)}>
+                        {working ? "Creating…" : "Create Google post"}
+                      </Button>
                     )}
                     <Button variant="ghost" disabled={working} onClick={() => void remove(img.id)}>
                       Delete

@@ -13,6 +13,9 @@ import {
   TicketStatus,
   TicketPriority,
   TicketAuthor,
+  UserRole,
+  PaymentStatus,
+  PaymentProvider,
   WalletTransactionType,
 } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
@@ -64,9 +67,10 @@ import {
 } from "../services/supportTicket.service";
 import { listEmailTemplates, upsertEmailTemplate } from "../services/emailTemplate.service";
 import { getGatewayStatus, setActiveProvider } from "../services/paymentGateway.service";
-import { listPayments, refundPayment } from "../services/payment.service";
+import { listPayments, paginatePayments, refundPayment } from "../services/payment.service";
 import { toCsv } from "../lib/csv";
-import { listInvoices, getInvoice } from "../services/invoice.service";
+import { listInvoices, paginateInvoices, getInvoice } from "../services/invoice.service";
+import { renderInvoicePdf } from "../services/invoicePdf.service";
 import {
   queueDepth,
   getGmbAutopilotQueue,
@@ -1145,19 +1149,28 @@ router.delete("/storage", async (req: RequestWithAuth, res: Response, next: Next
 
 // --- Payments + transactions ------------------------------------------------
 // Platform-wide money views. Payments = captured gateway payments; transactions
-// = the raw credit ledger across all workspaces. Read-only.
+// = the raw credit ledger across all workspaces. Payment refunds are explicit,
+// audited mutations; all other endpoints in this section are read-only.
 
-router.get("/payments", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+const moneyPageSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(10).max(100).default(25),
+  search: z.string().trim().max(160).optional(),
+});
+
+router.get("/payments", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
-    res.json({ success: true, data: await listPayments() });
+    const base = moneyPageSchema.extend({
+      status: z.nativeEnum(PaymentStatus).optional(),
+      provider: z.nativeEnum(PaymentProvider).optional(),
+    }).parse(req.query);
+    res.json({ success: true, data: await paginatePayments(base) });
   } catch (err) {
     next(err);
   }
 });
 
-// Refund a payment: reverse its credits + mark it REFUNDED (idempotent). Records
-// the refund in the ledger only — the operator issues the money-back in the
-// gateway dashboard. Audit-logged.
+// Refund provider money first, then reverse credits and mark REFUNDED.
 router.post("/payments/:id/refund", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     const refunded = await refundPayment(req.params.id);
@@ -1208,24 +1221,40 @@ router.get("/transactions", async (req: RequestWithAuth, res: Response, next: Ne
     const raw = typeof req.query.type === "string" ? req.query.type : undefined;
     const type =
       raw && raw in WalletTransactionType ? (raw as WalletTransactionType) : undefined;
-    const rows = await prisma.walletTransaction.findMany({
-      where: type ? { type } : undefined,
-      orderBy: { createdAt: "desc" },
-      take: 200,
-      include: { wallet: { select: { tenant: { select: { name: true } } } } },
-    });
+    const paging = moneyPageSchema.parse(req.query);
+    const where = {
+      ...(type ? { type } : {}),
+      ...(paging.search ? { OR: [
+        { reason: { contains: paging.search, mode: "insensitive" as const } },
+        { feature: { contains: paging.search, mode: "insensitive" as const } },
+        { wallet: { tenant: { name: { contains: paging.search, mode: "insensitive" as const } } } },
+      ] } : {}),
+    };
+    const [rows, total] = await Promise.all([
+      prisma.walletTransaction.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (paging.page - 1) * paging.pageSize,
+        take: paging.pageSize,
+        include: { wallet: { select: { tenant: { select: { name: true } } } } },
+      }),
+      prisma.walletTransaction.count({ where }),
+    ]);
     res.json({
       success: true,
-      data: rows.map((r) => ({
-        id: r.id,
-        tenantName: r.wallet.tenant.name,
-        type: r.type,
-        deltaCredits: r.deltaCredits,
-        balanceAfter: r.balanceAfter,
-        feature: r.feature,
-        reason: r.reason,
-        createdAt: r.createdAt,
-      })),
+      data: {
+        items: rows.map((r) => ({
+          id: r.id,
+          tenantName: r.wallet.tenant.name,
+          type: r.type,
+          deltaCredits: r.deltaCredits,
+          balanceAfter: r.balanceAfter,
+          feature: r.feature,
+          reason: r.reason,
+          createdAt: r.createdAt,
+        })),
+        pagination: { page: paging.page, pageSize: paging.pageSize, total, pages: Math.max(1, Math.ceil(total / paging.pageSize)) },
+      },
     });
   } catch (err) {
     next(err);
@@ -1262,9 +1291,10 @@ router.get("/transactions/export", async (_req: RequestWithAuth, res: Response, 
 // --- Invoices ---------------------------------------------------------------
 // Derived one-per-payment (see invoice.service). List + printable detail.
 
-router.get("/invoices", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+router.get("/invoices", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
-    res.json({ success: true, data: await listInvoices() });
+    const base = moneyPageSchema.extend({ status: z.nativeEnum(PaymentStatus).optional() }).parse(req.query);
+    res.json({ success: true, data: await paginateInvoices(base) });
   } catch (err) {
     next(err);
   }
@@ -1302,6 +1332,16 @@ router.get("/invoices/:id", async (req: RequestWithAuth, res: Response, next: Ne
   } catch (err) {
     next(err);
   }
+});
+
+router.get("/invoices/:id/pdf", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const invoice = await getInvoice(req.params.id);
+    if (!invoice) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Invoice not found.");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${invoice.number}.pdf"`);
+    res.send(renderInvoicePdf(invoice));
+  } catch (err) { next(err); }
 });
 
 // --- Payment gateways -------------------------------------------------------
@@ -1388,9 +1428,9 @@ router.post("/smtp/test", async (req: RequestWithAuth, res: Response, next: Next
 
 // --- Plans ------------------------------------------------------------------
 //
-// A plan catalog defines entitlements (limits, credit allotment), not charges —
-// no invoice/payment model ships here, so price is display-only. Limits are
-// enforced at creation points (e.g. locations); a null limit is unlimited.
+// A plan catalog defines entitlements, limits and the approved display price.
+// Recurring collection is intentionally not activated until the final catalog
+// and start-charging approval are supplied. A null limit is unlimited.
 
 router.get("/plans", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
@@ -1496,6 +1536,19 @@ router.get("/tickets", async (req: RequestWithAuth, res: Response, next: NextFun
   }
 });
 
+router.get("/tickets/assignees", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { role: UserRole.SUPER_ADMIN, isActive: true },
+      orderBy: [{ name: "asc" }, { email: "asc" }],
+      select: { id: true, name: true, email: true },
+    });
+    res.json({ success: true, data: users });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/tickets/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await getTicket(req.params.id, null) });
@@ -1504,22 +1557,26 @@ router.get("/tickets/:id", async (req: RequestWithAuth, res: Response, next: Nex
   }
 });
 
-const adminReplySchema = z.object({ body: z.string().min(1).max(5000) });
+const adminReplySchema = z.object({
+  body: z.string().min(1).max(5000),
+  internal: z.boolean().optional(),
+});
 
 router.post("/tickets/:id/reply", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
-    const { body } = adminReplySchema.parse(req.body);
+    const { body, internal } = adminReplySchema.parse(req.body);
     const ticket = await replyToTicket({
       ticketId: req.params.id,
       tenantId: null,
       author: TicketAuthor.STAFF,
       authorUserId: req.userId,
       body,
+      internal,
     });
     await logAudit({
       tenantId: ticket.tenantId,
       userId: req.userId!,
-      action: "REPLY",
+      action: internal ? "ANNOTATE" : "REPLY",
       resource: "SupportTicket",
       resourceId: ticket.id,
       ...extractRequestMeta(req),
@@ -1533,6 +1590,7 @@ router.post("/tickets/:id/reply", async (req: RequestWithAuth, res: Response, ne
 const ticketPatchSchema = z.object({
   status: z.nativeEnum(TicketStatus).optional(),
   priority: z.nativeEnum(TicketPriority).optional(),
+  assignedToUserId: z.string().cuid().nullable().optional(),
 });
 
 router.patch("/tickets/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
@@ -1545,7 +1603,7 @@ router.patch("/tickets/:id", async (req: RequestWithAuth, res: Response, next: N
       action: "UPDATE",
       resource: "SupportTicket",
       resourceId: ticket.id,
-      newValues: { status: ticket.status, priority: ticket.priority },
+      newValues: { status: ticket.status, priority: ticket.priority, assignedToUserId: ticket.assignedToUserId },
       ...extractRequestMeta(req),
     });
     res.json({ success: true, data: ticket });

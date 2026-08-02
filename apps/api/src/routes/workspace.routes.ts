@@ -2,7 +2,7 @@ import { Router, type NextFunction, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "@nexaflow/db";
 import { ApiError, ErrorCodes, Permissions, UserRole } from "@nexaflow/shared";
-import { requireAuth, requireTenantScope, type RequestWithAuth } from "../middleware/auth";
+import { requireAuth, requireTenantScope, requireVerifiedEmailForMutation, type RequestWithAuth } from "../middleware/auth";
 import { requirePermission, requireRole } from "../middleware/rbac";
 import { getTenantPlan } from "../services/plan.service";
 import { getCustomerTopupInfo } from "../services/paymentGateway.service";
@@ -13,7 +13,13 @@ import {
   getTicket,
   replyToTicket,
 } from "../services/supportTicket.service";
-import { listCustomerInvoices, getCustomerInvoice } from "../services/invoice.service";
+import {
+  getBillingProfile,
+  getCustomerInvoice,
+  listCustomerInvoices,
+  saveBillingProfile,
+} from "../services/invoice.service";
+import { renderInvoicePdf } from "../services/invoicePdf.service";
 
 // Workspace-level endpoints the app shell calls on every page load: language,
 // currency, wallet balance and product access.
@@ -24,7 +30,7 @@ import { listCustomerInvoices, getCustomerInvoice } from "../services/invoice.se
 // simpler and less misleading than porting the monorepo's entitlement system.
 
 const router = Router();
-router.use(requireAuth, requireTenantScope);
+router.use(requireAuth, requireTenantScope, requireVerifiedEmailForMutation);
 
 // --- language ---------------------------------------------------------------
 
@@ -312,6 +318,34 @@ router.get("/customer/invoices/:id", async (req: RequestWithAuth, res: Response,
   } catch (err) {
     next(err);
   }
+});
+
+router.get("/customer/invoices/:id/pdf", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const invoice = await getCustomerInvoice(req.tenantId!, req.params.id);
+    if (!invoice) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Invoice not found.");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${invoice.number}.pdf"`);
+    res.send(renderInvoicePdf(invoice));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/customer/billing-profile", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try { res.json({ success: true, data: await getBillingProfile(req.tenantId!) }); } catch (err) { next(err); }
+});
+
+router.put("/customer/billing-profile", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = z.object({
+      legalName: z.string().max(200).nullable().optional(),
+      billingAddress: z.string().max(1000).nullable().optional(),
+      gstin: z.string().max(15).nullable().optional(),
+      placeOfSupply: z.string().max(160).nullable().optional(),
+    }).parse(req.body);
+    res.json({ success: true, data: await saveBillingProfile(req.tenantId!, input) });
+  } catch (err) { next(err); }
 });
 
 // --- Support tickets (customer side) ----------------------------------------

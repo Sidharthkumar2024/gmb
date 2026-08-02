@@ -2,6 +2,7 @@ import { prisma, Prisma, GmbDescriptionTarget, GmbDescriptionStatus } from "@nex
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { GMB_PROMPT_KEYS, descriptionVariables, resolveFeaturePrompt } from "./gmbAiPrompts.service";
 import { runTenantLlmJson } from "./ai.service";
+import { updateGoogleBusinessDescription } from "./gmbGoogle.service";
 
 // =====================================================================
 // AdGrowly GMB — AI Description Optimizer (planning PDF §2). Improves a
@@ -215,6 +216,8 @@ interface DescriptionRow {
   maxLength: number | null;
   analysis: Prisma.JsonValue | null;
   status: GmbDescriptionStatus;
+  publishedToGoogle: boolean;
+  publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -231,6 +234,8 @@ export function toSafeDescription(row: DescriptionRow) {
     maxLength: row.maxLength,
     analysis: row.analysis,
     status: row.status,
+    publishedToGoogle: row.publishedToGoogle,
+    publishedAt: row.publishedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -362,12 +367,47 @@ export async function updateDescription(tenantId: string, id: string, input: Upd
     where: { id },
     data: {
       ...(input.optimized !== undefined ? { optimized: input.optimized } : {}),
+      ...(input.optimized !== undefined ? { publishedToGoogle: false, publishedAt: null } : {}),
       ...(input.label !== undefined ? { label: input.label } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(analysis !== undefined ? { analysis } : {}),
     },
   });
   return toSafeDescription(row);
+}
+
+/** Publish an explicitly approved BUSINESS description to its linked profile. */
+export async function publishDescriptionToGoogle(tenantId: string, id: string) {
+  const row = await findOwnedOrThrow(tenantId, id);
+  if (row.target !== GmbDescriptionTarget.BUSINESS) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Only BUSINESS descriptions map to the Google profile description.");
+  }
+  if (row.status !== GmbDescriptionStatus.APPROVED) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Approve this description before publishing it.");
+  }
+  if (!row.locationId || !row.optimized?.trim()) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "This draft needs a location and optimized text.");
+  }
+  const location = await prisma.gmbLocation.findFirst({
+    where: { id: row.locationId, tenantId },
+    select: { id: true, placeId: true, secretId: true },
+  });
+  if (!location?.placeId || !location.secretId) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Connect and sync this Google location first.");
+  }
+  await updateGoogleBusinessDescription({
+    tenantId,
+    locationId: location.id,
+    locationResourceName: location.placeId,
+    secretId: location.secretId,
+    description: row.optimized.trim(),
+  });
+  return toSafeDescription(
+    await prisma.gmbDescription.update({
+      where: { id },
+      data: { publishedToGoogle: true, publishedAt: new Date() },
+    }),
+  );
 }
 
 export async function deleteDescription(tenantId: string, id: string) {

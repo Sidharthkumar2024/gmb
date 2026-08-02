@@ -27,6 +27,7 @@ export const QueueNames = {
   ANALYTICS_REPORTS: "analytics-reports",
   GMB_POST_PUBLISHER: "gmb-post-publisher",
   GMB_REPORT_SCHEDULE: "gmb-report-schedule",
+  GMB_RANK_SCHEDULE: "gmb-rank-schedule",
   GMB_AUTOPILOT: "gmb-autopilot",
   GMB_AUTO_SYNC: "gmb-auto-sync",
   TEMPLATE_STATUS_SYNC: "template-status-sync",
@@ -71,6 +72,7 @@ export type WebhookJobData = WebhookDeliveryData;
 export type WabaTokenExpiryJobData = { kind: "scan" };
 export type GmbPostPublisherJobData = { kind: "sweep" };
 export type GmbReportScheduleJobData = { kind: "sweep" };
+export type GmbRankScheduleJobData = { kind: "sweep" };
 export type PartnerInvoiceJobData = { kind: "sweep" };
 export type GmbAutopilotJobData = { kind: "sweep" };
 export type GmbAutoSyncJobData = { kind: "sweep" };
@@ -162,6 +164,10 @@ export function getGmbAutoSyncQueue(): Queue<GmbAutoSyncJobData> {
 
 export function getGmbReportScheduleQueue(): Queue<GmbReportScheduleJobData> {
   return makeQueue<GmbReportScheduleJobData>(QueueNames.GMB_REPORT_SCHEDULE);
+}
+
+export function getGmbRankScheduleQueue(): Queue<GmbRankScheduleJobData> {
+  return makeQueue<GmbRankScheduleJobData>(QueueNames.GMB_RANK_SCHEDULE);
 }
 
 export function getPartnerInvoiceQueue(): Queue<PartnerInvoiceJobData> {

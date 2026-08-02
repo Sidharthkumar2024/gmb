@@ -17,6 +17,7 @@ export interface RequestWithAuth extends Request {
   tenantId?: string;
   userId?: string;
   userRole?: RoleName;
+  emailVerified?: boolean;
 }
 
 export interface AccessTokenPayload {
@@ -95,6 +96,7 @@ export async function requireAuth(
         tenantId: true,
         role: true,
         isActive: true,
+        emailVerified: true,
         tenant: { select: { status: true } },
       },
     });
@@ -111,10 +113,32 @@ export async function requireAuth(
     req.userId = user.id;
     req.tenantId = user.tenantId;
     req.userRole = user.role as RoleName;
+    req.emailVerified = user.emailVerified;
     next();
   } catch (err) {
     next(err);
   }
+}
+
+/**
+ * Let an unverified member inspect their workspace, but block state-changing
+ * product operations until they prove control of the login address. Auth's
+ * verify/resend endpoints live on a separate router and remain reachable.
+ */
+export function requireVerifiedEmailForMutation(
+  req: RequestWithAuth,
+  _res: Response,
+  next: NextFunction,
+): void {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method) || req.userRole === "SUPER_ADMIN") {
+    next();
+    return;
+  }
+  if (!req.emailVerified) {
+    next(new ApiError(ErrorCodes.FORBIDDEN, 403, "Verify your email before making changes."));
+    return;
+  }
+  next();
 }
 
 /**

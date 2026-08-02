@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { GmbShell } from "../../../../src/components/gmb/GmbShell";
 import { Card, ErrorNote, Skeleton } from "../../../../src/components/gmb/ui";
 import { api, ApiClientError } from "../../../../src/lib/api";
+import { downloadAuthed } from "../../../../src/lib/download";
 
 // A single top-up receipt for this workspace — the printable view of one
 // payment. Scoped server-side to the workspace; a foreign id 404s.
@@ -22,12 +23,13 @@ interface Invoice {
   status: "PAID" | "REFUNDED";
   issuedAt: string;
   currency: string;
-  seller: { name: string; product: string; supportEmail: string };
-  buyer: { tenantId: string; name: string };
+  seller: { name: string; product: string; supportEmail: string; address: string | null; gstin: string | null };
+  buyer: { tenantId: string; name: string; address: string | null; gstin: string | null; placeOfSupply: string | null };
   payment: { provider: string; providerPaymentId: string };
   lines: InvoiceLine[];
   subtotalMinor: number;
   taxMinor: number;
+  taxRateBps: number;
   totalMinor: number;
 }
 
@@ -66,13 +68,22 @@ export default function ReceiptPage() {
           ← Back to billing
         </Link>
         {inv && (
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="ml-auto rounded-control bg-gmb-night px-3 py-1.5 text-xs2 font-semibold text-white hover:opacity-90"
-          >
-            Print
-          </button>
+          <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              onClick={() => void downloadAuthed(`/api/v1/customer/invoices/${inv.id}/pdf`, `${inv.number}.pdf`).catch(() => setError("Could not download the invoice PDF."))}
+              className="rounded-control border border-gmb-line px-3 py-1.5 text-xs2 font-semibold text-gmb-ink hover:bg-gmb-canvas"
+            >
+              Download PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="rounded-control bg-gmb-night px-3 py-1.5 text-xs2 font-semibold text-white hover:opacity-90"
+            >
+              Print
+            </button>
+          </div>
         )}
       </div>
 
@@ -91,6 +102,8 @@ export default function ReceiptPage() {
               <div className="mt-1 font-geist-mono text-micro text-gmb-ink-subtle">
                 {inv.seller.supportEmail}
               </div>
+              {inv.seller.address && <div className="mt-1 max-w-sm whitespace-pre-line text-micro text-gmb-ink-subtle">{inv.seller.address}</div>}
+              {inv.seller.gstin && <div className="mt-1 font-geist-mono text-micro text-gmb-ink-subtle">GSTIN {inv.seller.gstin}</div>}
             </div>
             <div className="text-right">
               <div className="font-geist-mono text-sm2 font-semibold text-gmb-ink">{inv.number}</div>
@@ -114,6 +127,9 @@ export default function ReceiptPage() {
               Billed to
             </div>
             <div className="mt-1 text-sm2 text-gmb-ink">{inv.buyer.name}</div>
+            {inv.buyer.address && <div className="mt-1 whitespace-pre-line text-xs2 text-gmb-ink-muted">{inv.buyer.address}</div>}
+            {inv.buyer.gstin && <div className="mt-1 font-geist-mono text-micro text-gmb-ink-subtle">GSTIN {inv.buyer.gstin}</div>}
+            {inv.buyer.placeOfSupply && <div className="mt-1 text-micro text-gmb-ink-subtle">Place of supply: {inv.buyer.placeOfSupply}</div>}
           </div>
 
           <table className="w-full border-collapse text-left">
@@ -155,7 +171,7 @@ export default function ReceiptPage() {
               <span className="font-geist-mono">{money(inv.subtotalMinor, inv.currency)}</span>
             </div>
             <div className="flex justify-between text-gmb-ink-muted">
-              <span>Tax</span>
+              <span>Tax{inv.taxRateBps > 0 ? ` (${(inv.taxRateBps / 100).toFixed(2)}%)` : ""}</span>
               <span className="font-geist-mono">{money(inv.taxMinor, inv.currency)}</span>
             </div>
             <div className="flex justify-between border-t border-gmb-line pt-1.5 text-sm2 font-semibold text-gmb-ink">

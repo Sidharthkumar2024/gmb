@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { GmbShell } from "../../src/components/gmb/GmbShell";
 import { Card, SectionLabel, Pill, Button, ErrorNote, Skeleton } from "../../src/components/gmb/ui";
 import { api, ApiClientError } from "../../src/lib/api";
+import { downloadAuthed } from "../../src/lib/download";
 
 // Billing — credit balance, per-feature pricing, top-up, and the full ledger.
 //
@@ -76,6 +77,12 @@ interface Receipt {
   totalMinor: number;
   payment: { provider: string };
 }
+interface BillingProfile {
+  legalName: string | null;
+  billingAddress: string | null;
+  gstin: string | null;
+  placeOfSupply: string | null;
+}
 interface Plan {
   name: string;
   description: string | null;
@@ -106,9 +113,11 @@ export default function GmbBillingPage() {
   const [topup, setTopup] = useState<TopupInfo | null>(null);
   const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [billingProfile, setBillingProfile] = useState<BillingProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [buying, setBuying] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const refreshWalletAndLedger = useCallback(async () => {
     const [w, l] = await Promise.all([
@@ -123,7 +132,7 @@ export default function GmbBillingPage() {
     let cancelled = false;
     async function loadAll() {
       try {
-        const [w, c, u, p, t, l, r] = await Promise.all([
+        const [w, c, u, p, t, l, r, bp] = await Promise.all([
           api.get<Wallet>("/api/v1/customer/wallets"),
           api.get<CreditCost[]>("/api/v1/gmb/credit-costs").catch(() => []),
           api.get<Usage>("/api/v1/customer/ai-usage").catch(() => null),
@@ -131,6 +140,7 @@ export default function GmbBillingPage() {
           api.get<TopupInfo>("/api/v1/customer/topup-info").catch(() => null),
           api.get<LedgerRow[]>("/api/v1/customer/wallet-transactions").catch(() => []),
           api.get<Receipt[]>("/api/v1/customer/invoices").catch(() => []),
+          api.get<BillingProfile>("/api/v1/customer/billing-profile").catch(() => null),
         ]);
         if (cancelled) return;
         setWallet(w);
@@ -140,6 +150,7 @@ export default function GmbBillingPage() {
         setTopup(t);
         setLedger(l);
         setReceipts(r ?? []);
+        setBillingProfile(bp);
       } catch (e) {
         if (!cancelled) setError(e instanceof ApiClientError ? e.message : "Could not load billing.");
       }
@@ -218,6 +229,21 @@ export default function GmbBillingPage() {
       );
     } finally {
       setBuying(false);
+    }
+  }
+
+  async function saveProfile() {
+    if (!billingProfile) return;
+    setSavingProfile(true);
+    setError(null);
+    try {
+      const saved = await api.put<BillingProfile>("/api/v1/customer/billing-profile", billingProfile);
+      setBillingProfile(saved);
+      setNotice("Billing details saved. They will be used on future invoices.");
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not save billing details.");
+    } finally {
+      setSavingProfile(false);
     }
   }
 
@@ -437,6 +463,63 @@ export default function GmbBillingPage() {
         )}
       </div>
 
+      {billingProfile && (
+        <Card className="mt-3.5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <SectionLabel>Invoice billing details</SectionLabel>
+              <p className="mt-1 text-xs2 text-gmb-ink-muted">
+                Saved details are captured on future tax invoices. Issued invoices stay unchanged.
+              </p>
+            </div>
+            <Button disabled={savingProfile} onClick={() => void saveProfile()}>
+              {savingProfile ? "Saving…" : "Save billing details"}
+            </Button>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="text-xs2 text-gmb-ink-muted">
+              Legal business name
+              <input
+                value={billingProfile.legalName ?? ""}
+                onChange={(e) => setBillingProfile((p) => p ? { ...p, legalName: e.target.value } : p)}
+                maxLength={200}
+                className="mt-1 w-full rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 text-gmb-ink outline-none focus:border-gmb-brand-border"
+              />
+            </label>
+            <label className="text-xs2 text-gmb-ink-muted">
+              GSTIN
+              <input
+                value={billingProfile.gstin ?? ""}
+                onChange={(e) => setBillingProfile((p) => p ? { ...p, gstin: e.target.value.toUpperCase() } : p)}
+                maxLength={15}
+                placeholder="22AAAAA0000A1Z5"
+                className="mt-1 w-full rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 font-geist-mono text-sm2 uppercase text-gmb-ink outline-none focus:border-gmb-brand-border"
+              />
+            </label>
+            <label className="text-xs2 text-gmb-ink-muted">
+              Billing address
+              <textarea
+                value={billingProfile.billingAddress ?? ""}
+                onChange={(e) => setBillingProfile((p) => p ? { ...p, billingAddress: e.target.value } : p)}
+                maxLength={1000}
+                rows={3}
+                className="mt-1 w-full resize-y rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 text-gmb-ink outline-none focus:border-gmb-brand-border"
+              />
+            </label>
+            <label className="text-xs2 text-gmb-ink-muted">
+              Place of supply
+              <input
+                value={billingProfile.placeOfSupply ?? ""}
+                onChange={(e) => setBillingProfile((p) => p ? { ...p, placeOfSupply: e.target.value } : p)}
+                maxLength={160}
+                placeholder="State / union territory"
+                className="mt-1 w-full rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 text-gmb-ink outline-none focus:border-gmb-brand-border"
+              />
+            </label>
+          </div>
+        </Card>
+      )}
+
       {/* Wallet ledger — the source of truth for the balance: every grant,
           spend, reservation and refund. */}
       <Card className="mt-3.5">
@@ -498,7 +581,7 @@ export default function GmbBillingPage() {
         )}
       </Card>
 
-      {/* Receipts — one per top-up payment, each with a printable detail. */}
+      {/* Tax invoices — one immutable snapshot per top-up payment. */}
       {receipts.length > 0 && (
         <Card className="mt-3.5">
           <SectionLabel>Receipts</SectionLabel>
@@ -506,7 +589,7 @@ export default function GmbBillingPage() {
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="border-b border-gmb-line">
-                  {["Receipt", "Date", "Amount", "Status", ""].map((h) => (
+                  {["Invoice", "Date", "Amount", "Status", ""].map((h) => (
                     <th
                       key={h}
                       className="py-2 pr-4 font-geist-mono text-micro font-medium uppercase tracking-[0.1em] text-gmb-ink-subtle"
@@ -531,13 +614,20 @@ export default function GmbBillingPage() {
                     <td className="py-2 pr-4">
                       <Pill tone={r.status === "PAID" ? "ok" : "neutral"}>{r.status}</Pill>
                     </td>
-                    <td className="py-2 text-right">
+                    <td className="flex justify-end gap-2 py-2 text-right">
                       <Link
                         href={`/gmb-billing/receipt/${r.id}`}
                         className="rounded-control border border-gmb-line px-2.5 py-1 text-xs2 font-medium text-gmb-ink-muted no-underline hover:bg-gmb-canvas hover:no-underline"
                       >
                         View
                       </Link>
+                      <button
+                        type="button"
+                        onClick={() => void downloadAuthed(`/api/v1/customer/invoices/${r.id}/pdf`, `${r.number}.pdf`).catch(() => setError("Could not download the invoice PDF."))}
+                        className="rounded-control border border-gmb-line px-2.5 py-1 text-xs2 font-medium text-gmb-ink-muted hover:bg-gmb-canvas"
+                      >
+                        PDF
+                      </button>
                     </td>
                   </tr>
                 ))}

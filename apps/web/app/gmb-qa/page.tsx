@@ -8,9 +8,8 @@ import { api, ApiClientError } from "../../src/lib/api";
 // Q&A — the public-questions queue.
 //
 // Same approval-first shape as Reviews: AI drafts, a human approves. Google's
-// Q&A write is gated behind a live connection, so an approved answer is stored
-// and marked ANSWERED locally; the UI says so rather than implying it went
-// live on the profile.
+// Google questions are explicitly synced. Approving an answer to a synced
+// question publishes through answers:upsert; manual questions remain local.
 
 type QuestionStatus = "NEW" | "ANSWERED" | "IGNORED";
 
@@ -24,6 +23,7 @@ interface Question {
   answerText: string | null;
   answeredAt: string | null;
   isFromGoogle: boolean;
+  publishedToGoogle: boolean;
   createdAt: string;
 }
 
@@ -91,6 +91,20 @@ export default function GmbQaPage() {
     }
   }
 
+  async function sync() {
+    if (!locationId) return;
+    setBusy((b) => ({ ...b, __sync: "sync" }));
+    setError(null);
+    try {
+      await api.post("/api/v1/gmb/questions/sync", { locationId });
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not sync Google questions.");
+    } finally {
+      setBusy((b) => ({ ...b, __sync: "" }));
+    }
+  }
+
   async function answer(id: string) {
     const text = (drafts[id] ?? "").trim();
     if (!text) return;
@@ -144,6 +158,12 @@ export default function GmbQaPage() {
   return (
     <GmbShell title="Q&A">
       {error && <ErrorNote>{error}</ErrorNote>}
+
+      <div className="mb-3 flex justify-end">
+        <Button disabled={!locationId || busy.__sync === "sync"} onClick={() => void sync()}>
+          {busy.__sync === "sync" ? "Syncing…" : "Sync from Google"}
+        </Button>
+      </div>
 
       <div className="mb-3.5 grid grid-cols-4 gap-3.5">
         <Card>
@@ -255,6 +275,7 @@ export default function GmbQaPage() {
                         {new Date(q.askedAt ?? q.createdAt).toLocaleDateString()}
                       </span>
                       {q.status === "ANSWERED" && <Pill tone="ok">Answered</Pill>}
+                      {q.publishedToGoogle && <Pill tone="ok">On Google</Pill>}
                       {q.status === "IGNORED" && <Pill>Ignored</Pill>}
                       {!q.isFromGoogle && <Pill>Logged manually</Pill>}
                     </div>
@@ -308,8 +329,9 @@ export default function GmbQaPage() {
                     />
                     <div className="mt-2 flex items-center justify-between gap-3">
                       <span className="font-geist-mono text-micro text-gmb-ink-subtle">
-                        {(drafts[q.id] ?? "").length}/1000 · saved here; posts to Google once
-                        your Business Profile connection is live
+                        {(drafts[q.id] ?? "").length}/1000 · {q.isFromGoogle
+                          ? "approval publishes this answer to Google"
+                          : "manual question — answer is stored locally"}
                       </span>
                       <div className="flex gap-1.5">
                         <Button
@@ -323,7 +345,7 @@ export default function GmbQaPage() {
                           disabled={Boolean(working) || !(drafts[q.id] ?? "").trim()}
                           onClick={() => void answer(q.id)}
                         >
-                          {working === "answer" ? "Saving…" : "Approve & answer"}
+                          {working === "answer" ? "Publishing…" : q.isFromGoogle ? "Approve & publish" : "Save answer"}
                         </Button>
                       </div>
                     </div>

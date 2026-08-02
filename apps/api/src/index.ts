@@ -38,6 +38,7 @@ import {
   stopPartnerInvoiceWorker,
 } from "./services/partnerInvoice.service";
 import { startWorkerHeartbeat, stopWorkerHeartbeat } from "./lib/workerHeartbeat";
+import { startGmbRankScheduleWorker, stopGmbRankScheduleWorker } from "./services/gmbRankScheduler.service";
 
 const app = express();
 const PORT = Number(process.env.API_PORT ?? 3001);
@@ -53,7 +54,21 @@ app.set("trust proxy", Number.isFinite(trustProxyHops) ? trustProxyHops : 0);
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.WEB_URL ?? "http://localhost:3000",
+    origin: async (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const configured = process.env.WEB_URL ?? "http://localhost:3000";
+      if (origin === configured) return callback(null, true);
+      try {
+        const host = new URL(origin).hostname.toLowerCase();
+        const verified = await prisma.whiteLabelConfig.findFirst({
+          where: { customDomain: host, domainVerified: true },
+          select: { id: true },
+        });
+        callback(null, Boolean(verified));
+      } catch {
+        callback(null, false);
+      }
+    },
     credentials: true,
   }),
 );
@@ -129,6 +144,7 @@ async function startWorkers(): Promise<void> {
     startGmbAutopilotWorker(),
     startGmbPostPublisherWorker(),
     startGmbReportScheduleWorker(),
+    startGmbRankScheduleWorker(),
     startPartnerInvoiceWorker(),
   ]);
   // Publish a cross-process liveness heartbeat so /admin/health reports true
@@ -146,6 +162,7 @@ async function stopWorkers(): Promise<void> {
     stopGmbAutopilotWorker(),
     stopGmbPostPublisherWorker(),
     stopGmbReportScheduleWorker(),
+    stopGmbRankScheduleWorker(),
     stopPartnerInvoiceWorker(),
     stopWorkerHeartbeat(),
   ]);

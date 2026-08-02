@@ -5,10 +5,8 @@
 // customer dashboard rendered with these settings, so a partner sees exactly
 // what changes before saving.
 //
-// Honesty notes: domain verification is a flag the platform operator sets once
-// DNS is actually pointed — the page reports "pending verification" instead of
-// pretending DNS checks happen here. The design's "buy a domain" registrar flow
-// is not wired (no registrar integration exists), so it is not shown.
+// DNS ownership is verified server-side by TXT or CNAME lookup. Domain purchase
+// remains outside the product; this page handles the part the app can prove.
 
 import { useCallback, useEffect, useState } from "react";
 import { PartnerShell, PtnCard, PtnLabel, PtnPill } from "../../../src/components/gmb/PartnerShell";
@@ -19,9 +17,14 @@ interface Branding {
   brandName: string | null;
   customDomain: string | null;
   domainVerified: boolean;
+  domainVerificationToken: string | null;
+  domainVerifiedAt: string | null;
+  cnameTarget: string;
   brandColorHex: string;
   logoUrl: string | null;
   hidePoweredBy: boolean;
+  senderName: string | null;
+  senderEmail: string | null;
 }
 
 const SWATCHES = ["#5a4af0", "#7dd8a0", "#e3b558", "#e58c7f", "#4a90d9"];
@@ -39,6 +42,8 @@ export default function PartnerBrandingPage() {
   const [color, setColor] = useState("#5a4af0");
   const [logoUrl, setLogoUrl] = useState("");
   const [hidePoweredBy, setHidePoweredBy] = useState(false);
+  const [senderName, setSenderName] = useState("");
+  const [senderEmail, setSenderEmail] = useState("");
   const [uploading, setUploading] = useState(false);
 
   async function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -75,6 +80,8 @@ export default function PartnerBrandingPage() {
       setColor(b.brandColorHex);
       setLogoUrl(b.logoUrl ?? "");
       setHidePoweredBy(b.hidePoweredBy);
+      setSenderName(b.senderName ?? "");
+      setSenderEmail(b.senderEmail ?? "");
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not load branding.");
     }
@@ -96,11 +103,28 @@ export default function PartnerBrandingPage() {
         brandColorHex: color,
         logoUrl: logoUrl.trim() || null,
         hidePoweredBy,
+        senderName: senderName.trim() || null,
+        senderEmail: senderEmail.trim() || null,
       });
       setSaved(b);
       setNotice("Branding saved.");
     } catch (e2) {
       setError(e2 instanceof ApiClientError ? e2.message : "Could not save branding.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyDomain() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const b = await api.post<Branding>("/api/v1/partner/branding/verify-domain", {});
+      setSaved(b);
+      setNotice("DNS verified. Your custom domain and branded sender are now eligible for use.");
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "DNS could not be verified yet.");
     } finally {
       setBusy(false);
     }
@@ -147,10 +171,39 @@ export default function PartnerBrandingPage() {
                   />
                   {saved.domainVerified
                     ? "DNS verified"
-                    : "Pending verification — point a CNAME to app.adgrowly.ca and Adgrowly confirms it."}
+                    : "Pending DNS verification"}
                 </span>
               )}
+              {saved?.customDomain && !saved.domainVerified && saved.domainVerificationToken && (
+                <div className="mt-2 rounded-control border border-ptn-line bg-ptn-panel p-2.5 text-[11px] text-ptn-muted">
+                  <div>Use either DNS record:</div>
+                  <div className="mt-1 break-all font-geist-mono">CNAME {saved.customDomain} → {saved.cnameTarget}</div>
+                  <div className="mt-1 break-all font-geist-mono">TXT _adgrowly.{saved.customDomain} → adgrowly-verification={saved.domainVerificationToken}</div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void verifyDomain()}
+                    className="mt-2 rounded-control border border-ptn-accent px-2.5 py-1 text-[11px] font-semibold text-ptn-accent disabled:opacity-50"
+                  >
+                    {busy ? "Checking…" : "Verify DNS now"}
+                  </button>
+                </div>
+              )}
             </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1">
+                <PtnLabel>Email sender name</PtnLabel>
+                <input value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="GrowLabs" className={inputCls} />
+              </label>
+              <label className="flex flex-col gap-1">
+                <PtnLabel>Email sender</PtnLabel>
+                <input type="email" value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} placeholder="hello@youragency.com" className={inputCls} />
+              </label>
+            </div>
+            <p className="-mt-2 text-[11px] text-ptn-subtle">
+              Transactional email uses this identity only after the brand domain is verified; your SMTP relay must also authorize it.
+            </p>
 
             <div className="flex flex-col gap-1.5">
               <PtnLabel>Brand colour</PtnLabel>

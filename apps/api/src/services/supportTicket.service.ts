@@ -1,5 +1,6 @@
 import { prisma, TicketStatus, TicketPriority, TicketAuthor } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
+import { sendEmail } from "./email.service";
 
 // Support tickets — a workspace raises a ticket, platform staff (SUPER_ADMIN)
 // answer it. Both sides read the same thread; the difference is scope. Customer
@@ -11,6 +12,7 @@ export interface SafeTicketMessage {
   author: TicketAuthor;
   body: string;
   createdAt: Date;
+  internal: boolean;
 }
 
 export interface SafeTicket {
@@ -20,6 +22,7 @@ export interface SafeTicket {
   subject: string;
   status: TicketStatus;
   priority: TicketPriority;
+  assignedToUserId: string | null;
   lastReplyAt: Date;
   lastReplyBy: TicketAuthor;
   createdAt: Date;
@@ -78,7 +81,11 @@ export async function listTickets(
     orderBy: { lastReplyAt: "desc" },
     take: LIST_LIMIT,
     include: {
-      _count: { select: { messages: true } },
+      _count: {
+        select: {
+          messages: filter.tenantId ? { where: { internal: false } } : true,
+        },
+      },
       ...(filter.tenantId ? {} : { tenant: { select: { name: true } } }),
     },
   });
@@ -100,7 +107,10 @@ export async function getTicket(
   const ticket = await prisma.supportTicket.findFirst({
     where: { id, ...(tenantId ? { tenantId } : {}) },
     include: {
-      messages: { orderBy: { createdAt: "asc" } },
+      messages: {
+        where: tenantId ? { internal: false } : undefined,
+        orderBy: { createdAt: "asc" },
+      },
       tenant: { select: { name: true } },
     },
   });
@@ -113,6 +123,7 @@ export async function getTicket(
       author: m.author,
       body: m.body,
       createdAt: m.createdAt,
+      internal: m.internal,
     })),
   };
 }
@@ -123,6 +134,7 @@ export interface ReplyInput {
   author: TicketAuthor;
   authorUserId?: string;
   body: string;
+  internal?: boolean;
 }
 
 /**
@@ -137,9 +149,25 @@ export async function replyToTicket(input: ReplyInput): Promise<SafeTicket> {
   // Ownership check within the reply's scope.
   const existing = await prisma.supportTicket.findFirst({
     where: { id: input.ticketId, ...(input.tenantId ? { tenantId: input.tenantId } : {}) },
-    select: { id: true, status: true },
+    select: { id: true, status: true, tenantId: true, createdByUserId: true, subject: true },
   });
   if (!existing) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Ticket not found.");
+  if (input.internal && input.author !== TicketAuthor.STAFF) {
+    throw new ApiError(ErrorCodes.FORBIDDEN, 403, "Only support staff can add internal notes.");
+  }
+
+  if (input.internal) {
+    await prisma.supportTicketMessage.create({
+      data: {
+        ticketId: input.ticketId,
+        author: TicketAuthor.STAFF,
+        authorUserId: input.authorUserId ?? null,
+        body,
+        internal: true,
+      },
+    });
+    return getTicket(input.ticketId, null);
+  }
 
   // A reply reopens the ticket and routes it to whoever must act next: a
   // customer reply needs staff (OPEN); a staff reply awaits the customer
@@ -154,6 +182,7 @@ export async function replyToTicket(input: ReplyInput): Promise<SafeTicket> {
         author: input.author,
         authorUserId: input.authorUserId ?? null,
         body,
+        internal: false,
       },
     }),
     prisma.supportTicket.update({
@@ -161,21 +190,46 @@ export async function replyToTicket(input: ReplyInput): Promise<SafeTicket> {
       data: { lastReplyAt: new Date(), lastReplyBy: input.author, status: nextStatus },
     }),
   ]);
+  if (input.author === TicketAuthor.STAFF) {
+    const recipient = existing.createdByUserId
+      ? await prisma.user.findUnique({ where: { id: existing.createdByUserId }, select: { email: true, isActive: true } })
+      : await prisma.user.findFirst({
+          where: { tenantId: existing.tenantId, isActive: true },
+          orderBy: { createdAt: "asc" },
+          select: { email: true, isActive: true },
+        });
+    if (recipient?.isActive) {
+      await sendEmail({
+        tenantId: existing.tenantId,
+        to: recipient.email,
+        subject: `Support replied: ${existing.subject}`,
+        text: `${body}\n\nSign in to your workspace to continue the conversation.`,
+      }).catch((err) => console.error("[support] reply email failed", err));
+    }
+  }
   return getTicket(input.ticketId, input.tenantId);
 }
 
 /** Admin-only: set status/priority. */
 export async function updateTicket(
   id: string,
-  patch: { status?: TicketStatus; priority?: TicketPriority },
+  patch: { status?: TicketStatus; priority?: TicketPriority; assignedToUserId?: string | null },
 ): Promise<SafeTicket> {
   const existing = await prisma.supportTicket.findUnique({ where: { id }, select: { id: true } });
   if (!existing) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Ticket not found.");
+  if (patch.assignedToUserId) {
+    const assignee = await prisma.user.findFirst({
+      where: { id: patch.assignedToUserId, role: "SUPER_ADMIN", isActive: true },
+      select: { id: true },
+    });
+    if (!assignee) throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Assignee is not an active support operator.");
+  }
   const ticket = await prisma.supportTicket.update({
     where: { id },
     data: {
       ...(patch.status ? { status: patch.status } : {}),
       ...(patch.priority ? { priority: patch.priority } : {}),
+      ...(patch.assignedToUserId !== undefined ? { assignedToUserId: patch.assignedToUserId } : {}),
     },
   });
   return toSafe(ticket);
@@ -187,6 +241,7 @@ function toSafe(t: {
   subject: string;
   status: TicketStatus;
   priority: TicketPriority;
+  assignedToUserId: string | null;
   lastReplyAt: Date;
   lastReplyBy: TicketAuthor;
   createdAt: Date;
@@ -197,6 +252,7 @@ function toSafe(t: {
     subject: t.subject,
     status: t.status,
     priority: t.priority,
+    assignedToUserId: t.assignedToUserId,
     lastReplyAt: t.lastReplyAt,
     lastReplyBy: t.lastReplyBy,
     createdAt: t.createdAt,

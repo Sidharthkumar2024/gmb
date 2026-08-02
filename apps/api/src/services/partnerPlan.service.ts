@@ -162,6 +162,24 @@ export async function updatePartnerPlan(
 }
 
 export async function deletePartnerPlan(partnerTenantId: string, id: string): Promise<void> {
-  await requireOwnedPlan(partnerTenantId, id);
+  const plan = await requireOwnedPlan(partnerTenantId, id);
+  if (plan.status !== PlanStatus.ARCHIVED) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Archive a resale plan before deleting it.");
+  }
   await prisma.partnerPlan.delete({ where: { id } });
+}
+
+export async function reorderPartnerPlans(partnerTenantId: string, orderedIds: string[]) {
+  const owned = await prisma.partnerPlan.findMany({
+    where: { partnerTenantId },
+    select: { id: true },
+  });
+  const actual = new Set(owned.map((plan) => plan.id));
+  if (orderedIds.length !== actual.size || orderedIds.some((id) => !actual.has(id))) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Reorder must include every resale plan exactly once.");
+  }
+  await prisma.$transaction(
+    orderedIds.map((id, index) => prisma.partnerPlan.update({ where: { id }, data: { sortOrder: (index + 1) * 10 } })),
+  );
+  return listPartnerPlans(partnerTenantId);
 }

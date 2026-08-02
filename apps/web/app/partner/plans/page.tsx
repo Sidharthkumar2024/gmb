@@ -35,7 +35,14 @@ function money(cents: number, currency: string): string {
   }
 }
 
-const blankForm = { id: "", name: "", basePlanId: "", retailDisplay: "", status: "ACTIVE" as const };
+interface PlanForm {
+  id: string;
+  name: string;
+  basePlanId: string;
+  retailDisplay: string;
+  status: "ACTIVE" | "ARCHIVED";
+}
+const blankForm: PlanForm = { id: "", name: "", basePlanId: "", retailDisplay: "", status: "ACTIVE" };
 
 export default function PartnerPlansPage() {
   const [plans, setPlans] = useState<PartnerPlan[] | null>(null);
@@ -105,7 +112,7 @@ export default function PartnerPlansPage() {
       name: p.name,
       basePlanId: p.basePlan.id,
       retailDisplay: (p.retailCents / 100).toString(),
-      status: p.status === "ARCHIVED" ? "ACTIVE" : p.status,
+      status: p.status,
     });
 
   const remove = async (id: string) => {
@@ -119,6 +126,38 @@ export default function PartnerPlansPage() {
       setError(e instanceof ApiClientError ? e.message : "Could not delete the plan.");
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const toggleArchive = async (plan: PartnerPlan) => {
+    setBusyId(plan.id);
+    setError(null);
+    try {
+      await api.patch(`/api/v1/partner/plans/${plan.id}`, {
+        name: plan.name,
+        basePlanId: plan.basePlan.id,
+        retailCents: plan.retailCents,
+        status: plan.status === "ACTIVE" ? "ARCHIVED" : "ACTIVE",
+        sortOrder: plan.sortOrder,
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not update plan status.");
+    } finally { setBusyId(null); }
+  };
+
+  const move = async (index: number, direction: -1 | 1) => {
+    if (!plans) return;
+    const target = index + direction;
+    if (target < 0 || target >= plans.length) return;
+    const ordered = [...plans];
+    [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+    setPlans(ordered);
+    try {
+      setPlans(await api.post<PartnerPlan[]>("/api/v1/partner/plans/reorder", { orderedIds: ordered.map((plan) => plan.id) }));
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not reorder plans.");
+      await load();
     }
   };
 
@@ -162,7 +201,7 @@ export default function PartnerPlansPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {plans.map((p) => (
+                  {plans.map((p, index) => (
                     <tr
                       key={p.id}
                       className="border-b border-ptn-line/60 last:border-0 hover:bg-ptn-panel-hover"
@@ -191,6 +230,8 @@ export default function PartnerPlansPage() {
                         <PtnPill tone={p.status === "ACTIVE" ? "ok" : "neutral"}>{p.status}</PtnPill>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right">
+                        <button type="button" aria-label="Move up" disabled={index === 0} onClick={() => void move(index, -1)} className="mr-1 rounded-control border border-ptn-line px-2 py-1 text-xs2 disabled:opacity-30">↑</button>
+                        <button type="button" aria-label="Move down" disabled={index === plans.length - 1} onClick={() => void move(index, 1)} className="mr-1.5 rounded-control border border-ptn-line px-2 py-1 text-xs2 disabled:opacity-30">↓</button>
                         <button
                           type="button"
                           onClick={() => edit(p)}
@@ -200,8 +241,16 @@ export default function PartnerPlansPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => remove(p.id)}
+                          onClick={() => void toggleArchive(p)}
                           disabled={busyId === p.id}
+                          className="mr-1.5 rounded-control border border-ptn-line px-2.5 py-1 text-xs2 font-medium text-ptn-muted hover:bg-ptn-panel-hover"
+                        >
+                          {p.status === "ACTIVE" ? "Archive" : "Restore"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => remove(p.id)}
+                          disabled={busyId === p.id || p.status !== "ARCHIVED"}
                           className="rounded-control border border-ptn-line px-2.5 py-1 text-xs2 font-medium text-ptn-danger hover:bg-gmb-danger/10 disabled:opacity-50"
                         >
                           {busyId === p.id ? "…" : "Delete"}

@@ -45,6 +45,9 @@ interface ReportSchedule {
   enabled: boolean;
   frequency: "WEEKLY" | "MONTHLY" | "CUSTOM";
   lastRunAt: string | null;
+  recipientEmails: string[];
+  lastDeliveredAt: string | null;
+  lastDeliveryError: string | null;
 }
 
 const PRIORITY_TONE: Record<string, "danger" | "warn" | "neutral"> = {
@@ -69,17 +72,25 @@ export default function GmbReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<ReportSchedule | null>(null);
   const [schedBusy, setSchedBusy] = useState(false);
+  const [recipientInput, setRecipientInput] = useState("");
 
   useEffect(() => {
     void api
       .get<ReportSchedule>("/api/v1/gmb/report-schedule")
-      .then(setSchedule)
+      .then((value) => {
+        setSchedule(value);
+        setRecipientInput((value.recipientEmails ?? []).join(", "));
+      })
       .catch(() => undefined);
   }, []);
 
   // Persist an enable/frequency change immediately — one toggle, one save, so
   // there is no separate "save schedule" button to forget.
-  async function saveSchedule(next: { enabled: boolean; frequency: "WEEKLY" | "MONTHLY" }) {
+  async function saveSchedule(next: {
+    enabled: boolean;
+    frequency: "WEEKLY" | "MONTHLY";
+    recipientEmails?: string[];
+  }) {
     setSchedBusy(true);
     setError(null);
     try {
@@ -88,6 +99,27 @@ export default function GmbReportsPage() {
       setError(e instanceof ApiClientError ? e.message : "Could not update the schedule.");
     } finally {
       setSchedBusy(false);
+    }
+  }
+
+  function recipients(): string[] {
+    return recipientInput.split(",").map((value) => value.trim()).filter(Boolean);
+  }
+
+  async function emailReport(id: string) {
+    const to = recipients();
+    if (to.length === 0) {
+      setError("Add at least one report recipient first.");
+      return;
+    }
+    setBusy(`email-${id}`);
+    setError(null);
+    try {
+      await api.post(`/api/v1/gmb/reports/${id}/email`, { recipients: to });
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not email the report.");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -278,6 +310,36 @@ export default function GmbReportsPage() {
             </span>
           </div>
         )}
+        {schedule && (
+          <div className="mt-3 border-t border-gmb-line pt-3">
+            <label className="block font-geist-mono text-micro uppercase tracking-wide text-gmb-ink-subtle">
+              Email recipients (comma-separated)
+              <div className="mt-1.5 flex gap-2">
+                <input
+                  type="text"
+                  value={recipientInput}
+                  onChange={(e) => setRecipientInput(e.target.value)}
+                  placeholder="owner@example.com, manager@example.com"
+                  className="min-w-0 flex-1 rounded-control border border-gmb-line bg-gmb-surface px-3 py-2 text-sm2 normal-case tracking-normal text-gmb-ink outline-none"
+                />
+                <Button
+                  variant="ghost"
+                  disabled={schedBusy}
+                  onClick={() => void saveSchedule({
+                    enabled: schedule.enabled,
+                    frequency: schedule.frequency === "WEEKLY" ? "WEEKLY" : "MONTHLY",
+                    recipientEmails: recipients(),
+                  })}
+                >
+                  {schedBusy ? "Saving…" : "Save recipients"}
+                </Button>
+              </div>
+            </label>
+            {schedule.lastDeliveryError && (
+              <div className="mt-1.5 text-xs2 text-gmb-danger">Last delivery: {schedule.lastDeliveryError}</div>
+            )}
+          </div>
+        )}
       </Card>
 
       {reports === null ? (
@@ -334,6 +396,13 @@ export default function GmbReportsPage() {
                     )}
                   </div>
                   <div className="flex gap-1.5">
+                    <Button
+                      variant="ghost"
+                      disabled={busy === `email-${open.id}`}
+                      onClick={() => void emailReport(open.id)}
+                    >
+                      {busy === `email-${open.id}` ? "Sending…" : "Email PDF"}
+                    </Button>
                     <Button
                       variant="ghost"
                       disabled={busy === `pdf-${open.id}`}

@@ -1,20 +1,5 @@
 import { prisma, PaymentStatus, type PaymentProvider } from "@nexaflow/db";
-
-// Invoices are derived one-per-captured-Payment rather than stored: a Payment is
-// already the immutable record of money received, so an invoice is just a
-// formatted view of it plus the seller (platform) and buyer (workspace) details.
-// The invoice NUMBER is derived deterministically from the payment's immutable
-// fields, so the same payment always yields the same number without a sequence
-// table. If accounting-grade sequential numbering is ever needed, promote this
-// to a stored Invoice model — the DTO shape below stays the same.
-
-// Platform / seller identity shown on every invoice. Static for now; if these
-// ever need to be operator-editable, back them with a PLATFORM vault entry.
-const SELLER = {
-  name: "Adgrowly",
-  product: "GMB Suite",
-  supportEmail: "billing@adgrowly.local",
-};
+import { ApiError, ErrorCodes } from "@nexaflow/shared";
 
 export interface InvoiceLine {
   description: string;
@@ -24,106 +9,239 @@ export interface InvoiceLine {
 }
 
 export interface Invoice {
-  id: string; // == payment id, so /admin/invoices/:id is stable
+  id: string;
   number: string;
   status: "PAID" | "REFUNDED";
   issuedAt: Date;
   currency: string;
-  seller: typeof SELLER;
-  buyer: { tenantId: string; name: string };
+  seller: { name: string; product: string; supportEmail: string; address: string | null; gstin: string | null };
+  buyer: { tenantId: string; name: string; address: string | null; gstin: string | null; placeOfSupply: string | null };
   payment: { provider: PaymentProvider; providerPaymentId: string };
   lines: InvoiceLine[];
   subtotalMinor: number;
-  taxMinor: number; // 0 — no tax model configured; shown honestly, not hidden
+  taxMinor: number;
+  taxRateBps: number;
   totalMinor: number;
 }
 
-/**
- * Stable, human-readable invoice number derived from the payment: the issue
- * month plus a short suffix of the payment id. Deterministic — a redelivered
- * webhook that upserts the same Payment keeps the same invoice number.
- */
-function invoiceNumber(id: string, issuedAt: Date): string {
-  const y = issuedAt.getUTCFullYear();
-  const m = String(issuedAt.getUTCMonth() + 1).padStart(2, "0");
-  const suffix = id.replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase();
-  return `INV-${y}${m}-${suffix}`;
+function financialYear(date: Date): string {
+  const year = date.getUTCFullYear();
+  const start = date.getUTCMonth() >= 3 ? year : year - 1;
+  return `${start}-${String(start + 1).slice(-2)}`;
 }
 
-function toInvoice(p: {
-  id: string;
-  tenantId: string;
-  provider: PaymentProvider;
-  providerPaymentId: string;
-  credits: number;
-  amountMinor: number;
-  currency: string;
-  status: PaymentStatus;
-  createdAt: Date;
-  tenant: { name: string };
-}): Invoice {
-  const unit = p.credits > 0 ? Math.round(p.amountMinor / p.credits) : p.amountMinor;
+function seller() {
   return {
-    id: p.id,
-    number: invoiceNumber(p.id, p.createdAt),
-    status: p.status === PaymentStatus.REFUNDED ? "REFUNDED" : "PAID",
-    issuedAt: p.createdAt,
-    currency: p.currency,
-    seller: SELLER,
-    buyer: { tenantId: p.tenantId, name: p.tenant.name },
-    payment: { provider: p.provider, providerPaymentId: p.providerPaymentId },
-    lines: [
-      {
-        description: `${p.credits.toLocaleString()} ${SELLER.product} credits`,
-        quantity: p.credits,
-        unitAmountMinor: unit,
-        amountMinor: p.amountMinor,
-      },
-    ],
-    subtotalMinor: p.amountMinor,
-    taxMinor: 0,
-    totalMinor: p.amountMinor,
+    name: process.env.INVOICE_SELLER_NAME ?? "Adgrowly",
+    product: process.env.INVOICE_PRODUCT_NAME ?? "GMB Suite",
+    supportEmail: process.env.INVOICE_SELLER_EMAIL ?? "billing@adgrowly.ca",
+    address: process.env.INVOICE_SELLER_ADDRESS?.trim() || null,
+    gstin: process.env.INVOICE_SELLER_GSTIN?.trim().toUpperCase() || null,
   };
 }
 
-/** Admin: one invoice per payment, newest first. */
+function taxRateBps(): number {
+  if (!process.env.INVOICE_SELLER_GSTIN) return 0;
+  const value = Number(process.env.INVOICE_GST_RATE_BPS ?? 1800);
+  return Number.isInteger(value) && value >= 0 && value <= 10_000 ? value : 0;
+}
+
+/** Create the immutable accounting snapshot exactly once for a Payment. */
+export async function ensureTaxInvoice(paymentId: string) {
+  const existing = await prisma.taxInvoice.findUnique({ where: { paymentId } });
+  if (existing) return existing;
+  const payment = await prisma.payment.findUnique({
+    where: { id: paymentId },
+    include: { tenant: { select: { name: true } } },
+  });
+  if (!payment) return null;
+  const profile = await prisma.billingProfile.findUnique({ where: { tenantId: payment.tenantId } });
+  const rate = taxRateBps();
+  // Gateway amount is treated as tax-inclusive: enabling GST changes the
+  // breakdown, never silently charges the customer more than they paid.
+  const subtotalMinor = rate > 0
+    ? Math.round((payment.amountMinor * 10_000) / (10_000 + rate))
+    : payment.amountMinor;
+  const taxMinor = payment.amountMinor - subtotalMinor;
+  const seq = await prisma.$queryRaw<Array<{ nextval: bigint }>>`SELECT nextval('"TaxInvoice_number_seq"')`;
+  const number = `INV-${financialYear(payment.createdAt)}-${String(seq[0]?.nextval ?? 0).padStart(6, "0")}`;
+  const issuer = seller();
+  try {
+    return await prisma.taxInvoice.create({
+      data: {
+        paymentId: payment.id,
+        tenantId: payment.tenantId,
+        number,
+        subtotalMinor,
+        taxMinor,
+        totalMinor: payment.amountMinor,
+        taxRateBps: rate,
+        currency: payment.currency,
+        sellerName: issuer.name,
+        sellerAddress: issuer.address,
+        sellerGstin: issuer.gstin,
+        sellerEmail: issuer.supportEmail,
+        buyerName: profile?.legalName?.trim() || payment.tenant.name,
+        buyerAddress: profile?.billingAddress ?? null,
+        buyerGstin: profile?.gstin?.toUpperCase() ?? null,
+        placeOfSupply: profile?.placeOfSupply ?? null,
+        issuedAt: payment.createdAt,
+      },
+    });
+  } catch (error) {
+    // Concurrent webhook/list backfill: the payment unique wins; return it.
+    const raced = await prisma.taxInvoice.findUnique({ where: { paymentId } });
+    if (raced) return raced;
+    throw error;
+  }
+}
+
+type PaymentWithTenant = Awaited<ReturnType<typeof paymentById>>;
+async function paymentById(id: string) {
+  return prisma.payment.findUnique({
+    where: { id },
+    include: { tenant: { select: { name: true } }, taxInvoice: true },
+  });
+}
+
+async function toInvoice(payment: NonNullable<PaymentWithTenant>): Promise<Invoice> {
+  const tax = payment.taxInvoice ?? await ensureTaxInvoice(payment.id);
+  if (!tax) throw new Error("Invoice payment disappeared during rendering.");
+  const unit = payment.credits > 0 ? Math.round(tax.subtotalMinor / payment.credits) : tax.subtotalMinor;
+  return {
+    id: payment.id,
+    number: tax.number,
+    status: payment.status === PaymentStatus.REFUNDED ? "REFUNDED" : "PAID",
+    issuedAt: tax.issuedAt,
+    currency: tax.currency,
+    seller: {
+      name: tax.sellerName,
+      product: process.env.INVOICE_PRODUCT_NAME ?? "GMB Suite",
+      supportEmail: tax.sellerEmail ?? "billing@adgrowly.ca",
+      address: tax.sellerAddress,
+      gstin: tax.sellerGstin,
+    },
+    buyer: {
+      tenantId: payment.tenantId,
+      name: tax.buyerName,
+      address: tax.buyerAddress,
+      gstin: tax.buyerGstin,
+      placeOfSupply: tax.placeOfSupply,
+    },
+    payment: { provider: payment.provider, providerPaymentId: payment.providerPaymentId },
+    lines: [{
+      description: `${payment.credits.toLocaleString()} ${process.env.INVOICE_PRODUCT_NAME ?? "GMB Suite"} credits`,
+      quantity: payment.credits,
+      unitAmountMinor: unit,
+      amountMinor: tax.subtotalMinor,
+    }],
+    subtotalMinor: tax.subtotalMinor,
+    taxMinor: tax.taxMinor,
+    taxRateBps: tax.taxRateBps,
+    totalMinor: tax.totalMinor,
+  };
+}
+
 export async function listInvoices(limit = 200): Promise<Invoice[]> {
   const rows = await prisma.payment.findMany({
     orderBy: { createdAt: "desc" },
     take: limit,
-    include: { tenant: { select: { name: true } } },
+    include: { tenant: { select: { name: true } }, taxInvoice: true },
   });
-  return rows.map(toInvoice);
+  return Promise.all(rows.map(toInvoice));
 }
 
-/** Admin: a single invoice by its id (the payment id). Null if not found. */
+export async function paginateInvoices(input: {
+  page: number;
+  pageSize: number;
+  status?: PaymentStatus;
+  search?: string;
+}) {
+  const where = {
+    ...(input.status ? { status: input.status } : {}),
+    ...(input.search
+      ? { OR: [
+          { providerPaymentId: { contains: input.search, mode: "insensitive" as const } },
+          { tenant: { name: { contains: input.search, mode: "insensitive" as const } } },
+        ] }
+      : {}),
+  };
+  const [rows, total] = await Promise.all([
+    prisma.payment.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (input.page - 1) * input.pageSize,
+      take: input.pageSize,
+      include: { tenant: { select: { name: true } }, taxInvoice: true },
+    }),
+    prisma.payment.count({ where }),
+  ]);
+  return {
+    items: await Promise.all(rows.map(toInvoice)),
+    pagination: { page: input.page, pageSize: input.pageSize, total, pages: Math.max(1, Math.ceil(total / input.pageSize)) },
+  };
+}
+
 export async function getInvoice(id: string): Promise<Invoice | null> {
-  const p = await prisma.payment.findUnique({
-    where: { id },
-    include: { tenant: { select: { name: true } } },
-  });
-  return p ? toInvoice(p) : null;
+  const payment = await paymentById(id);
+  return payment ? toInvoice(payment) : null;
 }
 
-/** Customer: this workspace's own receipts (one per payment), newest first. */
 export async function listCustomerInvoices(tenantId: string, limit = 200): Promise<Invoice[]> {
   const rows = await prisma.payment.findMany({
     where: { tenantId },
     orderBy: { createdAt: "desc" },
     take: limit,
-    include: { tenant: { select: { name: true } } },
+    include: { tenant: { select: { name: true } }, taxInvoice: true },
   });
-  return rows.map(toInvoice);
+  return Promise.all(rows.map(toInvoice));
 }
 
-/**
- * Customer: one of this workspace's own receipts. Scoped to the tenant, so a
- * customer can never read another workspace's receipt. Null if not found/theirs.
- */
 export async function getCustomerInvoice(tenantId: string, id: string): Promise<Invoice | null> {
-  const p = await prisma.payment.findFirst({
+  const payment = await prisma.payment.findFirst({
     where: { id, tenantId },
-    include: { tenant: { select: { name: true } } },
+    include: { tenant: { select: { name: true } }, taxInvoice: true },
   });
-  return p ? toInvoice(p) : null;
+  return payment ? toInvoice(payment) : null;
+}
+
+export async function getBillingProfile(tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+  const row = await prisma.billingProfile.findUnique({ where: { tenantId } });
+  return {
+    legalName: row?.legalName ?? tenant?.name ?? null,
+    billingAddress: row?.billingAddress ?? null,
+    gstin: row?.gstin ?? null,
+    placeOfSupply: row?.placeOfSupply ?? null,
+  };
+}
+
+export async function saveBillingProfile(tenantId: string, input: {
+  legalName?: string | null;
+  billingAddress?: string | null;
+  gstin?: string | null;
+  placeOfSupply?: string | null;
+}) {
+  const clean = (value: string | null | undefined) => value?.trim() || null;
+  const gstin = clean(input.gstin)?.toUpperCase() ?? null;
+  if (gstin && !/^[0-9]{2}[A-Z0-9]{13}$/.test(gstin)) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Enter a valid 15-character GSTIN.");
+  }
+  const row = await prisma.billingProfile.upsert({
+    where: { tenantId },
+    create: {
+      tenantId,
+      legalName: clean(input.legalName),
+      billingAddress: clean(input.billingAddress),
+      gstin,
+      placeOfSupply: clean(input.placeOfSupply),
+    },
+    update: {
+      legalName: clean(input.legalName),
+      billingAddress: clean(input.billingAddress),
+      gstin,
+      placeOfSupply: clean(input.placeOfSupply),
+    },
+  });
+  return row;
 }
