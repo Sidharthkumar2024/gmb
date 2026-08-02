@@ -43,7 +43,7 @@ export default function AdminProvidersPage() {
         <AdmLabel>Scope</AdmLabel>
         <span className="text-xs2 text-adm-muted">
           Platform-wide integration status. Secrets never leave the server — this shows only whether
-          each is configured. Manage keys on each integration's own screen.
+          each is configured. Manage keys on each integration’s own screen.
         </span>
       </div>
 

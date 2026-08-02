@@ -166,7 +166,7 @@ export default function GmbConnectPage() {
               <>
                 <p className="mt-3 text-sm2 leading-relaxed text-gmb-ink-muted">
                   Link your Google Business Profile so GMB Suite can import your locations, sync
-                  reviews and insights, and publish updates you approve. You'll sign in with Google
+                  reviews and insights, and publish updates you approve. You’ll sign in with Google
                   and grant access — you can revoke it any time from your Google account.
                 </p>
                 <div className="mt-4">
@@ -177,8 +177,8 @@ export default function GmbConnectPage() {
               </>
             ) : (
               <p className="mt-3 text-sm2 leading-relaxed text-gmb-ink-muted">
-                Google sign-in isn't available on this workspace yet — the platform's Google
-                connection hasn't been configured. Contact your administrator, or add locations
+                Google sign-in isn’t available on this workspace yet — the platform’s Google
+                connection hasn’t been configured. Contact your administrator, or add locations
                 manually from{" "}
                 <Link href="/gmb-locations" className="font-semibold text-gmb-brand">
                   Locations

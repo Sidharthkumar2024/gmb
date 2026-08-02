@@ -47,6 +47,9 @@ jobs:
       - name: Typecheck web
         run: npx tsc --noEmit -p apps/web/tsconfig.json
 
+      - name: Lint web
+        run: npm --prefix apps/web run lint
+
       - name: Tests
         run: npx vitest run
 

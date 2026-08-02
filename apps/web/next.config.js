@@ -4,7 +4,7 @@ const path = require("path");
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  // Lint runs in a separate `npm run lint` step (turbo's lint task). The
+  // Lint runs in a separate `npm run lint` CI step. The
   // production build shouldn't gate on it — externally-edited pages have
   // been failing the build for missing-rule-definition errors unrelated
   // to whatever's actually changing. Keep `next lint` available; just

@@ -15,8 +15,7 @@ type RoleName =
 export function useAuth(opts: { required?: boolean; roles?: RoleName[] } = {}) {
   const router = useRouter();
   const required = opts.required;
-  const roles = opts.roles;
-  const rolesKey = roles?.join(",");
+  const rolesKey = opts.roles?.join(",");
   const [user, setUser] = useState<AuthUserPublic | null>(null);
   const [features, setFeatures] = useState<Record<string, boolean> | null>(null);
   const [products, setProducts] = useState<Record<string, boolean> | null>(null);
@@ -24,6 +23,8 @@ export function useAuth(opts: { required?: boolean; roles?: RoleName[] } = {}) {
 
   useEffect(() => {
     let cancelled = false;
+    // Depend on a stable primitive instead of the caller's array identity.
+    const allowedRoles = rolesKey?.split(",") as RoleName[] | undefined;
     const access = tokenStore.getAccess();
     if (!access) {
       setLoading(false);
@@ -39,7 +40,7 @@ export function useAuth(opts: { required?: boolean; roles?: RoleName[] } = {}) {
         if (required) router.replace("/login");
         return;
       }
-      if (roles && !roles.includes(me.user.role as RoleName)) {
+      if (allowedRoles && !allowedRoles.includes(me.user.role as RoleName)) {
         setLoading(false);
         router.replace(roleHome(me.user.role));
         return;
