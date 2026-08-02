@@ -189,7 +189,7 @@ export default function GmbBillingPage() {
     try {
       const order = await api.post<TopUpOrder>("/api/v1/billing/top-up", { credits });
       if (order.provider === "stripe" && order.stripe) {
-        window.location.href = order.stripe.checkoutUrl; // redirect to Stripe Checkout
+        window.location.assign(order.stripe.checkoutUrl); // redirect to Stripe Checkout
         return;
       }
       if (order.provider === "razorpay" && order.razorpay) {

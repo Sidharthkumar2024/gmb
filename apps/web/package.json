@@ -1,13 +1,13 @@
 {
   "name": "@gmb/web",
   "version": "0.1.0",
-  "description": "Adgrowly GMB - Next.js 14 Web Application (All Portals)",
+  "description": "Adgrowly GMB - Next.js 16 Web Application (All Portals)",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
@@ -20,20 +20,18 @@
     "@radix-ui/react-dropdown-menu": "^2.0.5",
     "@radix-ui/react-popover": "^1.0.6",
     "@types/node": "^20.5.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
     "@xyflow/react": "^12.10.2",
     "autoprefixer": "^10.4.0",
     "axios": "^1.4.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "date-fns": "^2.30.0",
-    "lucide-react": "^0.263.0",
-    "next": "^14.0.0",
+    "lucide-react": "^1.28.0",
+    "next": "^16.2.12",
     "postcss": "^8.4.0",
     "qrcode": "^1.5.4",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-hook-form": "^7.48.0",
     "socket.io-client": "^4.7.0",
     "styled-jsx": "^5.1.1",
@@ -46,7 +44,9 @@
   "devDependencies": {
     "@playwright/test": "^1.44.0",
     "@types/qrcode": "^1.5.6",
-    "eslint": "^8.50.0",
-    "eslint-config-next": "^14.0.0"
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "eslint": "^9",
+    "eslint-config-next": "^16.2.12"
   }
 }
