@@ -370,26 +370,37 @@ router.patch("/users/:id", async (req: RequestWithAuth, res: Response, next: Nex
 
 router.get("/audit", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
-    const rows = await prisma.auditLog.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 200,
-      include: {
-        user: { select: { email: true } },
-        tenant: { select: { name: true } },
-      },
-    });
+    const pageSize = 50;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const [rows, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          user: { select: { email: true } },
+          tenant: { select: { name: true } },
+        },
+      }),
+      prisma.auditLog.count(),
+    ]);
     res.json({
       success: true,
-      data: rows.map((a) => ({
-        id: a.id,
-        action: a.action,
-        resource: a.resource,
-        resourceId: a.resourceId,
-        userEmail: a.user.email,
-        tenantName: a.tenant.name,
-        ipAddress: a.ipAddress,
-        createdAt: a.createdAt,
-      })),
+      data: {
+        total,
+        page,
+        pageSize,
+        items: rows.map((a) => ({
+          id: a.id,
+          action: a.action,
+          resource: a.resource,
+          resourceId: a.resourceId,
+          userEmail: a.user.email,
+          tenantName: a.tenant.name,
+          ipAddress: a.ipAddress,
+          createdAt: a.createdAt,
+        })),
+      },
     });
   } catch (err) {
     next(err);

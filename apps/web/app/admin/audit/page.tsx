@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AdminShell, AdmCard, AdmLabel, AdmPill } from "../../../src/components/gmb/AdminShell";
 import { api, ApiClientError } from "../../../src/lib/api";
 
@@ -29,16 +29,30 @@ function actionTone(action: string): "ok" | "warn" | "danger" | "neutral" {
 export default function AdminAuditPage() {
   const [rows, setRows] = useState<AuditRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 50;
+
+  const load = useCallback(async (p: number) => {
+    setError(null);
+    try {
+      const res = await api.get<{ items: AuditRow[]; total: number }>(`/api/v1/admin/audit?page=${p}`);
+      setRows(res?.items ?? []);
+      setTotal(res?.total ?? 0);
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Could not load the audit log.");
+      setRows([]);
+    }
+  }, []);
 
   useEffect(() => {
-    void api
-      .get<AuditRow[]>("/api/v1/admin/audit")
-      .then((r) => setRows(r ?? []))
-      .catch((e) => {
-        setError(e instanceof ApiClientError ? e.message : "Could not load the audit log.");
-        setRows([]);
-      });
-  }, []);
+    void load(1);
+  }, [load]);
+
+  function goTo(p: number) {
+    setPage(p);
+    void load(p);
+  }
 
   return (
     <AdminShell title="Audit log">
@@ -104,6 +118,32 @@ export default function AdminAuditPage() {
             </tbody>
           </table>
         </AdmCard>
+      )}
+
+      {total > pageSize && (
+        <div className="mt-3 flex items-center justify-between text-sm2 text-adm-muted">
+          <span>
+            {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total.toLocaleString()}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => goTo(page - 1)}
+              className="rounded-control border border-adm-line px-3 py-1.5 text-xs2 font-medium text-adm-muted hover:bg-adm-panel-hover disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={page * pageSize >= total}
+              onClick={() => goTo(page + 1)}
+              className="rounded-control border border-adm-line px-3 py-1.5 text-xs2 font-medium text-adm-muted hover:bg-adm-panel-hover disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       )}
     </AdminShell>
   );
