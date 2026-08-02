@@ -16,7 +16,7 @@ datasource db {
 // Platform core for the standalone GMB app.
 //
 // These are NOT copies of the monorepo's models. The originals carry relations
-// into WhatsApp/campaign/commerce models that do not exist here (Tenant alone
+// into campaign/commerce models that do not exist here (Tenant alone
 // had 226 lines and 14 relations). Each model below was rebuilt from exactly
 // what the extracted GMB code reads — verified by inventorying every
 // `prisma.<model>` access and field read in apps/api.

@@ -168,7 +168,6 @@ import {
 import {
   deleteReport,
   generateReport,
-  buildReportWhatsAppText,
   getReport,
   listReports,
   resolveReportIssuer,
@@ -1946,20 +1945,6 @@ router.get("/reports/:id/pdf", async (req: RequestWithAuth, res: Response, next:
   }
 });
 
-const shareReportSchema = z.object({
-  to: z.string().trim().regex(/^\+?[1-9]\d{6,14}$/, "Enter a valid WhatsApp number (E.164)."),
-});
-
-// Share a report summary over WhatsApp (planning PDF §6 hook: "WhatsApp
-// report sharing"). Full compliant send path: afford + throttle gates,
-// recorded + debited like any outbound message.
-// The monorepo had two WhatsApp cross-sell endpoints here:
-//   POST /reports/:id/share-whatsapp  and  POST /review-request
-// Both are removed in the standalone app — they were the only place GMB
-// touched the WhatsApp product, and reimplementing them would mean pulling in
-// a BSP integration, send throttling and message billing. Re-add them against
-// email/SMS, or as calls back to the WhatsApp product API, if the cross-sell
-// is wanted.
 router.delete("/reports/:id", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     await deleteReport(req.tenantId!, req.params.id);

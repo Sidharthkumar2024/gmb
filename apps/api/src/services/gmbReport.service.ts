@@ -140,49 +140,6 @@ export function snapshotFromReportData(data: unknown): ReportSnapshot | null {
 }
 
 /**
- * Compact WhatsApp-ready text for a report (planning PDF §6: "WhatsApp report
- * sharing" hook). Plain text — title, period, the narrative summary, the
- * vs-last-period line when present, and up to 3 action items. Pure.
- */
-export function buildReportWhatsAppText(
-  report: {
-    type: string;
-    periodStart: Date | string;
-    periodEnd: Date | string;
-    summary: string | null;
-    data?: unknown;
-    actionPlan?: unknown;
-  },
-  issuerName = "NexaFlow AI",
-): string {
-  const day = (d: Date | string) => new Date(d).toISOString().slice(0, 10);
-  const lines = [
-    `📊 ${issuerName} — Google Business report (${report.type})`,
-    `Period: ${day(report.periodStart)} → ${day(report.periodEnd)}`,
-  ];
-  if (report.summary) lines.push("", report.summary);
-  const data = report.data as Record<string, unknown> | null | undefined;
-  const trend = data && typeof data === "object" ? (data.trend as ReportTrend | undefined) : undefined;
-  if (trend && typeof trend === "object") {
-    const s = (n: number) => (n > 0 ? `+${n}` : `${n}`);
-    lines.push(
-      "",
-      `Vs last period (${trend.momentum}): ${s(trend.reviewsCount)} reviews · ${s(trend.totalViews)} views · ${s(trend.totalActions)} actions`,
-    );
-  }
-  const plan = Array.isArray(report.actionPlan)
-    ? (report.actionPlan as Array<{ priority?: string; task?: string }>)
-    : [];
-  if (plan.length > 0) {
-    lines.push("", "Next actions:");
-    for (const item of plan.slice(0, 3)) {
-      lines.push(`• ${item.task ?? ""}`);
-    }
-  }
-  return lines.join("\n").slice(0, 3500);
-}
-
-/**
  * White-label issuer for a tenant's reports (planning PDF §4 "Report Templates:
  * white-label branding"). When the tenant sits under a reseller/agency, the
  * report carries that partner's brand; otherwise the platform default.

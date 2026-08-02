@@ -1,17 +1,16 @@
 # gmb
 
-The Google Business Profile (Local SEO) subsystem, extracted from the NexaFlow AI
-monorepo (`Sidharthkumar2024/whatsapp-api`).
+The standalone Adgrowly Google Business Profile (Local SEO) platform.
 
 ## Status
 
-**The API runs standalone.** It boots, authenticates, serves the full GMB surface
-against its own Postgres, and passes the extracted test suite unmodified
-(30 files, 285 tests).
+**The API and web app run standalone.** The platform includes the business,
+partner, and admin portals; Postgres migrations; background workers; billing and
+wallet flows; Docker packaging; and CI. The current suite passes 576 tests across
+63 files, and the Next.js production build generates 61 routes.
 
-Not yet built: the **web frontend** (the 12 page directories are present but have
-no Next.js app around them) and **production concerns** — migrations (uses
-`db push`), CI, Docker, and a credit ledger (see the billing caveat below).
+Production activation still requires real environment secrets and provider
+credentials. Follow `GO-LIVE.md` for deployment and operational checks.
 
 ## Quick start
 
@@ -74,10 +73,11 @@ descriptions, images, and the advisor.
   `gmb-` prefix. Including it here would have been misleading.
 - Platform infrastructure GMB *uses* but does not own (see below).
 
-## What is missing, and why it won't run
+## What the original extraction was missing
 
-Every import below resolves inside the monorepo and does not exist here. This list
-is derived from the extracted source, not from memory:
+Every dependency below originally resolved only inside the monorepo. The
+standalone app now supplies these contracts; the list is retained as extraction
+history:
 
 **Packages** — `@nexaflow/db` (40 imports, incl. the Prisma client and the `Tenant`
 model), `@nexaflow/shared` (22).
@@ -86,9 +86,9 @@ model), `@nexaflow/shared` (22).
 `billing.service` (3), `tokenCrypto` (2), `secretVault.service` (2),
 `aiPromptTemplate.service` (2), and one each of `ssrfGuard`,
 `publicObjectStorage`, `googleOAuthConfig.service`, `googleApiMonitor.service`,
-`productAccess.service`, `sendThrottle.service`, `rbac`, `whatsapp.service`.
+`productAccess.service` and `rbac`.
 
-**Also not included** — auth/JWT middleware, tenancy resolution, the audit log, the
+**Also originally absent** — auth/JWT middleware, tenancy resolution, the audit log, the
 4 background workers' registration (`GmbAutoSync`, `GmbAutopilot`,
 `GmbPostPublisher`, `GmbReportSchedule` are started from the monorepo's
 `index.ts`), env config, build tooling, and CI.
@@ -105,40 +105,26 @@ swap that relation for your own account/owner concept. Note that if GMB ever mov
 to its own database, the cascade delete becomes application-level cleanup; forget
 it and you orphan data silently rather than failing loudly.
 
-## Two WhatsApp couplings
+## Standalone application foundation
 
-`gmb.routes.ts` imports `sendWhatsAppText` for exactly two endpoints:
+The standalone implementation now includes:
 
-- `POST /reports/:id/share-whatsapp`
-- `POST /review-request`
-
-These are the deliberate GMB × WhatsApp cross-sell features and the only place the
-two products touch. Standalone, they need to be removed, re-pointed at email/SMS,
-or turned into calls back to the WhatsApp product's API. Deleting them has a
-product cost, not just a code one.
-
-## Turning this into a real application
-
-Roughly, in order:
-
-1. Provide `Tenant` (or your own owner model) and get the Prisma schema validating.
-2. Stand up auth, tenancy and RBAC.
-3. Replace or port the 15 platform services listed above — most are generic
-   (AI gateway, queue, crypto, storage, email), so porting is mechanical.
-4. Decide the fate of the two WhatsApp endpoints.
-5. Register the 4 background workers.
-6. Add env config, build and CI.
+1. A validating Prisma schema with tenant ownership and production migrations.
+2. Authentication, tenancy, RBAC, and audit logging.
+3. Focused platform services for AI, queues, crypto, storage, email, and billing.
+4. Registered background workers with health visibility.
+5. Environment configuration, build tooling, Docker, and CI.
 
 `docs/GMB_EXTRACTION_ANALYSIS.md` has the measured coupling data behind all of
 this, including per-portal state and the gotchas worth knowing before you start.
 
 ## Status of the portals
 
-- **User / business panel** — complete (12 pages, all wired).
-- **SuperAdmin** — partial; only scattered infrastructure config exists, no
-  consolidated cross-tenant GMB view.
-- **Partner / white-label** — does not exist. Partners can be *granted* the
-  `local_seo` product, but there is no partner-facing GMB UI.
+- **User / business panel** — complete and wired to the API.
+- **SuperAdmin** — operational screens for accounts, billing, plans, providers,
+  health, queues, storage, support, audit, and Google configuration.
+- **Partner / white-label** — operational overview, customer management, plans,
+  invoices, transactions, team, branding, support, gateway, and Google setup.
 
 ## Licence / provenance
 

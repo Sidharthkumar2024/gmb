@@ -144,8 +144,8 @@ export function buildGoogleReviewLink(placeId: string | null | undefined): strin
 }
 
 /**
- * WhatsApp-ready review request (planning PDF §6 hook: "review request
- * sharing"). Friendly, short, with the review link when one exists. Pure.
+ * Share-ready review request. Friendly, short, with the review link when one
+ * exists. Pure and channel-neutral.
  */
 export function buildReviewRequestText(input: {
   businessName: string;

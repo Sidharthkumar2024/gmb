@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GmbReportType } from "@nexaflow/db";
-import { buildActionPlan, buildReportNarrative, buildReportWhatsAppText, compareReportSnapshots, snapshotFromReportData, toSafeReport, type ReportSnapshot } from "./gmbReport.service";
+import { buildActionPlan, buildReportNarrative, compareReportSnapshots, snapshotFromReportData, toSafeReport, type ReportSnapshot } from "./gmbReport.service";
 
 const healthy: ReportSnapshot = {
   reviews: { count: 20, average: 4.6, unanswered: 0 },
@@ -109,51 +109,5 @@ describe("snapshotFromReportData", () => {
     const snap = snapshotFromReportData({ reviews: {}, insights: {}, ranking: {}, citations: {}, posts: {} });
     expect(snap?.reviews.count).toBe(0);
     expect(snap?.insights.totalViews).toBe(0);
-  });
-});
-
-describe("buildReportWhatsAppText", () => {
-  it("renders title, period, summary, trend and up to 3 action items", () => {
-    const text = buildReportWhatsAppText({
-      type: "MONTHLY",
-      periodStart: "2026-05-01T00:00:00Z",
-      periodEnd: "2026-05-31T00:00:00Z",
-      summary: "You collected 12 review(s) at an average of 4.5★.",
-      data: { trend: { momentum: "improving", reviewsCount: 3, averageRating: 0.2, totalViews: 120, totalActions: 15, top3: 1, consistentCitations: 0, postsCreated: 2 } },
-      actionPlan: [
-        { priority: "high", task: "Reply to 1 unanswered review(s)." },
-        { priority: "medium", task: "Add directory citations." },
-        { priority: "low", task: "Publish weekly posts." },
-        { priority: "low", task: "A fourth task that must be cut." },
-      ],
-    });
-    expect(text).toContain("NexaFlow AI — Google Business report (MONTHLY)");
-    expect(text).toContain("Period: 2026-05-01 → 2026-05-31");
-    expect(text).toContain("Vs last period (improving): +3 reviews · +120 views · +15 actions");
-    expect(text).toContain("• Reply to 1 unanswered review(s).");
-    expect(text).not.toContain("fourth task");
-  });
-
-  it("omits trend and actions when absent", () => {
-    const text = buildReportWhatsAppText({
-      type: "WEEKLY",
-      periodStart: "2026-06-01T00:00:00Z",
-      periodEnd: "2026-06-07T00:00:00Z",
-      summary: null,
-      data: {},
-      actionPlan: null,
-    });
-    expect(text).not.toContain("Vs last period");
-    expect(text).not.toContain("Next actions:");
-    expect(text).toContain("Google Business report (WEEKLY)");
-  });
-
-  it("uses the white-label issuer in the title when provided", () => {
-    const text = buildReportWhatsAppText(
-      { type: "MONTHLY", periodStart: "2026-05-01T00:00:00Z", periodEnd: "2026-05-31T00:00:00Z", summary: null, data: {}, actionPlan: null },
-      "Hexbytes Agency",
-    );
-    expect(text).toContain("Hexbytes Agency — Google Business report (MONTHLY)");
-    expect(text).not.toContain("NexaFlow AI");
   });
 });

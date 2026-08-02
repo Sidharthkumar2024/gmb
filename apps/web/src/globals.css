@@ -69,16 +69,6 @@
   background: transparent;
 }
 
-/* WhatsApp-style chat wallpaper: a faint dot texture over the base colour
-   (base colour is set by Tailwind bg-* so light/dark both work). */
-.wa-wallpaper {
-  background-image: radial-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1px);
-  background-size: 22px 22px;
-}
-:root.dark .wa-wallpaper {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-}
-
 /* ============================================================================
    Adgrowly editorial typography.
    Fonts are loaded via <link> in app/layout.tsx (Newsreader / Geist / Geist Mono).

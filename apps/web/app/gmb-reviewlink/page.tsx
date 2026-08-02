@@ -133,7 +133,7 @@ export default function GmbReviewLinkPage() {
             <Card>
               <SectionLabel>Ready-to-send request</SectionLabel>
               <p className="mt-1 text-xs2 text-gmb-ink-muted">
-                Paste into WhatsApp, SMS or email after a visit.
+                Paste into SMS or email after a visit.
               </p>
               <textarea
                 readOnly

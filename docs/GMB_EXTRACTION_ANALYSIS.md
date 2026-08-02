@@ -54,18 +54,15 @@ Nothing else in the codebase depends on GMB. **This is the number that makes ext
 `email.service`, `brandKit.service`, `billing.service`, `aiProviderHub.service`,
 `aiPromptTemplate.service`.
 
-The route layer adds: `auth`, `rbac`, `audit.service`, `sendThrottle.service`, `whatsapp.service`.
+The route layer adds `auth`, `rbac`, and `audit.service`.
 
-**Every one of these is generic platform plumbing** — AI gateway, job queue, secret storage, crypto, SSRF guard, object storage, email, billing, audit. None is WhatsApp-product logic. In a split these are either duplicated (small, boring) or published as a shared `packages/platform`.
+**Every one of these is generic platform plumbing** — AI gateway, job queue, secret storage, crypto, SSRF guard, object storage, email, billing and audit.
 
-### The only genuine product coupling: 2 endpoints
+### Cross-product messaging coupling removed
 
-`gmb.routes.ts` imports `sendWhatsAppText` for exactly two routes:
-
-- `POST /reports/:id/share-whatsapp` — send a GMB report to a customer over WhatsApp
-- `POST /review-request` — the Phase C review-request automation
-
-These are the deliberate **GMB × WhatsApp cross-sell features**. They are the only place the two products touch. In a standalone GMB they become either (a) removed, (b) re-pointed at email/SMS, or (c) calls back to the WhatsApp product's public API.
+The legacy extraction contained two cross-product messaging hooks. They are not
+part of the standalone GMB product and have been removed. Reports use PDF/email;
+review-request copy is channel-neutral for SMS or email.
 
 ---
 
@@ -174,7 +171,6 @@ Leave the code where it is; build what is absent: partner/white-label GMB (from 
 
 - **`gmb-admin/` is not GMB.** Rename before planning.
 - **No feature flag.** `GMB_MANAGE` is all-or-nothing per role.
-- **The 2 WhatsApp endpoints** (`/reports/:id/share-whatsapp`, `/review-request`) are the only cross-product code. Decide their fate explicitly — they are also the cross-sell story, so deleting them has a product cost.
 - **4 background workers** are started from `index.ts` and must move with the module, along with their `GMB_*` env vars.
 - **`GOOGLE_PLACES_API_KEY` is env-only**, not in the admin Secret Vault (already tracked in TASKS.md bucket B). A standalone GMB makes this more painful, so do that first.
 - **`Tenant` cascade delete** reaches all 19 GMB models. If GMB ever moves to its own database, that cascade becomes application-level cleanup — easy to forget, and it silently orphans data rather than failing loudly.

@@ -7,8 +7,8 @@ import { resolveSecretValue } from "./secretVault.service";
 
 // AI gateway for the standalone GMB app.
 //
-// The monorepo's ai.service is ~1,500 lines covering WhatsApp copywriting,
-// intent detection, segment building and knowledge-base retrieval. The GMB
+// The original monorepo's ai.service is ~1,500 lines covering unrelated
+// copywriting, intent detection, segment building and knowledge-base retrieval. The GMB
 // code imports exactly one function from it — runTenantLlmJson — so this is a
 // focused implementation of that contract rather than a port of the rest.
 //
