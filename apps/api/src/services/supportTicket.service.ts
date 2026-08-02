@@ -141,9 +141,11 @@ export async function replyToTicket(input: ReplyInput): Promise<SafeTicket> {
   });
   if (!existing) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Ticket not found.");
 
-  // A reply on either side means the ticket is active again.
+  // A reply reopens the ticket and routes it to whoever must act next: a
+  // customer reply needs staff (OPEN); a staff reply awaits the customer
+  // (PENDING). (The previous ternary set PENDING either way — a no-op.)
   const nextStatus =
-    existing.status === TicketStatus.CLOSED ? TicketStatus.PENDING : TicketStatus.PENDING;
+    input.author === TicketAuthor.CUSTOMER ? TicketStatus.OPEN : TicketStatus.PENDING;
 
   await prisma.$transaction([
     prisma.supportTicketMessage.create({
