@@ -26,17 +26,38 @@ function actionTone(action: string): "ok" | "warn" | "danger" | "neutral" {
   return "neutral";
 }
 
+// A curated subset of the most-searched audit actions for the filter.
+const ACTIONS = [
+  "LOGIN",
+  "LOGIN_FAILED",
+  "LOGOUT",
+  "CREATE",
+  "UPDATE",
+  "DELETE",
+  "IMPERSONATE",
+  "SIGNUP",
+  "PASSWORD_RESET_COMPLETE",
+  "EMAIL_VERIFIED",
+  "SECRET_REVEAL",
+  "RUN_RECONCILIATION",
+];
+
 export default function AdminAuditPage() {
   const [rows, setRows] = useState<AuditRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [action, setAction] = useState("");
   const pageSize = 50;
 
-  const load = useCallback(async (p: number) => {
+  const load = useCallback(async (p: number, act: string) => {
     setError(null);
     try {
-      const res = await api.get<{ items: AuditRow[]; total: number }>(`/api/v1/admin/audit?page=${p}`);
+      const qs = new URLSearchParams({ page: String(p) });
+      if (act) qs.set("action", act);
+      const res = await api.get<{ items: AuditRow[]; total: number }>(
+        `/api/v1/admin/audit?${qs.toString()}`,
+      );
       setRows(res?.items ?? []);
       setTotal(res?.total ?? 0);
     } catch (e) {
@@ -46,12 +67,18 @@ export default function AdminAuditPage() {
   }, []);
 
   useEffect(() => {
-    void load(1);
+    void load(1, "");
   }, [load]);
 
   function goTo(p: number) {
     setPage(p);
-    void load(p);
+    void load(p, action);
+  }
+
+  function applyAction(act: string) {
+    setAction(act);
+    setPage(1);
+    void load(1, act);
   }
 
   return (
@@ -62,11 +89,22 @@ export default function AdminAuditPage() {
         </div>
       )}
 
-      <div className="mb-3.5 flex items-center gap-2">
-        <AdmLabel>Scope</AdmLabel>
+      <div className="mb-3.5 flex flex-wrap items-center gap-2">
+        <AdmLabel>Filter</AdmLabel>
+        <select
+          value={action}
+          onChange={(e) => applyAction(e.target.value)}
+          className="rounded-control border border-adm-line bg-adm-bg px-3 py-2 text-sm2 text-adm-ink outline-none focus:border-gmb-brand"
+        >
+          <option value="">All actions</option>
+          {ACTIONS.map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
+        </select>
         <span className="text-xs2 text-adm-muted">
-          Most recent 200 entries across all workspaces. Entries are written by the API and cannot
-          be edited here.
+          Across all workspaces, newest first. Entries are written by the API and cannot be edited here.
         </span>
       </div>
 

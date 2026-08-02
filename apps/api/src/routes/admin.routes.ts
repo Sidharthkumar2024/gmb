@@ -372,8 +372,11 @@ router.get("/audit", async (req: RequestWithAuth, res: Response, next: NextFunct
   try {
     const pageSize = 50;
     const page = Math.max(1, Number(req.query.page) || 1);
+    const action = typeof req.query.action === "string" && req.query.action ? req.query.action : undefined;
+    const where = action ? { action } : undefined;
     const [rows, total] = await Promise.all([
       prisma.auditLog.findMany({
+        where,
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -382,7 +385,7 @@ router.get("/audit", async (req: RequestWithAuth, res: Response, next: NextFunct
           tenant: { select: { name: true } },
         },
       }),
-      prisma.auditLog.count(),
+      prisma.auditLog.count({ where }),
     ]);
     res.json({
       success: true,
