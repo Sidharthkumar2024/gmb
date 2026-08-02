@@ -66,17 +66,26 @@ export async function listPartnerTransactions(
     createdAt: p.createdAt,
   }));
 
-  // Totals reflect captured payments only (a refunded payment isn't revenue).
+  // Totals are ALL-TIME DB aggregates, not derived from the capped display list
+  // above — a partner with more than `limit` payments still sees true totals.
+  // Collected/credits count CAPTURED only (a refunded payment isn't revenue).
+  const [totalCount, byCurrency] = await Promise.all([
+    prisma.payment.count({ where: { tenantId: { in: ids } } }),
+    prisma.payment.groupBy({
+      by: ["currency"],
+      where: { tenantId: { in: ids }, status: PaymentStatus.CAPTURED },
+      _sum: { amountMinor: true, credits: true },
+    }),
+  ]);
   const collectedByCurrency: Record<string, number> = {};
   let creditsSold = 0;
-  for (const p of payments) {
-    if (p.status !== "CAPTURED") continue;
-    collectedByCurrency[p.currency] = (collectedByCurrency[p.currency] ?? 0) + p.amountMinor;
-    creditsSold += p.credits;
+  for (const g of byCurrency) {
+    collectedByCurrency[g.currency] = g._sum.amountMinor ?? 0;
+    creditsSold += g._sum.credits ?? 0;
   }
 
   return {
-    totals: { payments: payments.length, creditsSold, collectedByCurrency },
+    totals: { payments: totalCount, creditsSold, collectedByCurrency },
     payments,
   };
 }
