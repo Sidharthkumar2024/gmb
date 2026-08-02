@@ -36,6 +36,7 @@ import {
   startPartnerInvoiceWorker,
   stopPartnerInvoiceWorker,
 } from "./services/partnerInvoice.service";
+import { startWorkerHeartbeat, stopWorkerHeartbeat } from "./lib/workerHeartbeat";
 
 const app = express();
 const PORT = Number(process.env.API_PORT ?? 3001);
@@ -128,6 +129,9 @@ async function startWorkers(): Promise<void> {
     startGmbReportScheduleWorker(),
     startPartnerInvoiceWorker(),
   ]);
+  // Publish a cross-process liveness heartbeat so /admin/health reports true
+  // worker status even when web and workers run as separate instances.
+  await startWorkerHeartbeat();
   console.log(
     "[workers] GMB auto-sync, autopilot, post publisher, report scheduler, partner invoice started",
   );
@@ -141,6 +145,7 @@ async function stopWorkers(): Promise<void> {
     stopGmbPostPublisherWorker(),
     stopGmbReportScheduleWorker(),
     stopPartnerInvoiceWorker(),
+    stopWorkerHeartbeat(),
   ]);
 }
 

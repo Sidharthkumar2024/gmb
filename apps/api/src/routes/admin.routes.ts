@@ -74,6 +74,7 @@ import {
   getGmbReportScheduleQueue,
   getGmbPostPublisherQueue,
 } from "../lib/queue";
+import { isWorkersAlive } from "../lib/workerHeartbeat";
 
 // SuperAdmin API (Adgrowly GMB Admin design).
 //
@@ -429,7 +430,10 @@ router.get("/health", async (_req: RequestWithAuth, res: Response, next: NextFun
       data: {
         database: { status: database === "ok" ? "ok" : "error", latencyMs: dbLatencyMs, detail: database === "ok" ? null : database },
         workers: {
+          // `enabled` is this process's env flag; `alive` is a real cross-process
+          // Redis heartbeat, so a web-only instance reports true worker status.
           enabled: (process.env.ENABLE_WORKERS ?? "false").toLowerCase() === "true",
+          alive: await isWorkersAlive(),
         },
         uptime: process.uptime(),
         node: process.version,
