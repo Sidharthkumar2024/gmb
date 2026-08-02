@@ -149,7 +149,7 @@ export async function resolveReportIssuer(tenantId: string): Promise<string> {
     where: { id: tenantId },
     select: { parentTenant: { select: { name: true } } },
   });
-  return tenant?.parentTenant?.name?.trim() || "NexaFlow AI";
+  return tenant?.parentTenant?.name?.trim() || "Adgrowly GMB";
 }
 
 interface ReportRow {

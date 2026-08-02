@@ -18,11 +18,18 @@ const report = {
 describe("buildReportPdfLines", () => {
   it("renders title, period, summary, trend, and the action plan", () => {
     const text = buildReportPdfLines({ report }).join("\n");
+    expect(text).toContain("Adgrowly GMB — Google Business performance report");
     expect(text).toContain("Google Business performance report");
     expect(text).toContain("Type: MONTHLY · Period: 2026-05-01 to 2026-05-31");
     expect(text).toContain("You collected 12 review(s)");
     expect(text).toContain("Vs last period (improving): +3 reviews · +0.2 rating · +120 views · +15 actions · +1 top-3");
     expect(text).toContain("[HIGH] Reply to 1 unanswered review(s).");
+  });
+
+  it("uses a white-label issuer when supplied", () => {
+    const text = buildReportPdfLines({ report, issuerName: "GrowLabs Local" }).join("\n");
+    expect(text).toContain("GrowLabs Local — Google Business performance report");
+    expect(text).not.toContain("Adgrowly GMB");
   });
 
   it("omits trend and plan sections when absent", () => {

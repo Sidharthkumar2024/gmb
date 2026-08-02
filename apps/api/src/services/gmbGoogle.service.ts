@@ -1144,7 +1144,7 @@ export async function updateGoogleReviewReply(input: {
  * Create a Google Business Profile local post. The location's stored resource
  * name ("accounts/…/locations/…") anchors the call. Google requires CALL to
  * omit its URL; other CTA types require one. A single public image is sent to
- * match NexaFlow's one-branded-image product constraint.
+ * match Adgrowly GMB's one-branded-image product constraint.
  */
 export interface GoogleLocalPostInput {
   tenantId: string;

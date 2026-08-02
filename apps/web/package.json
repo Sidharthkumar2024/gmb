@@ -1,7 +1,7 @@
 {
   "name": "@gmb/web",
   "version": "0.1.0",
-  "description": "NexaFlow AI - Next.js 14 Web Application (All Portals)",
+  "description": "Adgrowly GMB - Next.js 14 Web Application (All Portals)",
   "private": true,
   "scripts": {
     "dev": "next dev",
