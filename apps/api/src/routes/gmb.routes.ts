@@ -1485,17 +1485,25 @@ router.delete("/place-actions/:id", async (req: RequestWithAuth, res: Response, 
 // CRITICAL: verification is only ever started by the owner's explicit request
 // (req.userId is the customer-initiated enforcement point) — never background.
 
-const verificationStatusSchema = z.object({ locationId: z.string().cuid() });
+const verificationStatusSchema = z.object({
+  locationId: z.string().cuid(),
+  languageCode: z.string().trim().min(2).max(35).optional(),
+});
 const verificationRequestSchema = z.object({
   locationId: z.string().cuid(),
   method: z.nativeEnum(GmbVerificationMethod),
+  languageCode: z.string().trim().min(2).max(35).optional(),
+  mailerContact: z.string().trim().max(120).optional(),
 });
 const verificationCompleteSchema = z.object({ code: z.string().trim().min(1).max(32) });
 
 router.get("/verifications/status", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
-    const { locationId } = verificationStatusSchema.parse(req.query);
-    res.json({ success: true, data: await getVerificationStatus(req.tenantId!, locationId) });
+    const { locationId, languageCode } = verificationStatusSchema.parse(req.query);
+    res.json({
+      success: true,
+      data: await getVerificationStatus(req.tenantId!, locationId, languageCode),
+    });
   } catch (err) {
     next(err);
   }
@@ -1510,6 +1518,8 @@ router.post("/verifications", async (req: RequestWithAuth, res: Response, next: 
       locationId: body.locationId,
       method: body.method,
       requestedByUserId: req.userId!,
+      languageCode: body.languageCode,
+      mailerContact: body.mailerContact,
     });
     await logAudit({
       tenantId: req.tenantId!,

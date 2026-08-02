@@ -1,8 +1,12 @@
 import { prisma, GmbImageStatus, AiProviderKey, AiProviderKind, SecretScope } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
+import sharp from "sharp";
+import { assertSafeOutboundUrl } from "../lib/ssrfGuard";
+import { putPublicObject, type PublicObjectStorageConfig } from "../lib/publicObjectStorage";
 import { reserveAi, settleAi, releaseAi } from "./billing.service";
 import { resolveProviderChain } from "./aiProviderHub.service";
 import { resolveSecretValue, type SecretContext } from "./secretVault.service";
+import { resolvePublicStorageConfig } from "./storage.service";
 
 // =====================================================================
 // AdGrowly GMB — AI Image Generator (planning PDF §2). Builds an image-model
@@ -316,6 +320,71 @@ async function generateViaReplicate(args: {
   throw new Error("Replicate returned no image URL.");
 }
 
+const GENERATED_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+const GENERATED_IMAGE_MAX_PIXELS = 20_000_000;
+
+type GeneratedImageFetch = (
+  url: string,
+  init: RequestInit,
+) => Promise<Pick<Response, "ok" | "status" | "headers" | "arrayBuffer">>;
+
+/**
+ * Copy the provider's short-lived result to platform storage before exposing
+ * it to the browser. The downloaded bytes are decoded by sharp, so a provider
+ * cannot smuggle HTML or another arbitrary payload under an image content type.
+ */
+export async function persistGeneratedImage(
+  input: { tenantId: string; requestId: string; providerUrl: string },
+  deps: {
+    fetchFn?: GeneratedImageFetch;
+    assertUrl?: (url: string) => Promise<URL>;
+    upload?: (input: { key: string; body: Buffer; contentType: string }) => Promise<string>;
+  } = {},
+): Promise<string> {
+  await (deps.assertUrl ?? assertSafeOutboundUrl)(input.providerUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  let response: Awaited<ReturnType<GeneratedImageFetch>>;
+  try {
+    response = await (deps.fetchFn ?? fetch)(input.providerUrl, {
+      method: "GET",
+      redirect: "error",
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!response.ok) {
+    throw new Error(`Generated image download failed with HTTP ${response.status}.`);
+  }
+  const declaredSize = Number(response.headers.get("content-length") ?? 0);
+  if (declaredSize > GENERATED_IMAGE_MAX_BYTES) {
+    throw new Error("Generated image exceeds the 20 MB storage limit.");
+  }
+  const body = Buffer.from(await response.arrayBuffer());
+  if (body.length === 0 || body.length > GENERATED_IMAGE_MAX_BYTES) {
+    throw new Error("Generated image is empty or exceeds the 20 MB storage limit.");
+  }
+  const metadata = await sharp(body, { limitInputPixels: GENERATED_IMAGE_MAX_PIXELS }).metadata();
+  const formats = {
+    png: { extension: "png", contentType: "image/png" },
+    jpeg: { extension: "jpg", contentType: "image/jpeg" },
+    webp: { extension: "webp", contentType: "image/webp" },
+  } as const;
+  const format = metadata.format ? formats[metadata.format as keyof typeof formats] : undefined;
+  if (!format) throw new Error("Generated image must be a PNG, JPEG or WebP file.");
+
+  const safeTenant = input.tenantId.replace(/[^A-Za-z0-9._-]/g, "_");
+  const safeRequest = input.requestId.replace(/[^A-Za-z0-9._-]/g, "_");
+  const upload = deps.upload ?? (async (object) =>
+    putPublicObject(object, { config: await resolvePublicStorageConfig() }));
+  return upload({
+    key: `gmb-images/${safeTenant}/${safeRequest}-generated.${format.extension}`,
+    body,
+    contentType: format.contentType,
+  });
+}
+
 /**
  * Generate the image for a PENDING (or retry a FAILED) request. Walks the
  * admin-configured IMAGE provider chain — the tenant's own providers first,
@@ -352,13 +421,31 @@ export async function processImageRequest(tenantId: string, id: string) {
     throw new ApiError(ErrorCodes.CONFLICT, 409, "This image is already being generated.");
   }
 
+  // Fail before calling a paid provider if the result cannot be persisted.
+  let storageConfig: PublicObjectStorageConfig;
+  try {
+    storageConfig = await resolvePublicStorageConfig();
+  } catch (error) {
+    await releaseAi(reservation).catch(() => undefined);
+    const failed = await prisma.gmbImageRequest.update({
+      where: { id },
+      data: {
+        status: GmbImageStatus.FAILED,
+        error: `Object storage is required for durable AI images: ${
+          error instanceof Error ? error.message : "storage is unavailable"
+        }`.slice(0, 500),
+      },
+    });
+    return toSafeImage(failed);
+  }
+
   const contexts: SecretContext[] = [
     { scope: SecretScope.CUSTOMER, tenantId },
     { scope: SecretScope.PLATFORM, tenantId: null },
   ];
   let lastError = "No IMAGE provider is configured. Add one under AI Providers with kind IMAGE.";
 
-  for (const ctx of contexts) {
+  providerContexts: for (const ctx of contexts) {
     const chain = await resolveProviderChain(ctx, AiProviderKind.IMAGE).catch(() => []);
     for (const cfg of chain) {
       if (!cfg.secretId) continue;
@@ -369,7 +456,7 @@ export async function processImageRequest(tenantId: string, id: string) {
       const apiKey = await resolveSecretValue(ctx, cfg.secretId).catch(() => null);
       if (!apiKey) continue;
       try {
-        const resultUrl =
+        const providerUrl =
           cfg.provider === AiProviderKey.REPLICATE
             ? await generateViaReplicate({
                 apiKey,
@@ -386,6 +473,18 @@ export async function processImageRequest(tenantId: string, id: string) {
                 size: normalizeSize(row.size),
                 quality: row.quality,
               });
+        let resultUrl: string;
+        try {
+          resultUrl = await persistGeneratedImage(
+            { tenantId, requestId: id, providerUrl },
+            { upload: (object) => putPublicObject(object, { config: storageConfig }) },
+          );
+        } catch (error) {
+          lastError = `The image was generated but could not be stored safely: ${
+            error instanceof Error ? error.message : "storage upload failed"
+          }`;
+          break providerContexts;
+        }
         const updated = await prisma.gmbImageRequest.update({
           where: { id },
           data: {

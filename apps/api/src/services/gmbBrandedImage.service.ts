@@ -4,6 +4,7 @@ import { prisma } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import { assertSafeOutboundUrl } from "../lib/ssrfGuard";
 import { putPublicObject } from "../lib/publicObjectStorage";
+import { resolvePublicStorageConfig } from "./storage.service";
 import {
   buildBrandedDesign,
   toPublicBrandKit,
@@ -363,11 +364,14 @@ export async function ensureBrandedPostMedia(
     throw new Error("Rendered GMB image is outside Google's 10 KB–5 MB media limit.");
   }
   const key = brandedPostObjectKey(tenantId, postId, png);
-  const mediaUrl = await (deps.upload ?? putPublicObject)({
+  const uploadInput = {
     key,
     body: png,
     contentType: "image/png",
-  });
+  };
+  const mediaUrl = deps.upload
+    ? await deps.upload(uploadInput)
+    : await putPublicObject(uploadInput, { config: await resolvePublicStorageConfig() });
   const parsedMediaUrl = new URL(mediaUrl);
   if (parsedMediaUrl.protocol !== "https:") {
     throw new Error("Hosted GMB image URL must use HTTPS.");

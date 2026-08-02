@@ -1,20 +1,30 @@
-# GMB Suite — Remaining Work Inventory & Estimate
+# GMB Suite — Roadmap Status
 
-_Generated from an 8-agent audit of all 59 screens, 55 services, 7 route modules (Aug 2026)._
+_Original audit generated from all 59 screens, 55 services, and 7 route modules (Aug 2026). Updated after the main-branch integration on 2 Aug 2026._
 
-## Verdict
+## Current status
 
-The app is **~85–90% built and mostly real** — not a half-finished shell. Money views read the actual
-`WalletTransaction` ledger, payments come from signature-verified webhooks, Google Business Profile /
-Places / AI image / AI text / email are all live integrations, and admin/partner/suite screens persist
-to real Prisma data. **No fabricated figures were found.**
+All branch-only work has been integrated into `main`. The complete launch-critical set from the original
+Bucket 1 and Bucket 2 audit is now implemented, including plan enforcement, live Google sync controls,
+Google OAuth configuration, provider-key tests, accurate image charging, durable generated-image storage,
+cross-process worker health, queue recovery controls, rank alerts, and corrected money aggregates.
 
-What remains falls into 4 buckets. Total to bring *everything* to production-done: **≈ 307 engineer-hours**.
-But that includes large optional product features. The **launch-critical subset is ≈ 90–110h (~2–3 weeks solo).**
+Google profile verification now uses Google's live verification-options, start, and PIN-completion APIs;
+the app no longer marks a profile verified from a local code alone. Public `/features`, `/pricing`, and
+`/agencies` routes now follow the supplied designs, and pricing comes from the active database catalog.
+
+The items still requiring work are the product-decision and go-live configuration items below. White-label
+logo/colour/powered-by settings are applied in the suite, but custom-domain DNS/serving remains an infrastructure
+decision. Admin accounts, users, and audit logs are paginated; further list pagination is scale-dependent.
+
+## Original audit baseline (historical)
+
+The following tables are preserved as the implementation checklist that led to the current state. Bucket 1
+and Bucket 2 are complete; their estimates are no longer remaining work.
 
 ---
 
-## Bucket 1 — Bugs & wrong/incomplete backend logic to FIX (≈ 34h)
+## Bucket 1 — Bugs & wrong/incomplete backend logic (completed)
 _These are correctness issues, several of them "changed away from intended behaviour."_
 
 | # | Item | File(s) | Est |
@@ -32,7 +42,7 @@ _These are correctness issues, several of them "changed away from intended behav
 
 ---
 
-## Bucket 2 — Backend EXISTS but is unreachable from the UI (wire it up) (≈ 40h)
+## Bucket 2 — Backend/UI wiring (completed)
 _High ROI: the hard part is already written and tested; it just needs a button + a bit of glue. Uses the existing design system, no new screens._
 
 | # | Item | Backend that already exists | Est |
@@ -56,7 +66,7 @@ _These are real builds; doing them the wrong way wastes days, so they need a yes
 | A | **Real citation scanning** | Actually crawl Justdial/Zomato/Bing/Apple etc. | Needs a paid aggregator (Yext/BrightLocal $$) OR relabel as manual NAP tracker | 20h |
 | B | **White-label actually applied** | Logo/colour/hide-powered-by re-skin customer workspaces + custom-domain serving + DNS verify | Full re-skin + domain infra, or portal-preview MVP? | 32h |
 | C | **Google Q&A sync** | Read questions from Google + post approved answers back | In scope for launch? Needs GBP API | 10h |
-| D | **Google Verifications API** | Real verify flow (stop faking "Verified") | Needs Google API allow-listing | 14h |
+| D | **Google Verifications API** | Implemented; production use still needs Google API allow-listing | Supply/confirm API access | Code complete |
 | E | **Google Place Actions API** | Book/Order/Reserve links actually publish to Google | Needs GBP API | 10h |
 | F | **Turn ON billing** | `WALLET_BILLING_ENABLED=true`, plan `priceCents` actually charged (subscription) | When to start charging? Final prices? | 20h |
 | G | **Auto gateway refunds** | Refund hits Razorpay/Stripe API (today: ledger reversal only, manual money-back) | Auto or stay manual? | 8h |
@@ -80,7 +90,7 @@ for auto-sync/autopilot/scheduled posts & reports.
 
 ---
 
-## Timeline estimate
+## Historical timeline estimate
 
 | Scope | Hours | Solo calendar |
 |-------|-------|---------------|
@@ -91,13 +101,11 @@ for auto-sync/autopilot/scheduled posts & reports.
 I can compress calendar time heavily by fanning out with parallel agents (Ultracode) — realistically the
 launch-critical set can land in a few focused days.
 
-## Recommended build order
-1. **Bucket 1 bugs** (correctness first — no decisions needed, non-colliding).
-2. **Bucket 2 wiring** (huge ROI, existing components).
-3. Whatever you greenlight from **Bucket 3** for launch.
-4. You supply **Bucket 4** keys → end-to-end flow test → bug sweep.
+## Recommended next order
+1. Greenlight the required **Bucket 3** product choices.
+2. Supply the **Bucket 4** credentials and infrastructure values.
+3. Run real-provider end-to-end acceptance tests in the deployment environment.
 
-## Note on parallel sessions
-Right now three efforts touch this repo: your other account's **payment** work, a running **upload-hardening**
-task (storage/uploads files), and me. I'll avoid those files to prevent conflicts and start with the
-non-colliding Bucket 1/2 items.
+## Branch policy
+`main` is the integration and delivery branch. Feature/test branch histories have been merged into it; new
+delivery work should be committed and pushed directly to `main` unless this policy is explicitly changed.

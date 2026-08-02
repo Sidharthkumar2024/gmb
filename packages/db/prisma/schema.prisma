@@ -900,6 +900,10 @@ model GmbVerificationRequest {
   method GmbVerificationMethod
   state  GmbVerificationRequestState @default(PENDING)
 
+  /// Resource returned by Google's `locations.verify` call. Null only on
+  /// legacy/local requests that were never submitted to Google.
+  googleVerificationName String?
+
   /// The human who initiated this — never null. Enforces "customer-initiated
   /// only": there is no code path that creates a request without a user.
   requestedByUserId String
@@ -912,6 +916,7 @@ model GmbVerificationRequest {
 
   @@index([tenantId])
   @@index([locationId, state])
+  @@index([googleVerificationName])
 }
 
 enum GmbPlaceActionType {

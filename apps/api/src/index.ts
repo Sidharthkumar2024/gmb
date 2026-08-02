@@ -11,6 +11,7 @@ import adminRoutes from "./routes/admin.routes";
 import partnerRoutes from "./routes/partner.routes";
 import billingRoutes from "./routes/billing.routes";
 import uploadsRoutes from "./routes/uploads.routes";
+import publicRoutes from "./routes/public.routes";
 import {
   primeGoogleOAuthCache,
   getCachedGoogleClientConfig,
@@ -85,6 +86,7 @@ app.get("/api/v1/health", async (_req, res) => {
 });
 
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/public", publicRoutes);
 app.use("/api/v1/gmb", gmbRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/partner", partnerRoutes);

@@ -18,6 +18,7 @@ interface QueueRow {
   delayed: number;
   failed: number;
   completed: number;
+  paused: boolean;
   error: string | null;
 }
 
@@ -54,7 +55,7 @@ export default function AdminQueuePage() {
 
   async function runAction(
     name: string,
-    action: "retry-failed" | "clean-failed" | "clean-completed",
+    action: "pause" | "resume" | "retry-failed" | "clean-failed" | "clean-completed",
   ) {
     setActionBusy(`${name}:${action}`);
     setError(null);
@@ -151,8 +152,9 @@ export default function AdminQueuePage() {
                   <tr key={q.name} className="border-b border-adm-line/60 last:border-0 hover:bg-adm-panel-hover">
                     <td className="px-4 py-3">
                       <div className="text-[13px] font-semibold text-adm-ink">{q.label}</div>
-                      <div className="font-geist-mono text-micro text-adm-subtle">
-                        {q.error ? `error: ${q.error}` : q.name}
+                      <div className="flex items-center gap-2 font-geist-mono text-micro text-adm-subtle">
+                        <span>{q.error ? `error: ${q.error}` : q.name}</span>
+                        {!q.error && q.paused && <AdmPill tone="warn">Paused</AdmPill>}
                       </div>
                     </td>
                     {q.error ? (
@@ -174,6 +176,16 @@ export default function AdminQueuePage() {
                         <td className="px-4 py-3 font-geist-mono text-xs2 text-adm-subtle">{q.completed}</td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex justify-end gap-1.5">
+                            <button
+                              type="button"
+                              disabled={actionBusy !== null}
+                              onClick={() => void runAction(q.name, q.paused ? "resume" : "pause")}
+                              className="rounded-control border border-adm-line px-2.5 py-1.5 text-xs2 font-medium text-adm-muted hover:bg-adm-panel-hover disabled:opacity-50"
+                            >
+                              {actionBusy === `${q.name}:${q.paused ? "resume" : "pause"}`
+                                ? q.paused ? "Resuming…" : "Pausing…"
+                                : q.paused ? "Resume" : "Pause"}
+                            </button>
                             {q.failed > 0 && (
                               <>
                                 <button

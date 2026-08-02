@@ -2,6 +2,10 @@ import crypto from "node:crypto";
 import { SecretProvider, SecretScope } from "@nexaflow/db";
 import { ApiError, ErrorCodes } from "@nexaflow/shared";
 import {
+  readPublicObjectStorageConfig,
+  type PublicObjectStorageConfig,
+} from "../lib/publicObjectStorage";
+import {
   listSecrets,
   createSecret,
   updateSecret,
@@ -94,6 +98,41 @@ export async function getStorageConfig(): Promise<
 export async function storageConfigured(): Promise<boolean> {
   const entry = await findStorageEntry();
   return Boolean(entry && (entry.metadata as StorageMeta | null)?.hasSecretKey);
+}
+
+/**
+ * Full server-side S3/R2 config for SDK uploads. Unlike the masked admin view,
+ * this stays inside the API process and resolves the encrypted secret only at
+ * the moment an upload is performed.
+ */
+export async function resolvePublicStorageConfig(): Promise<PublicObjectStorageConfig> {
+  const entry = await findStorageEntry();
+  // Preserve environment/IAM-based deployments while preferring the encrypted
+  // admin-managed vault whenever it exists.
+  if (!entry) return readPublicObjectStorageConfig();
+  const meta = entry?.metadata as StorageMeta | undefined;
+  if (!meta?.hasSecretKey || !meta.bucket || !meta.region || !meta.accessKeyId) {
+    throw new ApiError(ErrorCodes.SERVICE_UNAVAILABLE, 503, "Object storage is not configured.");
+  }
+  const secretAccessKey = await resolveSecretValue(PLATFORM_CTX, entry.id);
+  if (!secretAccessKey) {
+    throw new ApiError(ErrorCodes.SERVICE_UNAVAILABLE, 503, "Object storage secret is unavailable.");
+  }
+  const endpoint = meta.endpoint?.trim()
+    ? /^https?:\/\//i.test(meta.endpoint)
+      ? meta.endpoint
+      : `https://${meta.endpoint}`
+    : undefined;
+  const publicBaseUrl = meta.publicBaseUrl?.trim().replace(/\/+$/, "")
+    || `https://${storageHost(meta)}`;
+  return {
+    bucket: meta.bucket,
+    region: meta.region,
+    endpoint,
+    publicBaseUrl,
+    forcePathStyle: false,
+    credentials: { accessKeyId: meta.accessKeyId, secretAccessKey },
+  };
 }
 
 export interface SaveStorageInput {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 
 const deps = vi.hoisted(() => ({
   imageFindFirst: vi.fn(),
@@ -35,6 +36,7 @@ import {
   estimateImageCostCents,
   isAllowedSize,
   normalizeSize,
+  persistGeneratedImage,
   processImageRequest,
   toSafeImage,
 } from "./gmbImage.service";
@@ -117,6 +119,45 @@ describe("toSafeImage", () => {
     expect(safe.status).toBe("PENDING");
     expect((safe as Record<string, unknown>).secretId).toBeUndefined();
     expect((safe as Record<string, unknown>).tenantId).toBeUndefined();
+  });
+});
+
+describe("persistGeneratedImage", () => {
+  it("validates provider bytes and stores a stable tenant-scoped object", async () => {
+    const png = await sharp({
+      create: { width: 2, height: 2, channels: 4, background: "#5a4af0" },
+    }).png().toBuffer();
+    const upload = vi.fn().mockResolvedValue("https://cdn.example.com/gmb-images/t1/img1-generated.png");
+    const url = await persistGeneratedImage(
+      { tenantId: "t1", requestId: "img1", providerUrl: "https://provider.example/result" },
+      {
+        assertUrl: vi.fn().mockResolvedValue(new URL("https://provider.example/result")),
+        fetchFn: vi.fn().mockResolvedValue(new Response(png, {
+          status: 200,
+          headers: { "content-type": "image/png", "content-length": String(png.length) },
+        })),
+        upload,
+      },
+    );
+    expect(upload).toHaveBeenCalledWith({
+      key: "gmb-images/t1/img1-generated.png",
+      body: png,
+      contentType: "image/png",
+    });
+    expect(url).toBe("https://cdn.example.com/gmb-images/t1/img1-generated.png");
+  });
+
+  it("rejects non-image bytes before upload", async () => {
+    const upload = vi.fn();
+    await expect(persistGeneratedImage(
+      { tenantId: "t1", requestId: "img1", providerUrl: "https://provider.example/result" },
+      {
+        assertUrl: vi.fn().mockResolvedValue(new URL("https://provider.example/result")),
+        fetchFn: vi.fn().mockResolvedValue(new Response("<html>not an image</html>")),
+        upload,
+      },
+    )).rejects.toThrow();
+    expect(upload).not.toHaveBeenCalled();
   });
 });
 

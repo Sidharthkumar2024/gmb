@@ -7,6 +7,7 @@ import {
   normalizeGoogleLocation,
   signGoogleOAuthState,
   summarizeGoogleReviews,
+  toGoogleVerificationLocationName,
   verifyGoogleOAuthState,
 } from "./gmbGoogle.service";
 
@@ -101,6 +102,15 @@ describe("Google Business Profile normalizers", () => {
     ).toBe("accounts/123/locations/987/reviews/review-abc");
     expect(buildGoogleReviewResourceName("locations/987", "review-abc")).toBeNull();
     expect(buildGoogleReviewResourceName("accounts/123/locations/987", "")).toBeNull();
+  });
+
+  it("converts synced location resources to the Verifications API shape", () => {
+    expect(toGoogleVerificationLocationName("accounts/123/locations/987"))
+      .toBe("locations/987");
+    expect(toGoogleVerificationLocationName("locations/987"))
+      .toBe("locations/987");
+    expect(toGoogleVerificationLocationName("ChIJ-place-id"))
+      .toBeNull();
   });
 });
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const deps = vi.hoisted(() => ({
   listSecrets: vi.fn(),
@@ -18,7 +18,13 @@ vi.mock("./secretVault.service", () => ({
   deleteSecret: deps.deleteSecret,
 }));
 
-import { buildUploadKey, getStorageConfig, presignUpload, saveStorageConfig } from "./storage.service";
+import {
+  buildUploadKey,
+  getStorageConfig,
+  presignUpload,
+  resolvePublicStorageConfig,
+  saveStorageConfig,
+} from "./storage.service";
 
 const META = {
   provider: "S3" as const,
@@ -33,6 +39,7 @@ const ENTRY = { id: "sec-1", label: "Object storage", last4: "1234", metadata: M
 const AT = new Date("2026-01-02T03:04:05Z");
 
 beforeEach(() => vi.clearAllMocks());
+afterEach(() => vi.unstubAllEnvs());
 
 describe("buildUploadKey", () => {
   const T = "tenant-9";
@@ -88,6 +95,44 @@ describe("getStorageConfig", () => {
       secretKeyLast4: "1234",
     });
     expect(JSON.stringify(cfg)).not.toContain("AKIAEXAMPLE1234");
+  });
+});
+
+describe("resolvePublicStorageConfig", () => {
+  it("preserves the environment/IAM fallback when no vault entry exists", async () => {
+    deps.listSecrets.mockResolvedValue([]);
+    vi.stubEnv("S3_BUCKET_NAME", "env-bucket");
+    vi.stubEnv("S3_PUBLIC_BASE_URL", "https://assets.example.com");
+    vi.stubEnv("AWS_REGION", "ap-south-1");
+
+    await expect(resolvePublicStorageConfig()).resolves.toMatchObject({
+      bucket: "env-bucket",
+      region: "ap-south-1",
+      publicBaseUrl: "https://assets.example.com",
+    });
+  });
+
+  it("resolves the encrypted vault key for server-side SDK uploads", async () => {
+    deps.listSecrets.mockResolvedValue([
+      {
+        ...ENTRY,
+        metadata: {
+          ...META,
+          provider: "R2",
+          endpoint: "account.r2.cloudflarestorage.com",
+          publicBaseUrl: "https://cdn.example.com/",
+        },
+      },
+    ]);
+    deps.resolveSecretValue.mockResolvedValue("server-secret");
+    await expect(resolvePublicStorageConfig()).resolves.toEqual({
+      bucket: "my-bucket",
+      region: "us-east-1",
+      endpoint: "https://account.r2.cloudflarestorage.com",
+      publicBaseUrl: "https://cdn.example.com",
+      forcePathStyle: false,
+      credentials: { accessKeyId: "AKIAEXAMPLE1234", secretAccessKey: "server-secret" },
+    });
   });
 });
 

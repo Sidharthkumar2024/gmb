@@ -119,9 +119,9 @@ export default function LandingPage() {
           </span>
         </Link>
         <nav className="hidden gap-6 text-[13px] md:flex">
-          <a href="#features" className="text-gmb-ink-muted no-underline hover:text-gmb-ink">Features</a>
-          <a href="#pricing" className="text-gmb-ink-muted no-underline hover:text-gmb-ink">Pricing</a>
-          <a href="#agencies" className="text-gmb-ink-muted no-underline hover:text-gmb-ink">For agencies</a>
+          <Link href="/features" className="text-gmb-ink-muted no-underline hover:text-gmb-ink">Features</Link>
+          <Link href="/pricing" className="text-gmb-ink-muted no-underline hover:text-gmb-ink">Pricing</Link>
+          <Link href="/agencies" className="text-gmb-ink-muted no-underline hover:text-gmb-ink">For agencies</Link>
         </nav>
         <div className="flex-1" />
         <Link href="/login" className="no-underline hover:no-underline">

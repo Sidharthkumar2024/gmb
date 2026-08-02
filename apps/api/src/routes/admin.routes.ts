@@ -527,8 +527,8 @@ router.get("/queues", async (_req: RequestWithAuth, res: Response, next: NextFun
       GMB_QUEUES.map(async ({ label, get }) => {
         try {
           const q = get();
-          const d = await queueDepth(q);
-          return { name: q.name, label, ...d, error: null as string | null };
+          const [d, paused] = await Promise.all([queueDepth(q), q.isPaused()]);
+          return { name: q.name, label, paused, ...d, error: null as string | null };
         } catch (e) {
           return {
             name: label,
@@ -538,6 +538,7 @@ router.get("/queues", async (_req: RequestWithAuth, res: Response, next: NextFun
             delayed: 0,
             failed: 0,
             completed: 0,
+            paused: false,
             error: (e as Error).message,
           };
         }
@@ -558,11 +559,11 @@ router.get("/queues", async (_req: RequestWithAuth, res: Response, next: NextFun
   }
 });
 
-// Operate on a GMB background queue: retry its failed jobs, or purge failed /
-// completed history. Scoped to the four GMB queues surfaced above.
+// Operate on a GMB background queue: pause/resume processing, retry its failed
+// jobs, or purge failed/completed history. Scoped to the four surfaced queues.
 const queueActionSchema = z.object({
   name: z.string().min(1).max(100),
-  action: z.enum(["retry-failed", "clean-failed", "clean-completed"]),
+  action: z.enum(["pause", "resume", "retry-failed", "clean-failed", "clean-completed"]),
 });
 
 router.post("/queues/action", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
@@ -573,7 +574,13 @@ router.post("/queues/action", async (req: RequestWithAuth, res: Response, next: 
     const q = entry.get();
 
     let affected = 0;
-    if (action === "retry-failed") {
+    if (action === "pause") {
+      await q.pause();
+      affected = 1;
+    } else if (action === "resume") {
+      await q.resume();
+      affected = 1;
+    } else if (action === "retry-failed") {
       const failed = await q.getFailed(0, 999);
       await Promise.all(failed.map((j) => j.retry()));
       affected = failed.length;

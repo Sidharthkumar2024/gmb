@@ -25,6 +25,7 @@ const ACCOUNT_MANAGEMENT_BASE = "https://mybusinessaccountmanagement.googleapis.
 const BUSINESS_INFO_BASE = "https://mybusinessbusinessinformation.googleapis.com/v1";
 const MY_BUSINESS_BASE = "https://mybusiness.googleapis.com/v4";
 const PERFORMANCE_BASE = "https://businessprofileperformance.googleapis.com/v1";
+const VERIFICATIONS_BASE = "https://mybusinessverifications.googleapis.com/v1";
 
 export const GBP_SCOPES = ["https://www.googleapis.com/auth/business.manage"] as const;
 
@@ -505,6 +506,190 @@ async function googleJson<T>(args: {
   }
 }
 
+// --- Google Business Profile verification ---------------------------------
+
+export type GoogleVerificationMethod =
+  | "ADDRESS"
+  | "EMAIL"
+  | "PHONE_CALL"
+  | "SMS";
+
+export interface GoogleVerificationOption {
+  method: GoogleVerificationMethod;
+  phoneNumber?: string;
+  address?: {
+    business?: string;
+    address?: Record<string, unknown>;
+    expectedDeliveryDaysRegion?: number;
+  };
+  email?: {
+    domain?: string;
+    user?: string;
+    isUserNameEditable?: boolean;
+  };
+}
+
+interface GoogleVerificationApiOption {
+  verificationMethod?: string;
+  phoneNumber?: string;
+  addressData?: GoogleVerificationOption["address"];
+  emailData?: GoogleVerificationOption["email"];
+}
+
+interface GoogleVerificationApiRow {
+  name?: string;
+  method?: string;
+  state?: string;
+  createTime?: string;
+}
+
+/**
+ * Business Information stores an account-scoped location resource; the
+ * Verifications API accepts the account-free `locations/{id}` resource name. Never accept a raw
+ * place id here because sending a request to the wrong profile is irreversible.
+ */
+export function toGoogleVerificationLocationName(resourceName: string | null | undefined): string | null {
+  const value = resourceName?.trim().replace(/\/+$/, "");
+  if (!value) return null;
+  const match = value.match(/(?:^|\/)locations\/([^/]+)$/);
+  return match ? `locations/${match[1]}` : null;
+}
+
+function normalizeVerificationOption(
+  option: GoogleVerificationApiOption,
+): GoogleVerificationOption | null {
+  const method = option.verificationMethod;
+  if (!["ADDRESS", "EMAIL", "PHONE_CALL", "SMS"].includes(method ?? "")) return null;
+  return {
+    method: method as GoogleVerificationMethod,
+    ...(option.phoneNumber ? { phoneNumber: option.phoneNumber } : {}),
+    ...(option.addressData ? { address: option.addressData } : {}),
+    ...(option.emailData ? { email: option.emailData } : {}),
+  };
+}
+
+function verificationResourceOrThrow(resourceName: string | null | undefined): string {
+  const name = toGoogleVerificationLocationName(resourceName);
+  if (!name) {
+    throw new ApiError(
+      ErrorCodes.BAD_REQUEST,
+      400,
+      "Sync this location from Google before starting verification.",
+    );
+  }
+  return name;
+}
+
+export interface GoogleVoiceOfMerchantState {
+  hasVoiceOfMerchant?: boolean;
+  hasBusinessAuthority?: boolean;
+  verify?: { hasPendingVerification?: boolean };
+  waitForVoiceOfMerchant?: Record<string, never>;
+  resolveOwnershipConflict?: Record<string, never>;
+  complyWithGuidelines?: { recommendationReason?: string };
+}
+
+export async function fetchGoogleVoiceOfMerchantState(input: {
+  tenantId: string;
+  locationId: string;
+  locationResourceName: string;
+  secretId: string;
+}): Promise<GoogleVoiceOfMerchantState> {
+  const name = verificationResourceOrThrow(input.locationResourceName);
+  return googleJson<GoogleVoiceOfMerchantState>({
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    secretId: input.secretId,
+    operation: "GBP_GET_VOICE_OF_MERCHANT_STATE",
+    url: `${VERIFICATIONS_BASE}/${name}/VoiceOfMerchantState`,
+  });
+}
+
+export async function fetchGoogleVerificationOptions(input: {
+  tenantId: string;
+  locationId: string;
+  locationResourceName: string;
+  secretId: string;
+  languageCode?: string;
+}): Promise<GoogleVerificationOption[]> {
+  const name = verificationResourceOrThrow(input.locationResourceName);
+  const body = await googleJson<{ options?: GoogleVerificationApiOption[] }>({
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    secretId: input.secretId,
+    operation: "GBP_FETCH_VERIFICATION_OPTIONS",
+    method: "POST",
+    url: `${VERIFICATIONS_BASE}/${name}:fetchVerificationOptions`,
+    body: { languageCode: input.languageCode?.trim() || "en-US" },
+  });
+  return (body.options ?? [])
+    .map(normalizeVerificationOption)
+    .filter((option): option is GoogleVerificationOption => option !== null);
+}
+
+export async function requestGoogleLocationVerification(input: {
+  tenantId: string;
+  locationId: string;
+  locationResourceName: string;
+  secretId: string;
+  method: GoogleVerificationMethod;
+  languageCode?: string;
+  emailAddress?: string;
+  mailerContact?: string;
+  phoneNumber?: string;
+}) {
+  const name = verificationResourceOrThrow(input.locationResourceName);
+  const response = await googleJson<{ verification?: GoogleVerificationApiRow }>({
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    secretId: input.secretId,
+    operation: "GBP_REQUEST_VERIFICATION",
+    method: "POST",
+    url: `${VERIFICATIONS_BASE}/${name}:verify`,
+    body: {
+      method: input.method,
+      languageCode: input.languageCode?.trim() || "en-US",
+      ...(input.emailAddress?.trim() ? { emailAddress: input.emailAddress.trim() } : {}),
+      ...(input.mailerContact?.trim() ? { mailerContact: input.mailerContact.trim() } : {}),
+      ...(input.phoneNumber?.trim() ? { phoneNumber: input.phoneNumber.trim() } : {}),
+    },
+  });
+  if (!response.verification?.name) {
+    throw new ApiError(
+      ErrorCodes.BAD_REQUEST,
+      400,
+      "Google did not return a verification request. Try again from Business Profile Manager.",
+    );
+  }
+  return response.verification;
+}
+
+export async function completeGoogleLocationVerification(input: {
+  tenantId: string;
+  locationId: string;
+  secretId: string;
+  verificationName: string;
+  pin: string;
+}) {
+  const name = input.verificationName.trim();
+  if (!/^locations\/[^/]+\/verifications\/[^/]+$/.test(name)) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Google verification reference is invalid.");
+  }
+  const response = await googleJson<{ verification?: GoogleVerificationApiRow }>({
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    secretId: input.secretId,
+    operation: "GBP_COMPLETE_VERIFICATION",
+    method: "POST",
+    url: `${VERIFICATIONS_BASE}/${name}:complete`,
+    body: { pin: input.pin },
+  });
+  if (!response.verification) {
+    throw new ApiError(ErrorCodes.BAD_REQUEST, 400, "Google did not confirm the verification.");
+  }
+  return response.verification;
+}
+
 export function buildGoogleReviewResourceName(
   locationResourceName: string | null | undefined,
   externalReviewId: string | null | undefined,
@@ -756,7 +941,8 @@ export async function syncGoogleReviewsForLocation(tenantId: string, locationId:
   return {
     rating: summary.rating ?? undefined,
     reviewCount: summary.reviewCount,
-    verificationState: "SYNCED",
+    // Review sync does not return Google's ownership state. Omitting the field
+    // preserves a real VERIFIED value instead of replacing it with "SYNCED".
     imported,
     updated,
     source: "GOOGLE" as const,
