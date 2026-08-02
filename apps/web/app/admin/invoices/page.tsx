@@ -42,8 +42,15 @@ export default function AdminInvoicesPage() {
   }, []);
 
   const paid = (rows ?? []).filter((r) => r.status === "PAID");
-  const billed = paid.reduce((s, r) => s + r.totalMinor, 0);
-  const billedCurrency = paid[0]?.currency ?? "INR";
+  // Sum PER CURRENCY — never add paise (INR) and cents (USD) into one number.
+  const billedByCurrency: Record<string, number> = {};
+  for (const r of paid) billedByCurrency[r.currency] = (billedByCurrency[r.currency] ?? 0) + r.totalMinor;
+  const billedLabel =
+    Object.keys(billedByCurrency).length === 0
+      ? "—"
+      : Object.entries(billedByCurrency)
+          .map(([c, m]) => money(m, c))
+          .join(" · ");
 
   return (
     <AdminShell title="Invoices">
@@ -74,7 +81,7 @@ export default function AdminInvoicesPage() {
           [
             ["Invoices", rows?.length, "one per payment"],
             ["Paid", rows ? paid.length : null, "captured"],
-            ["Billed", rows ? money(billed, billedCurrency) : null, "sum of paid invoices"],
+            ["Billed", rows ? billedLabel : null, "paid invoices, per currency"],
           ] as const
         ).map(([label, value, caption]) => (
           <AdmCard key={label}>
