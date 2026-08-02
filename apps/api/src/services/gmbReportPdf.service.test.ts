@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReportPdfLines, wrapText } from "./gmbReportPdf.service";
+import { buildReportPdfLines, renderGmbReportPdf, wrapText } from "./gmbReportPdf.service";
 
 const report = {
   id: "r1",
@@ -45,5 +45,14 @@ describe("wrapText", () => {
     const lines = wrapText("one two three four five six", 10);
     expect(lines.every((l) => l.length <= 10)).toBe(true);
     expect(lines.join(" ")).toBe("one two three four five six");
+  });
+});
+
+describe("renderGmbReportPdf", () => {
+  it("renders a complete PDFKit document", async () => {
+    const pdf = await renderGmbReportPdf({ report });
+    expect(pdf.subarray(0, 8).toString("ascii")).toBe("%PDF-1.3");
+    expect(pdf.subarray(-6).toString("ascii")).toBe("%%EOF\n");
+    expect(pdf.byteLength).toBeGreaterThan(1_000);
   });
 });

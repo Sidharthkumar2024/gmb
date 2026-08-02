@@ -6,6 +6,7 @@
 
 FROM node:20-alpine AS deps
 WORKDIR /app
+RUN apk add --no-cache openssl
 
 # Manifests first so this layer caches until dependencies actually change.
 COPY package.json package-lock.json ./
@@ -21,6 +22,7 @@ RUN npm ci --omit=dev --ignore-scripts \
 
 FROM node:20-alpine AS build
 WORKDIR /app
+RUN apk add --no-cache openssl
 COPY package.json package-lock.json ./
 COPY packages ./packages
 COPY apps/api ./apps/api
@@ -32,8 +34,11 @@ FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Run unprivileged: a container escape should not land as root.
-RUN addgroup -S app && adduser -S app -G app
+# Prisma needs the system OpenSSL runtime; run the application unprivileged so
+# a container escape does not land as root.
+RUN apk add --no-cache openssl \
+    && addgroup -S app \
+    && adduser -S app -G app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/apps/api/dist ./apps/api/dist
