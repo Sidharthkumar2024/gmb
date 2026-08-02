@@ -75,7 +75,7 @@ _External-provider features fail closed until their production access and creden
 | H | Tax/GST invoices | Complete: immutable snapshots, financial-year sequential numbers, tax-inclusive GST split, billing profile and authenticated server PDF. Requires seller identity env values. |
 | I | Platform→partner settlement | Complete: monthly frozen invoice lifecycle, due/overdue state and one-currency Razorpay/Stripe settlement checkout/webhook. |
 | J | Approved AI content publishing | Complete as explicit operator-controlled publish: descriptions update the GBP profile and images create editable Google post drafts. |
-| K | Scheduled reports | Branded PDF generation and SMTP email delivery complete with observable delivery errors. WhatsApp requires a selected BSP/API account. |
+| K | Scheduled reports | Branded PDF generation and SMTP email delivery complete with observable delivery errors. |
 | L | Support workflow | Complete: customer email notification, private staff notes, assignee, priority and state controls. |
 | M | Admin pagination | Complete for accounts, users, audit and money lists, including filters/search/CSV where applicable. |
 | N | Scheduled single-keyword ranks | Complete: opt-in cadence, BullMQ worker and visible last-run/error state. |
@@ -106,8 +106,7 @@ launch-critical set can land in a few focused days.
 ## Go-live order
 1. Supply the **Bucket 4** credentials, invoice seller identity and custom-domain routing/TLS.
 2. Confirm final subscription prices and the date charging may start; then enable the billing switch.
-3. Choose a WhatsApp BSP if WhatsApp report delivery is required.
-4. Run real-provider end-to-end acceptance tests in the deployment environment.
+3. Run real-provider end-to-end acceptance tests in the deployment environment.
 
 ## Branch policy
 `main` is the integration and delivery branch. Feature/test branch histories have been merged into it; new
