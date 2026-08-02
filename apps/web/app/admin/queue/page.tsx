@@ -32,6 +32,7 @@ export default function AdminQueuePage() {
   const [error, setError] = useState<string | null>(null);
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
   const [busy, setBusy] = useState(false);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -50,6 +51,22 @@ export default function AdminQueuePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function runAction(
+    name: string,
+    action: "retry-failed" | "clean-failed" | "clean-completed",
+  ) {
+    setActionBusy(`${name}:${action}`);
+    setError(null);
+    try {
+      await api.post("/api/v1/admin/queues/action", { name, action });
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "The queue action failed.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
 
   return (
     <AdminShell title="Scan queue">
@@ -119,7 +136,7 @@ export default function AdminQueuePage() {
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="border-b border-adm-line">
-                  {["Queue", "Waiting", "Active", "Delayed", "Failed", "Completed"].map((h) => (
+                  {["Queue", "Waiting", "Active", "Delayed", "Failed", "Completed", ""].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-3 font-geist-mono text-micro font-medium uppercase tracking-[0.1em] text-adm-subtle"
@@ -139,7 +156,7 @@ export default function AdminQueuePage() {
                       </div>
                     </td>
                     {q.error ? (
-                      <td colSpan={5} className="px-4 py-3 text-xs2 text-[#ff8f85]">
+                      <td colSpan={6} className="px-4 py-3 text-xs2 text-[#ff8f85]">
                         unreadable
                       </td>
                     ) : (
@@ -155,6 +172,40 @@ export default function AdminQueuePage() {
                           {q.failed}
                         </td>
                         <td className="px-4 py-3 font-geist-mono text-xs2 text-adm-subtle">{q.completed}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-1.5">
+                            {q.failed > 0 && (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={actionBusy !== null}
+                                  onClick={() => void runAction(q.name, "retry-failed")}
+                                  className="rounded-control border border-adm-line px-2.5 py-1.5 text-xs2 font-medium text-adm-muted hover:bg-adm-panel-hover disabled:opacity-50"
+                                >
+                                  {actionBusy === `${q.name}:retry-failed` ? "Retrying…" : `Retry ${q.failed}`}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={actionBusy !== null}
+                                  onClick={() => void runAction(q.name, "clean-failed")}
+                                  className="rounded-control border border-adm-line px-2.5 py-1.5 text-xs2 font-medium text-[#ff8f85] hover:bg-gmb-danger/10 disabled:opacity-50"
+                                >
+                                  Clear failed
+                                </button>
+                              </>
+                            )}
+                            {q.completed > 0 && (
+                              <button
+                                type="button"
+                                disabled={actionBusy !== null}
+                                onClick={() => void runAction(q.name, "clean-completed")}
+                                className="rounded-control border border-adm-line px-2.5 py-1.5 text-xs2 font-medium text-adm-subtle hover:bg-adm-panel-hover disabled:opacity-50"
+                              >
+                                Clear done
+                              </button>
+                            )}
+                          </div>
+                        </td>
                       </>
                     )}
                   </tr>

@@ -554,6 +554,46 @@ router.get("/queues", async (_req: RequestWithAuth, res: Response, next: NextFun
   }
 });
 
+// Operate on a GMB background queue: retry its failed jobs, or purge failed /
+// completed history. Scoped to the four GMB queues surfaced above.
+const queueActionSchema = z.object({
+  name: z.string().min(1).max(100),
+  action: z.enum(["retry-failed", "clean-failed", "clean-completed"]),
+});
+
+router.post("/queues/action", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { name, action } = queueActionSchema.parse(req.body);
+    const entry = GMB_QUEUES.find((e) => e.get().name === name);
+    if (!entry) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Unknown queue.");
+    const q = entry.get();
+
+    let affected = 0;
+    if (action === "retry-failed") {
+      const failed = await q.getFailed(0, 999);
+      await Promise.all(failed.map((j) => j.retry()));
+      affected = failed.length;
+    } else if (action === "clean-failed") {
+      affected = (await q.clean(0, 1000, "failed")).length;
+    } else {
+      affected = (await q.clean(0, 1000, "completed")).length;
+    }
+
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "Queue",
+      resourceId: name,
+      newValues: { queueAction: action, affected },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: { name, action, affected } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // --- Google API telemetry ---------------------------------------------------
 
 router.get("/google-apis", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
