@@ -96,6 +96,51 @@ describe("api client — silent token refresh", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1); // no /auth/refresh attempt
   });
 
+  it("skips a redundant refresh for a request already in flight during a refresh", async () => {
+    // Monotonic clock so the burst ordering (B starts, refresh completes, B's
+    // 401 arrives) is deterministic rather than same-millisecond flaky.
+    let clock = 1000;
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => clock++);
+    let refreshCalls = 0;
+    let bHit = false;
+    let aHit = false;
+    let releaseB!: (r: Response) => void;
+    const bFirst = new Promise<Response>((res) => {
+      releaseB = res;
+    });
+
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/api/v1/auth/refresh")) {
+        refreshCalls += 1;
+        return Promise.resolve(jsonResponse(200, ok({ accessToken: "access-new", refreshToken: "refresh-2" })));
+      }
+      if (url.endsWith("/api/v1/b")) {
+        if (!bHit) {
+          bHit = true;
+          return bFirst; // hold B's first response until after A's refresh
+        }
+        return Promise.resolve(jsonResponse(200, ok({ who: "b" })));
+      }
+      if (!aHit) {
+        aHit = true;
+        return Promise.resolve(jsonResponse(401, err("expired")));
+      }
+      return Promise.resolve(jsonResponse(200, ok({ who: "a" })));
+    });
+
+    const bPromise = api.get<{ who: string }>("/api/v1/b"); // startedAt=1000, 401 held
+    const aData = await api.get<{ who: string }>("/api/v1/a"); // 401 → refresh → retry
+    expect(aData).toEqual({ who: "a" });
+    expect(refreshCalls).toBe(1);
+
+    releaseB(jsonResponse(401, err("expired"))); // B's 401 lands after the refresh
+    const bData = await bPromise;
+    expect(bData).toEqual({ who: "b" });
+    expect(refreshCalls).toBe(1); // B retried on the fresh token — no second rotation
+
+    nowSpy.mockRestore();
+  });
+
   it("does not attempt refresh when there is no refresh token", async () => {
     tokenStore.clear();
     store.set("nx_access", "access-old"); // access present, refresh absent

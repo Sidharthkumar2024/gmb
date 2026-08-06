@@ -94,6 +94,10 @@ interface FetchOpts extends RequestInit {
 // fires all wait on one rotation instead of racing N refreshes (which the
 // backend's reuse-detection would otherwise treat as token theft and revoke).
 let refreshInFlight: Promise<boolean> | null = null;
+// Bumped on every successful rotation. A request captures the value it started
+// with; if it later 401s but the counter has since advanced, a refresh already
+// happened underneath it and it can just replay on the fresh token.
+let refreshGeneration = 0;
 
 async function refreshAccessToken(): Promise<boolean> {
   const refreshToken = tokenStore.getRefresh();
@@ -108,13 +112,25 @@ async function refreshAccessToken(): Promise<boolean> {
     const parsed = text ? (JSON.parse(text) as ApiResponse<AuthTokens>) : null;
     if (!res.ok || !parsed?.success || !parsed.data) return false;
     tokenStore.set(parsed.data);
+    refreshGeneration += 1;
     return true;
   } catch {
     return false;
   }
 }
 
-function ensureRefresh(): Promise<boolean> {
+/**
+ * Resolve to `true` when a usable, freshly-rotated access token is available.
+ * `seenGeneration` is `refreshGeneration` as the calling request began: if a
+ * refresh has SUCCEEDED since (a burst where this request just carried the
+ * pre-refresh token), the current token is already fresh — retry without a
+ * second rotation. This keeps a screen's simultaneous 401s collapsing to
+ * exactly one /auth/refresh even when their responses straddle the rotation.
+ */
+function ensureRefresh(seenGeneration: number): Promise<boolean> {
+  if (!refreshInFlight && refreshGeneration > seenGeneration) {
+    return Promise.resolve(true);
+  }
   if (!refreshInFlight) {
     refreshInFlight = refreshAccessToken().finally(() => {
       refreshInFlight = null;
@@ -124,6 +140,10 @@ function ensureRefresh(): Promise<boolean> {
 }
 
 async function request<T>(path: string, opts: FetchOpts = {}, retried = false): Promise<T> {
+  // Snapshot the refresh generation as this request begins. If a refresh
+  // completes between now and a 401 landing, `refreshGeneration` will have moved
+  // past this snapshot and ensureRefresh() skips a redundant second rotation.
+  const seenGeneration = refreshGeneration;
   const headers = new Headers(opts.headers ?? {});
   if (opts.json !== undefined) {
     headers.set("Content-Type", "application/json");
@@ -150,7 +170,7 @@ async function request<T>(path: string, opts: FetchOpts = {}, retried = false): 
     !path.startsWith("/api/v1/auth/") &&
     tokenStore.getRefresh()
   ) {
-    if (await ensureRefresh()) {
+    if (await ensureRefresh(seenGeneration)) {
       return request<T>(path, opts, true);
     }
     // Refresh failed (expired/revoked): drop the dead tokens so useAuth sends
