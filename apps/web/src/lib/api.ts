@@ -139,6 +139,15 @@ function ensureRefresh(seenGeneration: number): Promise<boolean> {
   return refreshInFlight;
 }
 
+// Authed endpoints that must NOT refresh-and-retry on 401: the refresh call
+// itself (recursion), login (bad credentials, not expiry) and logout
+// (fire-and-forget). Every other authed call — including /auth/me — refreshes.
+const NO_REFRESH_RETRY = new Set([
+  "/api/v1/auth/refresh",
+  "/api/v1/auth/login",
+  "/api/v1/auth/logout",
+]);
+
 async function request<T>(path: string, opts: FetchOpts = {}, retried = false): Promise<T> {
   // Snapshot the refresh generation as this request begins. If a refresh
   // completes between now and a 401 landing, `refreshGeneration` will have moved
@@ -160,14 +169,17 @@ async function request<T>(path: string, opts: FetchOpts = {}, retried = false): 
     body: opts.json !== undefined ? JSON.stringify(opts.json) : opts.body,
   });
 
-  // Expired access token → rotate once and replay. Never on the auth endpoints
-  // themselves (they carry no access token and must not recurse), and only when
-  // a refresh token exists to rotate with.
+  // Expired access token → rotate once and replay. Excluded: refresh (must not
+  // recurse), login (a 401 is bad credentials, not expiry) and logout
+  // (fire-and-forget — no point refreshing to then end the session). Crucially
+  // this DOES cover /auth/me — the session-establishing read the shell fires on
+  // load — so an expired access token silently refreshes instead of bouncing to
+  // /login (the original session-death bug). Only fires when a refresh token exists.
   if (
     res.status === 401 &&
     authed &&
     !retried &&
-    !path.startsWith("/api/v1/auth/") &&
+    !NO_REFRESH_RETRY.has(path) &&
     tokenStore.getRefresh()
   ) {
     if (await ensureRefresh(seenGeneration)) {

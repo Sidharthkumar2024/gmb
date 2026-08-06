@@ -96,6 +96,23 @@ describe("api client — silent token refresh", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1); // no /auth/refresh attempt
   });
 
+  it("refreshes on a 401 from /auth/me (the session-establishing read), not just app calls", async () => {
+    // Regression: /auth/me must NOT be lumped in with refresh/login/logout — an
+    // expired access token on the shell's first read has to refresh silently
+    // rather than bounce the user to /login.
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(401, err("expired"))) // /auth/me
+      .mockResolvedValueOnce(jsonResponse(200, ok({ accessToken: "access-new", refreshToken: "refresh-2" }))) // /auth/refresh
+      .mockResolvedValueOnce(jsonResponse(200, ok({ user: { id: "u1" } }))); // /auth/me retry
+
+    const data = await api.get<{ user: { id: string } }>("/api/v1/auth/me");
+
+    expect(data).toEqual({ user: { id: "u1" } });
+    expect(tokenStore.getAccess()).toBe("access-new");
+    expect(fetchMock).toHaveBeenCalledTimes(3); // me → refresh → me retry
+    expect((fetchMock.mock.calls[1][0] as string)).toContain("/api/v1/auth/refresh");
+  });
+
   it("skips a redundant refresh for a request already in flight during a refresh", async () => {
     // Monotonic clock so the burst ordering (B starts, refresh completes, B's
     // 401 arrives) is deterministic rather than same-millisecond flaky.
