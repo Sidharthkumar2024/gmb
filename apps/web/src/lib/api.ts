@@ -87,12 +87,49 @@ interface FetchOpts extends RequestInit {
   json?: unknown;
 }
 
-async function request<T>(path: string, opts: FetchOpts = {}): Promise<T> {
+// Silent access-token refresh. The access token is short-lived (~1h); rather
+// than dumping the user on /login when it expires, an authed request that gets a
+// 401 transparently rotates the token via /auth/refresh and retries once. A
+// single in-flight refresh is shared, so the several concurrent reads a screen
+// fires all wait on one rotation instead of racing N refreshes (which the
+// backend's reuse-detection would otherwise treat as token theft and revoke).
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  const refreshToken = tokenStore.getRefresh();
+  if (!refreshToken) return false;
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+    const text = await res.text();
+    const parsed = text ? (JSON.parse(text) as ApiResponse<AuthTokens>) : null;
+    if (!res.ok || !parsed?.success || !parsed.data) return false;
+    tokenStore.set(parsed.data);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function ensureRefresh(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = refreshAccessToken().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+async function request<T>(path: string, opts: FetchOpts = {}, retried = false): Promise<T> {
   const headers = new Headers(opts.headers ?? {});
   if (opts.json !== undefined) {
     headers.set("Content-Type", "application/json");
   }
-  if (opts.auth !== false) {
+  const authed = opts.auth !== false;
+  if (authed) {
     const token = tokenStore.getAccess();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
@@ -102,6 +139,24 @@ async function request<T>(path: string, opts: FetchOpts = {}): Promise<T> {
     headers,
     body: opts.json !== undefined ? JSON.stringify(opts.json) : opts.body,
   });
+
+  // Expired access token → rotate once and replay. Never on the auth endpoints
+  // themselves (they carry no access token and must not recurse), and only when
+  // a refresh token exists to rotate with.
+  if (
+    res.status === 401 &&
+    authed &&
+    !retried &&
+    !path.startsWith("/api/v1/auth/") &&
+    tokenStore.getRefresh()
+  ) {
+    if (await ensureRefresh()) {
+      return request<T>(path, opts, true);
+    }
+    // Refresh failed (expired/revoked): drop the dead tokens so useAuth sends
+    // the user to /login instead of retrying a doomed request.
+    tokenStore.clear();
+  }
 
   const text = await res.text();
   const parsed = text ? (JSON.parse(text) as ApiResponse<T>) : null;

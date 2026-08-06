@@ -11,5 +11,8 @@ export default defineConfig({
       "@nexaflow/shared": path.resolve(projectRoot, "packages/shared/src/index.ts"),
     },
   },
-  test: { include: ["apps/api/src/**/*.test.ts"], environment: "node" },
+  test: {
+    include: ["apps/api/src/**/*.test.ts", "apps/web/src/**/*.test.ts"],
+    environment: "node",
+  },
 });
