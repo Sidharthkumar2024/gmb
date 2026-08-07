@@ -48,7 +48,7 @@ export function signAccessToken(
   payload: AccessTokenPayload,
   expiresIn: string = process.env.JWT_EXPIRES_IN ?? "1h",
 ): string {
-  return jwt.sign(payload, jwtSecret(), { expiresIn } as jwt.SignOptions);
+  return jwt.sign(payload, jwtSecret(), { expiresIn, algorithm: "HS256" } as jwt.SignOptions);
 }
 
 /**
@@ -84,7 +84,11 @@ export async function requireAuth(
 
     let decoded: AccessTokenPayload;
     try {
-      decoded = jwt.verify(token, jwtSecret()) as AccessTokenPayload;
+      // Pin the algorithm: only HS256 (the one we sign with) is accepted, so a
+      // token asserting a different `alg` can never be verified. Defence in
+      // depth — jsonwebtoken@9 already restricts a string secret to HMAC and
+      // rejects `alg:none`, but pinning removes any dependence on that default.
+      decoded = jwt.verify(token, jwtSecret(), { algorithms: ["HS256"] }) as AccessTokenPayload;
     } catch {
       throw new ApiError(ErrorCodes.UNAUTHORIZED, 401, "Invalid or expired token.");
     }
