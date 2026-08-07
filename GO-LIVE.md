@@ -17,13 +17,26 @@ template. Copy `.env.example` to `.env` and fill it as you go.
 
 ## 1. Core secrets (required — the app refuses to start on placeholders)
 
+On startup the API validates its environment and, in production, **aborts with a
+single list of every missing/weak required var** (placeholder, unset, or too
+short) before it binds a port — so a misconfigured deploy fails loudly here
+rather than 500-ing later. In development/test the same issues are warnings.
+
 - `JWT_SECRET` — long random string (≥16 chars, not starting with `change_me`).
   Signs every access token, **including impersonation tokens**.
 - `TENANT_TOKEN_ENCRYPTION_KEY` — 32-byte base64 key. Encrypts every Secret Vault
   entry (Google tokens, AI keys, SMTP, **partner gateway keys**). Losing/rotating
   this makes stored secrets unreadable.
 - `WEB_URL` — public URL of the web app (used in invite/receipt links + Stripe
-  return URLs). `API_PORT` — API listen port.
+  return URLs, and to allow that origin in CORS). `API_PORT` — API listen port.
+- `NEXT_PUBLIC_API_URL` — the API's public origin, read by the **browser** to
+  reach the API. Required for a **split deploy** (web and API on different
+  hosts); can be omitted only when the browser reaches the API same-origin/at
+  localhost in dev. Must match a `WEB_URL`-allowed CORS origin.
+- `TRUST_PROXY_HOPS` — number of trusted proxies (load balancer / CDN) in front
+  of the API, so per-IP rate limiting sees the real client IP instead of the
+  proxy's. Default `0` (no proxy); set `1` behind a single LB. Getting this wrong
+  makes rate limits either bypassable or over-aggressive.
 - `WHITE_LABEL_CNAME_TARGET` — deployment hostname shown in partner DNS setup;
   route this host and each verified custom hostname to the web deployment.
 
