@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useId } from "react";
 import type { ReactNode } from "react";
 
 // Split auth layout from the GMB Landing design: form on the left, proof panel
@@ -132,15 +133,20 @@ export function Field({
   hint?: string;
   right?: ReactNode;
 } & React.InputHTMLAttributes<HTMLInputElement>) {
+  const fieldId = useId();
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="font-geist-mono text-[9.5px] uppercase tracking-[0.1em] text-gmb-ink-subtle">
+        <label
+          htmlFor={fieldId}
+          className="font-geist-mono text-[9.5px] uppercase tracking-[0.1em] text-gmb-ink-subtle"
+        >
           {label}
-        </span>
+        </label>
         {right}
       </div>
       <input
+        id={fieldId}
         {...props}
         className="w-full rounded-[10px] border border-gmb-line bg-gmb-subtle px-3.5 py-[11px] text-[13px] text-gmb-ink outline-none focus:border-gmb-brand"
       />

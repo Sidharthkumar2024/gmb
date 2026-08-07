@@ -172,7 +172,8 @@ export default function GmbImagesPage() {
     setError(null);
     try {
       await api.post(`/api/v1/gmb/images/${id}/create-post`, {});
-      window.location.assign("/gmb-posts");
+      // Posts live at /gmb (GmbShell labels it "Posts"); there is no /gmb-posts route.
+      window.location.assign("/gmb");
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not create a post draft.");
       setBusy(null);

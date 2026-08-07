@@ -99,7 +99,7 @@ export function GmbShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, loading, signOut } = useAuth();
 
   const [locations, setLocations] = useState<GmbLocationLite[]>([]);
   const [activeId, setActiveId] = useState<string>("");
@@ -148,6 +148,15 @@ export function GmbShell({
   // server's (a neutral skeleton) removes the divergence entirely.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  // Bounce a dead/expired session to /login instead of stranding the customer
+  // on empty chrome. useAuth() clears tokens after a failed silent refresh; with
+  // no redirect here the shell would render with user=null, every tile blank and
+  // no way back. AdminShell/PartnerShell already guard this way.
+  useEffect(() => {
+    if (!mounted || loading) return;
+    if (!user) router.replace("/login");
+  }, [mounted, loading, user, router]);
 
   const locRef = useOutsideClose(useCallback(() => setLocMenu(false), []));
   const userRef = useOutsideClose(useCallback(() => setUserMenu(false), []));
@@ -221,7 +230,10 @@ export function GmbShell({
   // render a neutral skeleton until mount. Server HTML and the first client
   // render are then byte-identical, so hydration is clean and React patches in
   // the real content on the next tick.
-  if (!mounted) {
+  // Show the skeleton until mounted AND authenticated. While unauthenticated the
+  // redirect effect above is sending the user to /login — rendering the skeleton
+  // (not the live chrome) avoids a flash of empty, tenant-less UI.
+  if (!mounted || loading || !user) {
     return (
       <div className="flex h-screen overflow-hidden bg-gmb-canvas font-geist text-gmb-ink">
         <aside className="w-[248px] flex-shrink-0 border-r border-gmb-line bg-gmb-surface" />
