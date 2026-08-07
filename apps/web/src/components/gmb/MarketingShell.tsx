@@ -16,7 +16,7 @@ export function MarketingShell({
 }) {
   return (
     <div className="min-h-screen bg-gmb-canvas font-geist text-gmb-ink">
-      <header className="flex flex-wrap items-center gap-7 border-b border-gmb-line bg-gmb-surface px-6 py-[18px] lg:px-12">
+      <header className="flex flex-wrap items-center gap-3 border-b border-gmb-line bg-gmb-surface px-6 py-[18px] md:gap-7 lg:px-12">
         <Link href="/" className="flex items-center gap-2.5 text-gmb-ink no-underline hover:no-underline">
           <span className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-gradient-to-br from-gmb-brand-light to-gmb-brand-lighter text-[13px] font-bold text-white">
             G
