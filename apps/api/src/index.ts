@@ -39,6 +39,12 @@ import {
 } from "./services/partnerInvoice.service";
 import { startWorkerHeartbeat, stopWorkerHeartbeat } from "./lib/workerHeartbeat";
 import { startGmbRankScheduleWorker, stopGmbRankScheduleWorker } from "./services/gmbRankScheduler.service";
+import { validateEnvOrExit } from "./lib/validateEnv";
+
+// Validate configuration before anything binds a port or serves a request. In
+// production a missing/weak critical var aborts here with a clear list; in
+// dev/test it only warns so fallbacks keep working.
+validateEnvOrExit();
 
 const app = express();
 const PORT = Number(process.env.API_PORT ?? 3001);
