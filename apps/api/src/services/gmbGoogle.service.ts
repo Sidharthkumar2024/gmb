@@ -757,8 +757,22 @@ export async function syncGoogleLocations(input: {
     url: `${ACCOUNT_MANAGEMENT_BASE}/accounts`,
   });
   const accountNames = (accounts.accounts ?? []).map((a) => a.name).filter(Boolean) as string[];
+
+  // Enforce the plan's location cap here too: the manual createLocation path
+  // checks it (assertWithinLocationLimit), so sync/import must not be a backdoor
+  // around it. Updates to already-imported locations don't count; NEW locations
+  // are created only up to the remaining headroom, and any beyond the cap are
+  // skipped and reported rather than silently created over-limit.
+  const planTenant = await prisma.tenant.findUnique({
+    where: { id: input.tenantId },
+    select: { plan: { select: { maxLocations: true } } },
+  });
+  const maxLocations = planTenant?.plan?.maxLocations ?? null;
+  let liveCount = await prisma.gmbLocation.count({ where: { tenantId: input.tenantId } });
+
   let created = 0;
   let updated = 0;
+  let skipped = 0;
   const locations = [];
   for (const accountName of accountNames) {
     const readMask = [
@@ -801,20 +815,28 @@ export async function syncGoogleLocations(input: {
         secretId: credential.secretId,
         lastSyncedAt: new Date(),
       };
-      const row = existing
-        ? await prisma.gmbLocation.update({ where: { id: existing.id }, data })
-        : await prisma.gmbLocation.create({
-            data: {
-              tenantId: input.tenantId,
-              createdByUserId: input.createdByUserId ?? null,
-              ...data,
-            },
-          });
-      existing ? (updated += 1) : (created += 1);
-      locations.push(row);
+      if (existing) {
+        const row = await prisma.gmbLocation.update({ where: { id: existing.id }, data });
+        updated += 1;
+        locations.push(row);
+      } else if (maxLocations != null && liveCount >= maxLocations) {
+        // Over the plan's location cap — don't create this new location.
+        skipped += 1;
+      } else {
+        const row = await prisma.gmbLocation.create({
+          data: {
+            tenantId: input.tenantId,
+            createdByUserId: input.createdByUserId ?? null,
+            ...data,
+          },
+        });
+        created += 1;
+        liveCount += 1;
+        locations.push(row);
+      }
     }
   }
-  return { accounts: accountNames.length, created, updated, total: locations.length };
+  return { accounts: accountNames.length, created, updated, skipped, total: locations.length };
 }
 
 export function mapGoogleStarRating(starRating: string | number | undefined): number | null {

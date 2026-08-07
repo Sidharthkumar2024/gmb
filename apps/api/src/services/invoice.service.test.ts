@@ -81,6 +81,20 @@ describe("ensureTaxInvoice — GST split + numbering", () => {
     expect(deps.taxCreate.mock.calls[0][0].data.number).toBe("INV-2026-27-000042");
   });
 
+  it("files an IST-boundary payment in the new financial year, not the UTC one", async () => {
+    // 2026-03-31T20:00:00Z == 2026-04-01T01:30 IST → FY 2026-27. A UTC-based FY
+    // would wrongly file it as 2025-26.
+    vi.stubEnv("INVOICE_SELLER_GSTIN", "29ABCDE1234F1Z5");
+    deps.taxFindUnique.mockResolvedValue(null);
+    deps.paymentFindUnique.mockResolvedValue(payment({ createdAt: new Date("2026-03-31T20:00:00Z") }));
+    deps.profileFindUnique.mockResolvedValue(null);
+    deps.queryRaw.mockResolvedValue([{ nextval: 7n }]);
+    deps.taxCreate.mockImplementation(async ({ data }: { data: { number: string } }) => data);
+
+    await ensureTaxInvoice("pay_1");
+    expect(deps.taxCreate.mock.calls[0][0].data.number).toBe("INV-2026-27-000007");
+  });
+
   it("charges no tax when no seller GSTIN is configured (subtotal === amount)", async () => {
     // no INVOICE_SELLER_GSTIN in env → rate 0
     deps.taxFindUnique.mockResolvedValue(null);

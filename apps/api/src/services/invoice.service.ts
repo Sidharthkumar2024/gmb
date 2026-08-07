@@ -25,8 +25,13 @@ export interface Invoice {
 }
 
 function financialYear(date: Date): string {
-  const year = date.getUTCFullYear();
-  const start = date.getUTCMonth() >= 3 ? year : year - 1;
+  // India's fiscal year runs 1 Apr – 31 Mar in IST (UTC+5:30, no DST). Compute
+  // the boundary in IST, not UTC: a payment captured between 18:30 and 24:00 UTC
+  // already falls on the next IST day, so a UTC-based FY would misfile invoices
+  // in that window around the 31 Mar / 1 Apr boundary into the wrong year.
+  const ist = new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
+  const year = ist.getUTCFullYear();
+  const start = ist.getUTCMonth() >= 3 ? year : year - 1;
   return `${start}-${String(start + 1).slice(-2)}`;
 }
 
