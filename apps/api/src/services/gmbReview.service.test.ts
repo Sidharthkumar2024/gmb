@@ -1,9 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const deps = vi.hoisted(() => ({ groupBy: vi.fn(), count: vi.fn() }));
+vi.mock("@nexaflow/db", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nexaflow/db")>();
+  return { ...actual, prisma: { gmbReview: { groupBy: deps.groupBy, count: deps.count } } };
+});
+
 import { GmbReviewStatus } from "@nexaflow/db";
 import {
   buildGoogleReviewLink,
   buildReviewReplyDraft,
   buildReviewRequestText,
+  getReputationSummary,
   ratingSentiment,
   summarizeReviews,
   toSafeReview,
@@ -103,6 +111,41 @@ describe("summarizeReviews", () => {
     expect(summary.count).toBe(0);
     expect(summary.average).toBe(0);
     expect(summary.unanswered).toBe(0);
+  });
+});
+
+describe("getReputationSummary (DB-aggregated)", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("aggregates via groupBy/count and does NOT load every review row", async () => {
+    deps.groupBy.mockResolvedValue([
+      { rating: 5, _count: { _all: 3 } },
+      { rating: 4, _count: { _all: 1 } },
+      { rating: 1, _count: { _all: 1 } },
+    ]);
+    deps.count.mockResolvedValue(2); // unanswered (status NEW)
+
+    const s = await getReputationSummary("t1");
+
+    expect(s.count).toBe(5);
+    expect(s.average).toBe(4); // (5*3 + 4 + 1) / 5 = 20/5
+    expect(s.distribution[5]).toBe(3);
+    expect(s.distribution[4]).toBe(1);
+    expect(s.distribution[1]).toBe(1);
+    expect(s.unanswered).toBe(2);
+    // the scale guarantee: it aggregates in the DB, never findMany-ing all rows
+    expect(deps.groupBy).toHaveBeenCalledOnce();
+  });
+
+  it("returns a zeroed summary for a tenant with no reviews", async () => {
+    deps.groupBy.mockResolvedValue([]);
+    deps.count.mockResolvedValue(0);
+    expect(await getReputationSummary("t1")).toEqual({
+      count: 0,
+      average: 0,
+      distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      unanswered: 0,
+    });
   });
 });
 

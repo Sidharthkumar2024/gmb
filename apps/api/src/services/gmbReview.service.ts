@@ -331,11 +331,31 @@ export async function deleteReview(tenantId: string, id: string) {
   await prisma.gmbReview.delete({ where: { id } });
 }
 
-export async function getReputationSummary(tenantId: string, locationId?: string) {
+export async function getReputationSummary(
+  tenantId: string,
+  locationId?: string,
+): Promise<ReputationSummary> {
   if (locationId) await findLocationOrThrow(tenantId, locationId);
-  const rows = await prisma.gmbReview.findMany({
-    where: { tenantId, ...(locationId ? { locationId } : {}) },
-    select: { rating: true, status: true },
-  });
-  return summarizeReviews(rows);
+  const where = { tenantId, ...(locationId ? { locationId } : {}) };
+  // Aggregate in the DB instead of loading every review row into memory: this
+  // runs on the dashboard hot path (and reports/advisor), so a high-review
+  // tenant would otherwise pull thousands of rows on every dashboard load.
+  // `rating` is an Int, so grouping by it reproduces summarizeReviews' output
+  // exactly (count, average over raw ratings, 1–5 distribution, unanswered).
+  const [byRating, unanswered] = await Promise.all([
+    prisma.gmbReview.groupBy({ by: ["rating"], where, _count: { _all: true } }),
+    prisma.gmbReview.count({ where: { ...where, status: GmbReviewStatus.NEW } }),
+  ]);
+  const distribution: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  let count = 0;
+  let total = 0;
+  for (const g of byRating) {
+    const n = g._count._all;
+    count += n;
+    total += g.rating * n;
+    const bucket = Math.min(5, Math.max(1, Math.round(g.rating))) as 1 | 2 | 3 | 4 | 5;
+    distribution[bucket] += n;
+  }
+  const average = count ? Math.round((total / count) * 100) / 100 : 0;
+  return { count, average, distribution, unanswered };
 }
