@@ -1,0 +1,101 @@
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import { prisma } from "@nexaflow/db";
+
+import { errorHandler } from "./middleware/errorHandler";
+import authRoutes from "./routes/auth.routes";
+import gmbRoutes from "./routes/gmb.routes";
+import workspaceRoutes from "./routes/workspace.routes";
+import adminRoutes from "./routes/admin.routes";
+import partnerRoutes from "./routes/partner.routes";
+import billingRoutes from "./routes/billing.routes";
+import uploadsRoutes from "./routes/uploads.routes";
+import publicRoutes from "./routes/public.routes";
+
+// The configured Express app, with NO side effects (no port bound, no env
+// validation, no workers). index.ts imports this to validate + listen; tests
+// import it to drive HTTP requests against an ephemeral server.
+export const app = express();
+
+// Trust the reverse proxy only as far as explicitly configured, so `req.ip`
+// reflects the real client for rate limiting. Default 0 = trust nothing, so a
+// spoofed X-Forwarded-For can't influence req.ip; set TRUST_PROXY_HOPS to the
+// number of proxies in front of the API in production (e.g. 1 for a single
+// nginx/ELB) so the real client IP is used instead of the proxy's.
+const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
+app.set("trust proxy", Number.isFinite(trustProxyHops) ? trustProxyHops : 0);
+
+app.use(helmet());
+app.use(
+  cors({
+    origin: async (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const configured = process.env.WEB_URL ?? "http://localhost:3000";
+      if (origin === configured) return callback(null, true);
+      try {
+        const host = new URL(origin).hostname.toLowerCase();
+        const verified = await prisma.whiteLabelConfig.findFirst({
+          where: { customDomain: host, domainVerified: true },
+          select: { id: true },
+        });
+        callback(null, Boolean(verified));
+      } catch {
+        callback(null, false);
+      }
+    },
+    credentials: true,
+  }),
+);
+// Branded post images and report PDFs are sizeable; the default 100kb limit
+// rejects them.
+app.use(
+  express.json({
+    limit: "5mb",
+    // Capture the raw body so the Razorpay webhook can verify its HMAC signature
+    // — JSON parsing discards the exact bytes the signature is computed over.
+    verify: (req, _res, buf) => {
+      (req as unknown as { rawBody?: Buffer }).rawBody = buf;
+    },
+  }),
+);
+
+app.get("/api/v1/health", async (_req, res) => {
+  // Report DB reachability rather than just "the process is up" — an API that
+  // answers 200 while Postgres is down is worse than one that fails.
+  let database = "ok";
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (err) {
+    database = `error: ${(err as Error).message}`;
+  }
+  res.status(database === "ok" ? 200 : 503).json({
+    success: database === "ok",
+    data: { status: database === "ok" ? "ok" : "degraded", database, uptime: process.uptime() },
+  });
+});
+
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/public", publicRoutes);
+app.use("/api/v1/gmb", gmbRoutes);
+app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/partner", partnerRoutes);
+// Top-up: POST /api/v1/billing/top-up (authed) + /billing/webhook/{razorpay,
+// stripe} (public, gateway-signature-verified). MUST precede the /api/v1
+// catch-all below — that router applies requireAuth to everything under it, so
+// the public webhooks would 401 before reaching their handler if mounted after.
+app.use("/api/v1/billing", billingRoutes);
+// Direct-to-storage upload presign: POST /api/v1/uploads/presign (authed).
+app.use("/api/v1/uploads", uploadsRoutes);
+// Mounted at the version root: these paths are /language-settings,
+// /currency-settings, /customer/wallets and /products/customer-access.
+app.use("/api/v1", workspaceRoutes);
+
+app.use((_req, res) => {
+  res.status(404).json({
+    success: false,
+    error: { code: "NOT_FOUND", message: "Route not found." },
+  });
+});
+
+app.use(errorHandler);
