@@ -166,4 +166,30 @@ describe("api client — silent token refresh", () => {
     await expect(api.get("/api/v1/thing")).rejects.toMatchObject({ status: 401 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("clears the impersonation stash on a successful refresh (no stale-token logout)", async () => {
+    // Admin session parked; the impersonation access token sits in the primary
+    // slot while the admin's refresh token (R0) stays there as the only
+    // refreshable credential.
+    tokenStore.set({ accessToken: "admin-A0", refreshToken: "admin-R0", expiresIn: 3600 });
+    tokenStore.stashAdminAndSetImpersonation("imp-access");
+    expect(store.get("nx_admin_refresh")).toBe("admin-R0"); // stash present
+
+    // An authed read 401s (impersonation token expired); the client refreshes
+    // with R0, rotating it to R1 — which necessarily ends impersonation.
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(401, err("expired")))
+      .mockResolvedValueOnce(jsonResponse(200, ok({ accessToken: "admin-A1", refreshToken: "admin-R1" })))
+      .mockResolvedValueOnce(jsonResponse(200, ok({ ok: true })));
+
+    await api.get("/api/v1/gmb/locations");
+
+    // Rotated admin session is live in the primary slot...
+    expect(tokenStore.getRefresh()).toBe("admin-R1");
+    // ...and the now-stale stash is gone, so "Return to admin" can't replay the
+    // revoked R0 (which would trip reuse-detection and log the admin out).
+    expect(store.get("nx_admin_access")).toBeUndefined();
+    expect(store.get("nx_admin_refresh")).toBeUndefined();
+    expect(tokenStore.restoreAdminFromStash()).toBe(false);
+  });
 });

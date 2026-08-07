@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   decryptToken,
   decryptTokenIfNeeded,
@@ -61,5 +61,29 @@ describe("decryptTokenIfNeeded", () => {
     expect(decryptTokenIfNeeded("")).toBeNull();
     expect(decryptTokenIfNeeded("already-plain")).toBe("already-plain");
     expect(decryptTokenIfNeeded(encryptToken("wrapped"))).toBe("wrapped");
+  });
+});
+
+describe("KEK fallback fails closed", () => {
+  // The insecure repo-committed fallback key must be usable ONLY under an
+  // explicit dev/test NODE_ENV. An unset or "staging" NODE_ENV with no configured
+  // key must throw rather than silently encrypt every secret with a public key.
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("throws when no key is set and NODE_ENV is not development/test", () => {
+    // ensure the weak-key branch is taken regardless of the ambient key
+    vi.stubEnv("TENANT_TOKEN_ENCRYPTION_KEY", "");
+    for (const env of ["production", "staging", "prod", undefined]) {
+      vi.stubEnv("NODE_ENV", env as string);
+      expect(() => encryptToken("x")).toThrow(/TENANT_TOKEN_ENCRYPTION_KEY must be set/);
+    }
+  });
+
+  it("still allows the fallback under development and test", () => {
+    vi.stubEnv("TENANT_TOKEN_ENCRYPTION_KEY", "");
+    for (const env of ["development", "test"]) {
+      vi.stubEnv("NODE_ENV", env);
+      expect(decryptToken(encryptToken("ok"))).toBe("ok");
+    }
   });
 });

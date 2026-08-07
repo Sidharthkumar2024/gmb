@@ -64,6 +64,38 @@ async function creditAllowed(creds: WebhookCreds | undefined, tenantId: string):
   return ok;
 }
 
+type RazorpayPaymentEntity = {
+  id?: string;
+  order_id?: string;
+  amount?: number;
+  currency?: string;
+  notes?: Record<string, string>;
+};
+
+/**
+ * Resolve who to credit and how much for a captured Razorpay payment — SOLELY
+ * from the order we created server-side. A payment entity's `notes` are chosen
+ * by the payer's own Checkout call and do NOT inherit the order's notes, so they
+ * are attacker-controlled and must never influence tenantId/credits: trusting
+ * them would let a payer inject `{tenantId, credits}` and mint arbitrary credits
+ * for a ~₹1 payment, or credit an arbitrary tenant. Returns tenantId undefined /
+ * credits 0 when the order can't be read, so the caller fails closed.
+ */
+export async function resolveRazorpayCreditTarget(
+  payment: RazorpayPaymentEntity | undefined,
+  creds?: WebhookCreds,
+): Promise<{ tenantId?: string; credits: number; orderNotes?: Record<string, string> }> {
+  if (!payment?.order_id) return { tenantId: undefined, credits: 0, orderNotes: undefined };
+  const orderNotes =
+    (await fetchRazorpayOrderNotes(
+      payment.order_id,
+      creds?.razorpayApi?.keyId
+        ? { keyId: creds.razorpayApi.keyId, keySecret: creds.razorpayApi.keySecret }
+        : undefined,
+    )) ?? undefined;
+  return { tenantId: orderNotes?.tenantId, credits: Number(orderNotes?.credits ?? 0), orderNotes };
+}
+
 /**
  * Razorpay webhook (public — no user auth). The signature is verified against the
  * RAW body under the platform secret, or a partner's webhook secret for a routed
@@ -103,24 +135,12 @@ async function handleRazorpay(
     };
     if (event.event === "payment.captured") {
       const payment = event.payload?.payment?.entity;
-      // tenantId/credits live in the ORDER's notes — a Razorpay payment does NOT
-      // inherit them, so payment.notes is normally empty. Resolve from the order
-      // (server-side, untamperable) via order_id; keep payment.notes as a fast
-      // path. For a partner-routed webhook, the order lives on the partner's
-      // account, so the order fetch uses the partner's API keys.
-      let tenantId = payment?.notes?.tenantId;
-      let credits = Number(payment?.notes?.credits ?? 0);
-      let orderNotes = payment?.notes;
-      if ((!tenantId || !(credits > 0)) && payment?.order_id) {
-        orderNotes = (await fetchRazorpayOrderNotes(
-          payment.order_id,
-          creds?.razorpayApi?.keyId
-            ? { keyId: creds.razorpayApi.keyId, keySecret: creds.razorpayApi.keySecret }
-            : undefined,
-        )) ?? undefined;
-        tenantId = orderNotes?.tenantId ?? tenantId;
-        credits = Number(orderNotes?.credits ?? credits);
-      }
+      // tenantId/credits/kind come ONLY from the ORDER's notes, which we set
+      // server-side — never from payment.notes, which the payer's own Checkout
+      // call can populate (a payment does NOT inherit the order's notes). For a
+      // partner-routed webhook the order lives on the partner's account, so the
+      // fetch uses the partner's API keys.
+      const { tenantId, credits, orderNotes } = await resolveRazorpayCreditTarget(payment, creds);
       if (orderNotes?.kind === "partner_settlement" && orderNotes.invoiceId && tenantId && payment?.id && !creds?.scopePartnerId) {
         await markPartnerInvoicePaid({
           invoiceId: orderNotes.invoiceId,

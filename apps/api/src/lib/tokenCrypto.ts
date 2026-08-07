@@ -34,12 +34,19 @@ const HKDF_INFO = Buffer.from("nexaflow.tenant-token.v1");
 function getKek(): Buffer {
   const raw = process.env.TENANT_TOKEN_ENCRYPTION_KEY;
   if (!raw || raw.startsWith("your_") || raw.length < 16) {
-    if (process.env.NODE_ENV === "production") {
+    // Fail CLOSED: the insecure, repo-committed fallback key is only permitted
+    // when NODE_ENV is explicitly "development" or "test". Gating on
+    // `NODE_ENV === "production"` alone was unsafe — an unset or "staging"
+    // NODE_ENV would silently encrypt every vault secret with a key that is
+    // public in source control, so a DB dump would be trivially decryptable.
+    const env = process.env.NODE_ENV;
+    if (env !== "development" && env !== "test") {
       throw new Error(
-        "TENANT_TOKEN_ENCRYPTION_KEY must be set to a strong value (>=32 bytes) in production.",
+        "TENANT_TOKEN_ENCRYPTION_KEY must be set to a strong value (>=32 bytes). " +
+          "The insecure dev fallback key is only allowed when NODE_ENV is 'development' or 'test'.",
       );
     }
-    // Deterministic dev fallback so encrypt/decrypt round-trip works
+    // Deterministic dev/test fallback so encrypt/decrypt round-trip works
     // without manual setup. NEVER ship this default to prod.
     return Buffer.from(
       "DEV-ONLY-FALLBACK-KEY-DO-NOT-USE-IN-PROD-32B",

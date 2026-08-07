@@ -56,6 +56,21 @@ export const tokenStore = {
     // restores the admin context (which is the right safe default).
   },
   /**
+   * Drop any parked admin stash. Called after a successful token refresh: the
+   * impersonation access token is not itself refreshable, so a refresh
+   * necessarily spends the admin's OWN refresh token (parked in the primary
+   * slot) and lands a fresh admin session there — ending impersonation. The
+   * stashed pair is now stale: its refresh token has been rotated away, and the
+   * backend's reuse-detection revokes the whole token family if it is replayed.
+   * Restoring it would therefore log the admin out. Clearing it makes "Return to
+   * admin" a safe no-op — the primary slots already hold the restored session.
+   */
+  clearStash(): void {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(STASHED_ACCESS_KEY);
+    window.localStorage.removeItem(STASHED_REFRESH_KEY);
+  },
+  /**
    * Restore the parked admin tokens to the primary slots. No-op when
    * no stash is present.
    */
@@ -112,6 +127,9 @@ async function refreshAccessToken(): Promise<boolean> {
     const parsed = text ? (JSON.parse(text) as ApiResponse<AuthTokens>) : null;
     if (!res.ok || !parsed?.success || !parsed.data) return false;
     tokenStore.set(parsed.data);
+    // A successful refresh ends any impersonation (see clearStash): the rotated
+    // admin session now lives in the primary slots, so the stale stash must go.
+    tokenStore.clearStash();
     refreshGeneration += 1;
     return true;
   } catch {
