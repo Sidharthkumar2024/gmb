@@ -21,26 +21,43 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string }> }
     items: [
       { href: "/admin", name: "Overview" },
       { href: "/admin/accounts", name: "Accounts" },
-      { href: "/admin/users", name: "Users" },
-      { href: "/admin/plans", name: "Plans" },
-      { href: "/admin/gateways", name: "Payment gateways" },
-      { href: "/admin/payments", name: "Payments" },
-      { href: "/admin/invoices", name: "Invoices" },
-      { href: "/admin/transactions", name: "Transactions" },
+      { href: "/admin/white-label", name: "White-label" },
+      { href: "/admin/users", name: "Users & AI" },
+      { href: "/admin/roles", name: "Roles & access" },
       { href: "/admin/queue", name: "Scan queue" },
     ],
   },
   {
-    label: "Operations",
+    label: "Billing",
+    items: [
+      { href: "/admin/plans", name: "Plans & units" },
+      { href: "/admin/payments", name: "Payments" },
+      { href: "/admin/invoices", name: "Invoices" },
+      { href: "/admin/transactions", name: "Transactions" },
+    ],
+  },
+  {
+    label: "Infrastructure",
     items: [
       { href: "/admin/google", name: "Google APIs" },
-      { href: "/admin/ai", name: "AI models" },
-      { href: "/admin/email", name: "Email" },
-      { href: "/admin/email-templates", name: "Email templates" },
-      { href: "/admin/providers", name: "Integrations" },
       { href: "/admin/storage", name: "Image storage" },
-      { href: "/admin/health", name: "Health" },
+      { href: "/admin/ai", name: "AI models" },
+      { href: "/admin/api-keys", name: "API keys" },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { href: "/admin/providers", name: "Providers & keys" },
       { href: "/admin/audit", name: "Audit log" },
+      { href: "/admin/health", name: "Health" },
+    ],
+  },
+  {
+    label: "Email",
+    items: [
+      { href: "/admin/email-templates", name: "Templates" },
+      { href: "/admin/email", name: "SMTP & delivery" },
     ],
   },
   {

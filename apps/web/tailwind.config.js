@@ -170,6 +170,7 @@ module.exports = {
       fontFamily: {
         geist: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         'geist-mono': ['Geist Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        newsreader: ['Newsreader', 'Georgia', 'Times New Roman', 'serif'],
       },
       fontSize: {
         // The design leans on half-pixel sizes; named so screens don't

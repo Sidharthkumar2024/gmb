@@ -33,13 +33,38 @@ interface CreateResult {
   inviteUrl: string;
   emailSent: boolean;
 }
+interface Statement {
+  totals: {
+    wholesaleDueByCurrency: Record<string, number>;
+    collectedByCurrency: Record<string, number>;
+    marginByCurrency: Record<string, number>;
+  };
+}
+
+function money(minor: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(minor / 100);
+  } catch {
+    return `${(minor / 100).toFixed(2)} ${currency}`;
+  }
+}
+
+function byCurrency(values: Record<string, number> | undefined): string {
+  const entries = Object.entries(values ?? {});
+  return entries.length ? entries.map(([currency, minor]) => money(minor, currency)).join(" · ") : "—";
+}
 
 const STATUS_TONE = { ACTIVE: "ok", SUSPENDED: "warn", DELETED: "danger" } as const;
 const blankForm = { businessName: "", adminEmail: "", adminName: "", partnerPlanId: "" };
 
-export default function PartnerDashboardPage() {
+export default function PartnerDashboardPage({
+  portalTitle = "Customers",
+}: {
+  portalTitle?: "Dashboard" | "Customers";
+} = {}) {
   const [data, setData] = useState<Overview | null>(null);
   const [plans, setPlans] = useState<ResalePlan[]>([]);
+  const [statement, setStatement] = useState<Statement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(blankForm);
@@ -53,8 +78,15 @@ export default function PartnerDashboardPage() {
       .catch((e) => setError(e instanceof ApiClientError ? e.message : "Could not load your customers."));
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("new") === "1") setShowForm(true);
     void load();
-    void api.get<ResalePlan[]>("/api/v1/partner/plans").then((r) => setPlans(r ?? [])).catch(() => setPlans([]));
+    void Promise.all([
+      api.get<ResalePlan[]>("/api/v1/partner/plans").catch(() => []),
+      api.get<Statement>("/api/v1/partner/statement").catch(() => null),
+    ]).then(([availablePlans, currentStatement]) => {
+      setPlans(availablePlans ?? []);
+      setStatement(currentStatement);
+    });
   }, []);
 
   const submit = async () => {
@@ -118,7 +150,7 @@ export default function PartnerDashboardPage() {
     "w-full rounded-control border border-ptn-line bg-ptn-bg px-3 py-2 text-sm2 text-ptn-ink outline-none focus:border-ptn-accent";
 
   return (
-    <PartnerShell title="Dashboard">
+    <PartnerShell title={portalTitle}>
       {error && (
         <div className="mb-3.5 rounded-control border border-gmb-danger/30 bg-gmb-danger/10 px-3 py-2 text-sm2 text-ptn-danger">
           {error}
@@ -146,18 +178,19 @@ export default function PartnerDashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3.5">
+      <div className="grid grid-cols-4 gap-3.5">
         {(
           [
             ["Customers", data?.totals.customers, "workspaces you manage"],
-            ["Active", data?.totals.active, "not suspended"],
-            ["Locations", data?.totals.locations, "across all customers"],
+            ["Total MRR", statement ? byCurrency(statement.totals.collectedByCurrency) : null, "your retail billing"],
+            ["Wholesale cost", statement ? byCurrency(statement.totals.wholesaleDueByCurrency) : null, "billed by Adgrowly"],
+            ["Margin", statement ? byCurrency(statement.totals.marginByCurrency) : null, "collected − wholesale"],
           ] as const
         ).map(([label, value, caption]) => (
           <PtnCard key={label}>
             <PtnLabel>{label}</PtnLabel>
-            <div className="mt-1.5 text-[28px] font-bold tracking-[-0.02em]">
-              {typeof value === "number" ? value.toLocaleString() : "—"}
+            <div className={`mt-1.5 font-newsreader text-[30px] font-medium tracking-[-0.015em] ${label === "Margin" ? "text-ptn-accent" : "text-ptn-ink"}`}>
+              {typeof value === "number" ? value.toLocaleString() : (value ?? "—")}
             </div>
             <div className="mt-1 text-xs2 text-ptn-muted">{caption}</div>
           </PtnCard>
@@ -180,16 +213,18 @@ export default function PartnerDashboardPage() {
       <div className="mt-3.5">
         <div className="mb-2 flex items-center gap-2">
           <PtnLabel>Customers</PtnLabel>
-          <button
-            type="button"
-            onClick={() => {
-              setShowForm((s) => !s);
-              setCreated(null);
-            }}
-            className="ml-auto rounded-control bg-ptn-accent px-3.5 py-1.5 text-xs2 font-semibold text-ptn-bg hover:bg-ptn-accent-hover"
-          >
-            {showForm ? "Cancel" : "+ Add customer"}
-          </button>
+          {showForm ? (
+            <button
+              type="button"
+              onClick={() => {
+                setShowForm(false);
+                setCreated(null);
+              }}
+              className="ml-auto rounded-control border border-ptn-line px-3.5 py-1.5 text-xs2 font-semibold text-ptn-muted hover:bg-ptn-panel-hover"
+            >
+              Cancel
+            </button>
+          ) : null}
         </div>
 
         {showForm && (

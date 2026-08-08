@@ -84,6 +84,59 @@ export interface UpsertTemplateInput {
   updatedByUserId?: string;
 }
 
+/** List the same real mail catalogue with overrides isolated to one partner. */
+export async function listPartnerEmailTemplates(tenantId: string): Promise<SafeEmailTemplate[]> {
+  const rows = await prisma.partnerEmailTemplate.findMany({ where: { tenantId } });
+  const byKey = new Map(rows.map((row) => [row.key, row]));
+  return EMAIL_TEMPLATES.map((def) => {
+    const row = byKey.get(def.key);
+    const useCustom = row?.useCustom ?? false;
+    return {
+      ...def,
+      subject: useCustom && row ? row.subject : def.defaultSubject,
+      body: useCustom && row ? row.body : def.defaultBody,
+      useCustom,
+      updatedAt: row?.updatedAt ?? null,
+    };
+  });
+}
+
+export async function upsertPartnerEmailTemplate(
+  tenantId: string,
+  key: string,
+  input: UpsertTemplateInput,
+): Promise<SafeEmailTemplate> {
+  const def = BY_KEY.get(key);
+  if (!def) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Unknown email template.");
+  const subject = input.subject.trim();
+  const body = input.body.trim();
+  if (input.useCustom && (!subject || !body)) {
+    throw new ApiError(
+      ErrorCodes.BAD_REQUEST,
+      400,
+      "A custom subject and body are required to enable a custom template.",
+    );
+  }
+  await prisma.partnerEmailTemplate.upsert({
+    where: { tenantId_key: { tenantId, key } },
+    create: {
+      tenantId,
+      key,
+      subject: subject || def.defaultSubject,
+      body: body || def.defaultBody,
+      useCustom: input.useCustom,
+      updatedByUserId: input.updatedByUserId ?? null,
+    },
+    update: {
+      subject: subject || def.defaultSubject,
+      body: body || def.defaultBody,
+      useCustom: input.useCustom,
+      updatedByUserId: input.updatedByUserId ?? null,
+    },
+  });
+  return (await listPartnerEmailTemplates(tenantId)).find((template) => template.key === key)!;
+}
+
 export async function upsertEmailTemplate(
   key: string,
   input: UpsertTemplateInput,
@@ -123,12 +176,31 @@ function render(template: string, vars: Record<string, string>): string {
 export async function renderEmailTemplate(
   key: string,
   vars: Record<string, string>,
+  tenantId?: string,
 ): Promise<{ subject: string; text: string }> {
   const def = BY_KEY.get(key);
   if (!def) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "Unknown email template.");
   let subject = def.defaultSubject;
   let body = def.defaultBody;
   try {
+    if (tenantId) {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { type: true, parentTenantId: true },
+      });
+      const partnerTenantId = tenant?.parentTenantId ?? (tenant?.type === "WHITE_LABEL" ? tenantId : null);
+      if (partnerTenantId) {
+        const partnerRow = await prisma.partnerEmailTemplate.findUnique({
+          where: { tenantId_key: { tenantId: partnerTenantId, key } },
+        });
+        if (partnerRow?.useCustom) {
+          return {
+            subject: render(partnerRow.subject, vars),
+            text: render(partnerRow.body, vars),
+          };
+        }
+      }
+    }
     const row = await prisma.emailTemplate.findUnique({ where: { key } });
     if (row?.useCustom) {
       subject = row.subject;

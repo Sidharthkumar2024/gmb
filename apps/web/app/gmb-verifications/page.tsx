@@ -150,7 +150,7 @@ export default function GmbVerificationsPage() {
   const selectedOption = status?.availableOptions.find((option) => option.method === method);
 
   return (
-    <GmbShell title="Verification">
+    <GmbShell title="Verifications">
       {error && <ErrorNote>{error}</ErrorNote>}
 
       <Card className="mb-3.5">

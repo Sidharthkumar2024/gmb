@@ -119,7 +119,7 @@ export default function PartnerGatewayPage() {
     "w-full rounded-control border border-ptn-line bg-ptn-bg px-3 py-2 font-geist-mono text-xs2 text-ptn-ink outline-none focus:border-ptn-accent";
 
   return (
-    <PartnerShell title="Payment gateway">
+    <PartnerShell title="Payment gateways">
       {error && (
         <div className="mb-3.5 rounded-control border border-gmb-danger/30 bg-gmb-danger/10 px-3 py-2 text-sm2 text-ptn-danger">
           {error}

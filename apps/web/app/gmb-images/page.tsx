@@ -181,7 +181,7 @@ export default function GmbImagesPage() {
   }
 
   return (
-    <GmbShell title="Photos">
+    <GmbShell title="Images">
       {error && <ErrorNote>{error}</ErrorNote>}
 
       {/* Composer */}

@@ -150,12 +150,12 @@ export async function createPartnerCustomer(
   // mean an email actually went out, or the partner won't know to share the link.
   let emailSent = false;
   try {
-    if (await resolveSmtpSettings()) {
+    if (await resolveSmtpSettings(tenant.id)) {
       const mail = await renderEmailTemplate("STAFF_INVITE", {
         inviter: businessName,
         url: inviteUrl,
-      });
-      await sendEmail({ to: email, ...mail });
+      }, tenant.id);
+      await sendEmail({ to: email, ...mail, tenantId: tenant.id });
       emailSent = true;
     }
   } catch (err) {
@@ -563,12 +563,12 @@ export async function inviteStaff(input: InviteStaffInput): Promise<InviteResult
   // know to share the link themselves.
   let emailSent = false;
   try {
-    if (await resolveSmtpSettings()) {
+    if (await resolveSmtpSettings(input.partnerTenantId)) {
       const mail = await renderEmailTemplate("STAFF_INVITE", {
         inviter: inviter?.name ?? inviter?.email ?? "Your team",
         url: inviteUrl,
-      });
-      await sendEmail({ to: email, ...mail });
+      }, input.partnerTenantId);
+      await sendEmail({ to: email, ...mail, tenantId: input.partnerTenantId });
       emailSent = true;
     }
   } catch (err) {

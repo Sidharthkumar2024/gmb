@@ -252,7 +252,7 @@ export default function GmbBillingPage() {
   const chargingOn = (costs ?? []).some((c) => c.credits > 0);
 
   return (
-    <GmbShell title="Billing">
+    <GmbShell title="Billing & plan">
       {error && <ErrorNote>{error}</ErrorNote>}
       {notice && (
         <div className="mb-3.5 rounded-control border border-gmb-ok/30 bg-gmb-ok/10 px-3 py-2 text-sm2 text-gmb-ok">

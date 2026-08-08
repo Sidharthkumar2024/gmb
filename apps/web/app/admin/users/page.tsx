@@ -77,7 +77,7 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <AdminShell title="Users">
+    <AdminShell title="Users & AI">
       {error && (
         <div className="mb-3.5 rounded-control border border-gmb-danger/30 bg-gmb-danger/10 px-3 py-2 text-sm2 text-[#ff8f85]">
           {error}

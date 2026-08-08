@@ -9,7 +9,18 @@ const deps = vi.hoisted(() => ({
   resolveSecretValue: vi.fn(),
   sendMail: vi.fn(),
   createTransport: vi.fn(),
+  tenantFindUnique: vi.fn(),
 }));
+
+vi.mock("@nexaflow/db", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nexaflow/db")>();
+  return {
+    ...actual,
+    prisma: {
+      tenant: { findUnique: deps.tenantFindUnique },
+    },
+  };
+});
 
 vi.mock("./secretVault.service", () => ({
   listSecrets: deps.listSecrets,
@@ -26,6 +37,7 @@ import {
   sendTestEmail,
   SMTP_NO_AUTH_SENTINEL,
   SMTP_VAULT_LABEL,
+  PARTNER_SMTP_VAULT_LABEL,
 } from "./email.service";
 
 const VAULT_ENTRY = {
@@ -46,6 +58,34 @@ afterEach(() => {
 });
 
 describe("resolveSmtpSettings", () => {
+  it("prefers a partner-scoped relay for a partner child tenant", async () => {
+    deps.tenantFindUnique.mockResolvedValue({ type: "DIRECT", parentTenantId: "partner-1" });
+    deps.listSecrets.mockImplementation(async (ctx) =>
+      ctx.scope === "PARTNER"
+        ? [{
+            ...VAULT_ENTRY,
+            id: "partner-smtp",
+            label: PARTNER_SMTP_VAULT_LABEL,
+            metadata: { host: "smtp.partner.test", port: 465, fromEmail: "hello@partner.test" },
+          }]
+        : [VAULT_ENTRY],
+    );
+    deps.resolveSecretValue.mockResolvedValue("partner-password");
+
+    const settings = await resolveSmtpSettings("child-1");
+
+    expect(settings).toMatchObject({
+      source: "partner",
+      host: "smtp.partner.test",
+      secure: true,
+      fromEmail: "hello@partner.test",
+    });
+    expect(deps.listSecrets).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "PARTNER", tenantId: "partner-1" }),
+      { provider: "SMTP" },
+    );
+  });
+
   it("prefers the admin vault entry over env", async () => {
     deps.listSecrets.mockResolvedValue([VAULT_ENTRY]);
     deps.resolveSecretValue.mockResolvedValue("super-secret-pw");

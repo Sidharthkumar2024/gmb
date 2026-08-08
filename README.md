@@ -6,8 +6,8 @@ The standalone Adgrowly Google Business Profile (Local SEO) platform.
 
 **The API and web app run standalone.** The platform includes the business,
 partner, and admin portals; Postgres migrations; background workers; billing and
-wallet flows; Docker packaging; and CI. The current suite passes 578 tests across
-63 files, and the Next.js production build generates 61 routes.
+wallet flows; Docker packaging; and CI. The current suite passes 663 tests across
+72 files, and the Next.js production build generates 71 routes.
 
 Production activation still requires real environment secrets and provider
 credentials. Follow `GO-LIVE.md` for deployment and operational checks.

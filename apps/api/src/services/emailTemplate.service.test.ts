@@ -9,6 +9,10 @@ const deps = vi.hoisted(() => ({
   findMany: vi.fn(),
   findUnique: vi.fn(),
   upsert: vi.fn(),
+  partnerFindMany: vi.fn(),
+  partnerFindUnique: vi.fn(),
+  partnerUpsert: vi.fn(),
+  tenantFindUnique: vi.fn(),
 }));
 
 vi.mock("@nexaflow/db", async (importOriginal) => {
@@ -17,14 +21,22 @@ vi.mock("@nexaflow/db", async (importOriginal) => {
     ...actual,
     prisma: {
       emailTemplate: { findMany: deps.findMany, findUnique: deps.findUnique, upsert: deps.upsert },
+      partnerEmailTemplate: {
+        findMany: deps.partnerFindMany,
+        findUnique: deps.partnerFindUnique,
+        upsert: deps.partnerUpsert,
+      },
+      tenant: { findUnique: deps.tenantFindUnique },
     },
   };
 });
 
 import {
   listEmailTemplates,
+  listPartnerEmailTemplates,
   renderEmailTemplate,
   upsertEmailTemplate,
+  upsertPartnerEmailTemplate,
 } from "./emailTemplate.service";
 
 afterEach(() => vi.clearAllMocks());
@@ -84,6 +96,43 @@ describe("upsertEmailTemplate", () => {
       expect.objectContaining({ where: { key: "PASSWORD_RESET" } }),
     );
     expect(saved.subject).toBe("Reset now");
+  });
+});
+
+describe("partner email templates", () => {
+  it("isolates list reads to the authenticated partner tenant", async () => {
+    deps.partnerFindMany.mockResolvedValue([
+      { key: "STAFF_INVITE", subject: "From partner", body: "Open {{url}}", useCustom: true, updatedAt: new Date() },
+    ]);
+    const list = await listPartnerEmailTemplates("partner-1");
+    expect(deps.partnerFindMany).toHaveBeenCalledWith({ where: { tenantId: "partner-1" } });
+    expect(list.find((template) => template.key === "STAFF_INVITE")?.subject).toBe("From partner");
+  });
+
+  it("upserts through the compound tenant/key boundary", async () => {
+    deps.partnerUpsert.mockResolvedValue({});
+    deps.partnerFindMany.mockResolvedValue([
+      { key: "STAFF_INVITE", subject: "Join us", body: "Open {{url}}", useCustom: true, updatedAt: new Date() },
+    ]);
+    await upsertPartnerEmailTemplate("partner-1", "STAFF_INVITE", {
+      subject: "Join us",
+      body: "Open {{url}}",
+      useCustom: true,
+    });
+    expect(deps.partnerUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId_key: { tenantId: "partner-1", key: "STAFF_INVITE" } } }),
+    );
+  });
+
+  it("renders the owning partner override for a child tenant", async () => {
+    deps.tenantFindUnique.mockResolvedValue({ type: "DIRECT", parentTenantId: "partner-1" });
+    deps.partnerFindUnique.mockResolvedValue({ subject: "Hello", body: "Partner {{url}}", useCustom: true });
+    const rendered = await renderEmailTemplate("STAFF_INVITE", { url: "Z" }, "child-1");
+    expect(deps.partnerFindUnique).toHaveBeenCalledWith({
+      where: { tenantId_key: { tenantId: "partner-1", key: "STAFF_INVITE" } },
+    });
+    expect(rendered).toEqual({ subject: "Hello", text: "Partner Z" });
+    expect(deps.findUnique).not.toHaveBeenCalled();
   });
 });
 

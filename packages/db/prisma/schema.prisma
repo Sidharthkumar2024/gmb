@@ -66,9 +66,9 @@ model SupportTicket {
 
   createdByUserId String?
 
-  subject  String
-  status   TicketStatus   @default(OPEN)
-  priority TicketPriority @default(NORMAL)
+  subject          String
+  status           TicketStatus   @default(OPEN)
+  priority         TicketPriority @default(NORMAL)
   /// Optional platform user currently responsible for the ticket. Kept as a
   /// scalar so deleting an operator never deletes or invalidates support history.
   assignedToUserId String?
@@ -96,7 +96,7 @@ model SupportTicketMessage {
   authorUserId String?
   body         String
   /// Staff-only note. Customer ticket reads never return these messages.
-  internal     Boolean @default(false)
+  internal     Boolean      @default(false)
 
   createdAt DateTime @default(now())
 
@@ -112,16 +112,16 @@ model WhiteLabelConfig {
   tenantId String @unique
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  brandName     String?
-  customDomain  String?
-  domainVerified Boolean @default(false)
+  brandName               String?
+  customDomain            String?
+  domainVerified          Boolean   @default(false)
   domainVerificationToken String?
-  domainVerifiedAt DateTime?
-  brandColorHex String  @default("#5a4af0")
-  logoUrl       String?
-  hidePoweredBy Boolean @default(false)
-  senderName    String?
-  senderEmail   String?
+  domainVerifiedAt        DateTime?
+  brandColorHex           String    @default("#5a4af0")
+  logoUrl                 String?
+  hidePoweredBy           Boolean   @default(false)
+  senderName              String?
+  senderEmail             String?
 
   updatedByUserId String?
   createdAt       DateTime @default(now())
@@ -146,6 +146,25 @@ model EmailTemplate {
   updatedAt       DateTime @updatedAt
 }
 
+/// Partner-scoped overrides for transactional emails sent under a verified
+/// white-label brand. Kept separate from the platform EmailTemplate catalogue
+/// so one reseller can never alter another reseller's or the platform's mail.
+model PartnerEmailTemplate {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  key             String
+  subject         String
+  body            String
+  useCustom       Boolean  @default(false)
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+}
+
 enum PlanInterval {
   MONTH
   YEAR
@@ -164,9 +183,9 @@ enum PlanStatus {
 /// (null = unlimited); `monthlyCredits` is informational until an auto-grant
 /// worker exists (credit top-ups are manual for now).
 model Plan {
-  id          String       @id @default(cuid())
+  id          String  @id @default(cuid())
   name        String
-  slug        String       @unique
+  slug        String  @unique
   description String?
 
   priceCents Int          @default(0)
@@ -297,28 +316,29 @@ model Tenant {
   settings           TenantSettings?
 
   // GMB back-relations
-  gmbLocations       GmbLocation[]
-  gmbPosts           GmbPost[]
-  gmbReviews         GmbReview[]
-  gmbQuestions       GmbQuestion[]
-  gmbPlaceActions    GmbPlaceAction[]
-  gmbVerifications   GmbVerificationRequest[]
-  gmbTrackedKeywords GmbTrackedKeyword[]
-  gmbRankAlertRules  GmbRankAlertRule[]
-  gmbRankSnapshots   GmbRankSnapshot[]
-  gmbRankGridSnaps   GmbRankGridSnapshot[]
-  gmbInsightSnaps    GmbInsightSnapshot[]
-  gmbCitations       GmbCitation[]
-  gmbReports         GmbReport[]
-  gmbKeywordIdeaSets GmbKeywordIdeaSet[]
-  gmbDescriptions    GmbDescription[]
-  gmbAdvisorReports  GmbAdvisorReport[]
-  gmbImageRequests   GmbImageRequest[]
-  supportTickets     SupportTicket[]
-  whiteLabelConfig   WhiteLabelConfig?
-  payments           Payment[]
-  partnerPlans       PartnerPlan[]    @relation("PartnerResalePlans")
-  partnerInvoices    PartnerInvoice[] @relation("PartnerInvoices")
+  gmbLocations          GmbLocation[]
+  gmbPosts              GmbPost[]
+  gmbReviews            GmbReview[]
+  gmbQuestions          GmbQuestion[]
+  gmbPlaceActions       GmbPlaceAction[]
+  gmbVerifications      GmbVerificationRequest[]
+  gmbTrackedKeywords    GmbTrackedKeyword[]
+  gmbRankAlertRules     GmbRankAlertRule[]
+  gmbRankSnapshots      GmbRankSnapshot[]
+  gmbRankGridSnaps      GmbRankGridSnapshot[]
+  gmbInsightSnaps       GmbInsightSnapshot[]
+  gmbCitations          GmbCitation[]
+  gmbReports            GmbReport[]
+  gmbKeywordIdeaSets    GmbKeywordIdeaSet[]
+  gmbDescriptions       GmbDescription[]
+  gmbAdvisorReports     GmbAdvisorReport[]
+  gmbImageRequests      GmbImageRequest[]
+  supportTickets        SupportTicket[]
+  whiteLabelConfig      WhiteLabelConfig?
+  partnerEmailTemplates PartnerEmailTemplate[]
+  payments              Payment[]
+  partnerPlans          PartnerPlan[]            @relation("PartnerResalePlans")
+  partnerInvoices       PartnerInvoice[]         @relation("PartnerInvoices")
   // GmbReportSchedule and GmbAutopilotConfig are deliberately absent: both are
   // one-row-per-tenant configs keyed by `tenantId @unique` with no declared FK
   // relation in the source schema. Adding back-relations here would require
@@ -368,13 +388,13 @@ model User {
 /// row is revoked so a stolen token cannot be replayed after the real client
 /// has already used it.
 model RefreshToken {
-  id        String  @id @default(cuid())
+  id        String @id @default(cuid())
   userId    String
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String  @unique
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String @unique
 
-  expiresAt DateTime
-  revokedAt DateTime?
+  expiresAt      DateTime
+  revokedAt      DateTime?
   /// Set when this token was rotated, pointing at its successor — lets a
   /// reuse-detection sweep spot a replayed ancestor.
   replacedByHash String?
@@ -597,8 +617,8 @@ model Payment {
 /// Buyer details used on GST/tax invoices. A tenant may update these without
 /// changing its workspace display name.
 model BillingProfile {
-  id             String @id @default(cuid())
-  tenantId       String @unique
+  id             String   @id @default(cuid())
+  tenantId       String   @unique
   legalName      String?
   billingAddress String?
   gstin          String?
@@ -620,7 +640,7 @@ model TaxInvoice {
   subtotalMinor Int
   taxMinor      Int
   totalMinor    Int
-  taxRateBps    Int @default(0)
+  taxRateBps    Int    @default(0)
   currency      String
 
   sellerName    String
@@ -810,11 +830,9 @@ model BrandKit {
   updatedAt      DateTime @updatedAt
 }
 
-
 // ============================================================
 // GMB models (extracted from the NexaFlow monorepo)
 // ============================================================
-
 
 enum GmbPostType {
   UPDATE
@@ -1010,10 +1028,10 @@ model GmbPlaceAction {
   actionType GmbPlaceActionType
   url        String
 
-  isActive          Boolean @default(true)
+  isActive              Boolean @default(true)
   /// Whether this link has been pushed to the Google profile (Place Actions
   /// API write — gated on a live connection). Local-only until then.
-  publishedToGoogle Boolean @default(false)
+  publishedToGoogle     Boolean @default(false)
   googlePlaceActionName String?
 
   createdByUserId String?
@@ -1042,12 +1060,12 @@ model GmbQuestion {
   questionText       String
   askedAt            DateTime?
 
-  status     GmbQuestionStatus @default(NEW)
-  answerText String?
-  answeredAt DateTime?
-  answerPublishedToGoogle Boolean @default(false)
-  googleAnswerName String?
-  lastSyncedAt DateTime?
+  status                  GmbQuestionStatus @default(NEW)
+  answerText              String?
+  answeredAt              DateTime?
+  answerPublishedToGoogle Boolean           @default(false)
+  googleAnswerName        String?
+  lastSyncedAt            DateTime?
 
   createdByUserId String?
 
@@ -1158,14 +1176,14 @@ model GmbRankSnapshot {
 /// Opt-in cadence for lightweight single-keyword rank captures. The worker
 /// checks the centre point only; grid scans remain explicitly user-triggered.
 model GmbRankSchedule {
-  id           String   @id @default(cuid())
-  tenantId     String   @unique
-  enabled      Boolean  @default(false)
-  cadenceHours Int      @default(24)
+  id           String    @id @default(cuid())
+  tenantId     String    @unique
+  enabled      Boolean   @default(false)
+  cadenceHours Int       @default(24)
   lastRunAt    DateTime?
   lastError    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([enabled])
 }
@@ -1359,8 +1377,8 @@ model GmbDescription {
   maxLength Int?
   analysis  Json?
 
-  status GmbDescriptionStatus @default(DRAFT)
-  publishedToGoogle Boolean @default(false)
+  status            GmbDescriptionStatus @default(DRAFT)
+  publishedToGoogle Boolean              @default(false)
   publishedAt       DateTime?
 
   createdByUserId String?
@@ -1433,16 +1451,16 @@ model GmbImageRequest {
 }
 
 model GmbReportSchedule {
-  id        String        @id @default(cuid())
-  tenantId  String        @unique
-  enabled   Boolean       @default(false)
-  frequency GmbReportType @default(MONTHLY)
-  lastRunAt DateTime?
-  recipientEmails String[] @default([])
-  lastDeliveredAt DateTime?
+  id                String        @id @default(cuid())
+  tenantId          String        @unique
+  enabled           Boolean       @default(false)
+  frequency         GmbReportType @default(MONTHLY)
+  lastRunAt         DateTime?
+  recipientEmails   String[]      @default([])
+  lastDeliveredAt   DateTime?
   lastDeliveryError String?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   @@index([enabled])
 }

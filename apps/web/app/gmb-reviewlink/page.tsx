@@ -77,7 +77,7 @@ export default function GmbReviewLinkPage() {
   }
 
   return (
-    <GmbShell title="Review link">
+    <GmbShell title="Review link & QR">
       {error && <ErrorNote>{error}</ErrorNote>}
 
       {!locationId ? (

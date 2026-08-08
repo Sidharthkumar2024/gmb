@@ -17,8 +17,9 @@ import {
   PaymentStatus,
   PaymentProvider,
   WalletTransactionType,
+  TenantType,
 } from "@nexaflow/db";
-import { ApiError, ErrorCodes } from "@nexaflow/shared";
+import { ApiError, ErrorCodes, Permissions, ROLE_PERMISSIONS } from "@nexaflow/shared";
 import { requireAuth, signAccessToken, type RequestWithAuth } from "../middleware/auth";
 import { requireRole } from "../middleware/rbac";
 import { logAudit, extractRequestMeta } from "../services/audit.service";
@@ -138,9 +139,13 @@ router.get("/overview", async (_req: RequestWithAuth, res: Response, next: NextF
 router.get("/tenants", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
   try {
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const type = req.query.type === "WHITE_LABEL" ? TenantType.WHITE_LABEL : undefined;
     const pageSize = 50;
     const page = Math.max(1, Number(req.query.page) || 1);
-    const where = q ? { name: { contains: q, mode: "insensitive" as const } } : undefined;
+    const where = {
+      ...(q ? { name: { contains: q, mode: "insensitive" as const } } : {}),
+      ...(type ? { type } : {}),
+    };
     const [rows, total] = await Promise.all([
       prisma.tenant.findMany({
         where,
@@ -184,6 +189,38 @@ router.get("/tenants", async (req: RequestWithAuth, res: Response, next: NextFun
   } catch (err) {
     next(err);
   }
+});
+
+router.get("/roles", async (_req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const counts = await prisma.user.groupBy({ by: ["role"], _count: { _all: true } });
+    const countByRole = new Map(counts.map((row) => [row.role, row._count._all]));
+    const roles = Object.values(UserRole).map((role) => ({
+      role,
+      users: countByRole.get(role) ?? 0,
+      permissions: ROLE_PERMISSIONS[role],
+    }));
+    res.json({
+      success: true,
+      data: { permissions: Object.values(Permissions), roles },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/api-keys", async (_req: RequestWithAuth, res: Response) => {
+  // The application currently exposes authenticated product APIs, not a
+  // public integration API. Issuing bearer keys before scoped endpoints and
+  // key-level permissions exist would create a super-admin credential path.
+  res.json({
+    success: true,
+    data: {
+      issuanceEnabled: false,
+      items: [],
+      reason: "Scoped public API endpoints are not enabled for this deployment.",
+    },
+  });
 });
 
 /**

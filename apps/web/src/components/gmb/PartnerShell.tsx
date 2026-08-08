@@ -19,6 +19,12 @@ function money(minor: number, currency: string): string {
   }
 }
 
+function initials(name: string | null | undefined, email: string | undefined): string {
+  const source = name?.trim() || email?.split("@")[0] || "P";
+  const parts = source.split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "P";
+}
+
 // Shell for the Partner Portal (white-label reseller). Dark green theme per the
 // Partner Portal design, distinct from the purple admin console.
 //
@@ -28,17 +34,24 @@ function money(minor: number, currency: string): string {
 
 const NAV: Array<{ label: string; items: Array<{ href: string; name: string }> }> = [
   {
-    label: "Business",
+    label: "",
     items: [
       { href: "/partner", name: "Dashboard" },
-      { href: "/partner/branding", name: "White-label" },
-      { href: "/partner/plans", name: "Resale plans" },
+      { href: "/partner/customers", name: "Customers" },
+      { href: "/partner/branding", name: "Branding" },
+      { href: "/partner/plans", name: "Plans & pricing" },
+      { href: "/partner/commissions", name: "Commissions" },
       { href: "/partner/transactions", name: "Transactions" },
-      { href: "/partner/gateway", name: "Payment gateway" },
       { href: "/partner/invoices", name: "Invoices" },
-      { href: "/partner/team", name: "Team" },
-      { href: "/partner/google", name: "Google" },
+      { href: "/partner/gateway", name: "Payment gateways" },
+      { href: "/partner/smtp", name: "SMTP & email" },
+      { href: "/partner/team", name: "Team & roles" },
+      { href: "/partner/google", name: "Google API" },
       { href: "/partner/support", name: "Tickets" },
+      { href: "/partner/email-templates", name: "Email templates" },
+      { href: "/partner/reports", name: "Reports" },
+      { href: "/partner/audit", name: "Audit logs" },
+      { href: "/partner/security", name: "Security" },
     ],
   },
 ];
@@ -52,14 +65,18 @@ export function PartnerShell({ title, children }: { title: string; children: Rea
 
   // Real month-to-date commission for the sidebar card, from the statement.
   const [commission, setCommission] = useState<CommissionSummary | null>(null);
+  const [customDomain, setCustomDomain] = useState<string | null>(null);
   useEffect(() => {
     if (!mounted || loading || user?.role !== "WHITE_LABEL_ADMIN") return;
-    void api
-      .get<{ totals: { marginByCurrency: Record<string, number> }; period: { label: string } }>(
+    void Promise.all([
+      api.get<{ totals: { marginByCurrency: Record<string, number> }; period: { label: string } }>(
         "/api/v1/partner/statement",
-      )
-      .then((s) => setCommission({ marginByCurrency: s.totals.marginByCurrency, label: s.period.label }))
-      .catch(() => setCommission(null));
+      ).catch(() => null),
+      api.get<{ customDomain: string | null }>("/api/v1/partner/branding").catch(() => null),
+    ]).then(([statement, branding]) => {
+      setCommission(statement ? { marginByCurrency: statement.totals.marginByCurrency, label: statement.period.label } : null);
+      setCustomDomain(branding?.customDomain ?? null);
+    });
   }, [mounted, loading, user]);
 
   useEffect(() => {
@@ -85,11 +102,11 @@ export function PartnerShell({ title, children }: { title: string; children: Rea
     <div className="flex h-screen overflow-hidden bg-ptn-bg font-geist text-ptn-ink">
       <aside className="flex w-[236px] flex-shrink-0 flex-col border-r border-ptn-line bg-ptn-panel">
         <div className="flex items-center gap-2.5 px-5 pb-4 pt-5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-ptn-accent text-[15px] font-bold text-ptn-bg">
+          <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-ptn-accent font-newsreader text-[17px] font-semibold text-ptn-bg">
             a
           </div>
           <div>
-            <div className="text-base font-bold tracking-[-0.01em]">Adgrowly</div>
+            <div className="font-newsreader text-[18px] font-medium leading-none tracking-[-0.015em]">Adgrowly</div>
             <div className="font-geist-mono text-micro uppercase tracking-[0.1em] text-ptn-subtle">
               Partner portal
             </div>
@@ -99,9 +116,11 @@ export function PartnerShell({ title, children }: { title: string; children: Rea
         <nav className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-3 pb-3">
           {NAV.map((section) => (
             <div key={section.label}>
-              <div className="px-2.5 pb-[7px] font-geist-mono text-micro uppercase tracking-[0.1em] text-ptn-subtle">
-                {section.label}
-              </div>
+              {section.label ? (
+                <div className="px-2.5 pb-[7px] font-geist-mono text-micro uppercase tracking-[0.1em] text-ptn-subtle">
+                  {section.label}
+                </div>
+              ) : null}
               <div className="flex flex-col gap-px">
                 {section.items.map((item) => {
                   const active =
@@ -140,8 +159,8 @@ export function PartnerShell({ title, children }: { title: string; children: Rea
                       ? "—"
                       : entries.map(([c, m]) => money(m, c)).join(" · ")}
                   </div>
-                  <Link href="/partner/invoices" className="mt-0.5 block text-[11px] text-ptn-accent no-underline hover:underline">
-                    View statement →
+                  <Link href="/partner/commissions" className="mt-0.5 block text-[11px] text-ptn-accent no-underline hover:underline">
+                    View commissions →
                   </Link>
                 </>
               );
@@ -154,18 +173,30 @@ export function PartnerShell({ title, children }: { title: string; children: Rea
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 flex-shrink-0 items-center gap-3.5 border-b border-ptn-line bg-ptn-bg px-7">
-          <h1 className="m-0 flex-shrink-0 text-[21px] font-bold tracking-[-0.01em]">{title}</h1>
+          <h1 className="m-0 flex-shrink-0 font-newsreader text-[24px] font-medium tracking-[-0.015em]">{title}</h1>
           <div className="flex-1" />
-          <span className="font-geist-mono text-micro text-ptn-subtle">{user.email}</span>
+          <span className="rounded-full border border-ptn-line px-3 py-1.5 font-geist-mono text-micro text-ptn-muted">
+            {customDomain ?? "Domain not set"}
+          </span>
+          {pathname === "/partner" || pathname === "/partner/customers" ? (
+            <Link
+              href="/partner/customers?new=1"
+              className="rounded-control bg-ptn-accent px-4 py-2 text-sm2 font-semibold text-ptn-bg no-underline hover:bg-ptn-accent-hover hover:no-underline"
+            >
+              + New customer
+            </Link>
+          ) : null}
           <button
             type="button"
+            title={`Sign out ${user.email}`}
+            aria-label="Sign out"
             onClick={() => {
               void signOut();
               router.push("/login");
             }}
-            className="rounded-control border border-ptn-line px-3 py-1.5 text-xs2 font-medium text-ptn-muted hover:bg-ptn-panel-hover"
+            className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[#174b31] text-xs font-semibold text-ptn-accent hover:bg-[#205c3d]"
           >
-            Sign out
+            {initials(user.name, user.email)}
           </button>
         </header>
         <div className="flex-1 overflow-y-auto px-7 pb-10 pt-6">{children}</div>

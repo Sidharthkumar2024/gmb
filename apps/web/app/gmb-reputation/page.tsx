@@ -213,7 +213,7 @@ export default function GmbReviewsPage() {
   }
 
   return (
-    <GmbShell title="Reviews">
+    <GmbShell title="Reputation">
       {error && <ErrorNote>{error}</ErrorNote>}
 
       {/* Summary strip */}

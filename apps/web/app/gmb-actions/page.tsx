@@ -143,7 +143,7 @@ export default function GmbActionsPage() {
   const byType = new Map((actions ?? []).map((a) => [a.actionType, a]));
 
   return (
-    <GmbShell title="Action links">
+    <GmbShell title="Place actions">
       {error && <ErrorNote>{error}</ErrorNote>}
 
       <Card className="mb-3.5">

@@ -134,7 +134,7 @@ export default function PartnerBrandingPage() {
   const previewDomain = customDomain.trim() || "app.youragency.com";
 
   return (
-    <PartnerShell title="White-label">
+    <PartnerShell title="Branding & white-label">
       {error && (
         <div className="mb-3.5 rounded-control border border-gmb-danger/30 bg-gmb-danger/10 px-3 py-2 text-sm2 text-ptn-danger">
           {error}

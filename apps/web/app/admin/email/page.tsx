@@ -135,7 +135,7 @@ export default function AdminEmailPage() {
   const active = data?.admin ? "admin" : data?.env.configured ? "env" : "off";
 
   return (
-    <AdminShell title="Email">
+    <AdminShell title="SMTP & delivery">
       {error && (
         <div className="mb-3.5 rounded-control border border-gmb-danger/30 bg-gmb-danger/10 px-3 py-2 text-sm2 text-[#ff8f85]">
           {error}

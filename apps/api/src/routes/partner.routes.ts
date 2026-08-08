@@ -44,7 +44,25 @@ import {
   setPartnerActiveProvider,
   disconnectPartnerGateway,
 } from "../services/partnerGateway.service";
-import { UserRole, PlanStatus } from "@nexaflow/db";
+import { prisma, UserRole, PlanStatus, SecretProvider, SecretScope } from "@nexaflow/db";
+import {
+  listSecrets,
+  createSecret,
+  updateSecret,
+  rotateSecret,
+  deleteSecret,
+} from "../services/secretVault.service";
+import {
+  PARTNER_SMTP_VAULT_LABEL,
+  SMTP_NO_AUTH_SENTINEL,
+  resolveSmtpSettings,
+  sendTestEmail,
+} from "../services/email.service";
+import {
+  listPartnerEmailTemplates,
+  upsertPartnerEmailTemplate,
+} from "../services/emailTemplate.service";
+import { ApiError, ErrorCodes } from "@nexaflow/shared";
 
 // Partner (white-label reseller) portal API. Every route is a WHITE_LABEL_ADMIN
 // acting within their own tenant, so req.tenantId is the partner tenant and its
@@ -420,6 +438,298 @@ router.delete("/gateway/:provider", async (req: RequestWithAuth, res: Response, 
   try {
     const provider = gatewayProviderSchema.parse(req.params.provider);
     res.json({ success: true, data: await disconnectPartnerGateway(req.tenantId!, provider) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- SMTP & transactional email -------------------------------------------
+// Partner relay credentials live in the PARTNER vault scope. sendEmail()
+// resolves these settings for the partner and every child customer before it
+// falls back to platform SMTP, so the saved configuration is operational.
+
+const partnerSecretContext = (tenantId: string) => ({
+  scope: SecretScope.PARTNER,
+  tenantId,
+});
+
+interface PartnerSmtpMeta {
+  host?: string;
+  port?: number;
+  secure?: boolean;
+  user?: string | null;
+  fromEmail?: string;
+  fromName?: string | null;
+  hasPassword?: boolean;
+}
+
+async function findPartnerSmtpEntry(tenantId: string) {
+  const entries = await listSecrets(partnerSecretContext(tenantId), {
+    provider: SecretProvider.SMTP,
+  });
+  return entries.find((entry) => entry.label === PARTNER_SMTP_VAULT_LABEL) ?? null;
+}
+
+router.get("/smtp", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const entry = await findPartnerSmtpEntry(req.tenantId!);
+    const meta = (entry?.metadata ?? {}) as PartnerSmtpMeta;
+    const active = await resolveSmtpSettings(req.tenantId!);
+    res.json({
+      success: true,
+      data: {
+        partner: entry
+          ? {
+              host: meta.host ?? null,
+              port: meta.port ?? 587,
+              secure: meta.secure ?? (meta.port ?? 587) === 465,
+              user: meta.user ?? null,
+              fromEmail: meta.fromEmail ?? null,
+              fromName: meta.fromName ?? null,
+              passwordLast4: meta.hasPassword ? entry.last4 : null,
+            }
+          : null,
+        fallback: entry || !active
+          ? null
+          : { source: active.source, host: active.host, fromEmail: active.fromEmail },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const partnerSmtpSchema = z.object({
+  host: z.string().min(1).max(255),
+  port: z.number().int().min(1).max(65535).default(587),
+  secure: z.boolean().optional(),
+  user: z.string().max(255).optional(),
+  password: z.string().max(500).optional(),
+  fromEmail: z.string().email().max(255),
+  fromName: z.string().max(120).optional(),
+});
+
+router.put("/smtp", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = partnerSmtpSchema.parse(req.body);
+    const user = input.user?.trim() || null;
+    const existing = await findPartnerSmtpEntry(req.tenantId!);
+    const hasStoredPassword = Boolean(
+      existing && (existing.metadata as PartnerSmtpMeta | null)?.hasPassword,
+    );
+    if (user && !input.password && !hasStoredPassword) {
+      throw new ApiError(
+        ErrorCodes.BAD_REQUEST,
+        400,
+        "A password is required when an SMTP user is set.",
+      );
+    }
+
+    const metadata: PartnerSmtpMeta = {
+      host: input.host.trim(),
+      port: input.port,
+      secure: input.secure ?? input.port === 465,
+      user,
+      fromEmail: input.fromEmail.trim(),
+      fromName: input.fromName?.trim() || null,
+      hasPassword: input.password ? true : user ? hasStoredPassword : false,
+    };
+    const ctx = partnerSecretContext(req.tenantId!);
+    let entryId: string;
+    if (existing) {
+      await updateSecret(ctx, existing.id, { metadata });
+      if (input.password) {
+        await rotateSecret(ctx, existing.id, input.password);
+      } else if (!user && hasStoredPassword) {
+        await rotateSecret(ctx, existing.id, SMTP_NO_AUTH_SENTINEL);
+      }
+      entryId = existing.id;
+    } else {
+      const created = await createSecret(ctx, {
+        provider: SecretProvider.SMTP,
+        label: PARTNER_SMTP_VAULT_LABEL,
+        value: input.password || SMTP_NO_AUTH_SENTINEL,
+        metadata,
+        createdByUserId: req.userId,
+      });
+      entryId = created.id;
+    }
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: existing ? "UPDATE" : "CREATE",
+      resource: "PartnerSmtpConfig",
+      resourceId: entryId,
+      newValues: {
+        host: metadata.host,
+        port: metadata.port,
+        fromEmail: metadata.fromEmail,
+        passwordChanged: Boolean(input.password),
+      },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: { saved: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/smtp", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const existing = await findPartnerSmtpEntry(req.tenantId!);
+    if (!existing) throw new ApiError(ErrorCodes.NOT_FOUND, 404, "No partner SMTP settings saved.");
+    await deleteSecret(partnerSecretContext(req.tenantId!), existing.id);
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "DELETE",
+      resource: "PartnerSmtpConfig",
+      resourceId: existing.id,
+      oldValues: { host: (existing.metadata as PartnerSmtpMeta | null)?.host ?? null },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: { deleted: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/smtp/test", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const { to } = z.object({ to: z.string().email() }).parse(req.body);
+    res.json({ success: true, data: await sendTestEmail(to, req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/email-templates", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await listPartnerEmailTemplates(req.tenantId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const partnerTemplateSchema = z.object({
+  subject: z.string().max(300),
+  body: z.string().max(20_000),
+  useCustom: z.boolean(),
+});
+
+router.patch("/email-templates/:key", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const input = partnerTemplateSchema.parse(req.body);
+    const template = await upsertPartnerEmailTemplate(req.tenantId!, req.params.key, {
+      ...input,
+      updatedByUserId: req.userId,
+    });
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "UPDATE",
+      resource: "PartnerEmailTemplate",
+      resourceId: req.params.key,
+      newValues: { useCustom: input.useCustom },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: template });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Audit & security -------------------------------------------------------
+
+router.get("/audit", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = 50;
+    const where = {
+      OR: [
+        { tenantId: req.tenantId! },
+        { tenant: { parentTenantId: req.tenantId! } },
+      ],
+    };
+    const [items, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          user: { select: { name: true, email: true } },
+          tenant: { select: { name: true } },
+        },
+      }),
+      prisma.auditLog.count({ where }),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        page,
+        pageSize,
+        total,
+        items: items.map((item) => ({
+          id: item.id,
+          action: item.action,
+          resource: item.resource,
+          resourceId: item.resourceId,
+          userName: item.user.name,
+          userEmail: item.user.email,
+          tenantName: item.tenant.name,
+          ipAddress: item.ipAddress,
+          createdAt: item.createdAt,
+        })),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/security", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const [user, activeSessions] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: req.userId! },
+        select: { email: true, emailVerified: true, lastLoginAt: true, updatedAt: true },
+      }),
+      prisma.refreshToken.count({
+        where: { userId: req.userId!, revokedAt: null, expiresAt: { gt: new Date() } },
+      }),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        email: user?.email ?? null,
+        emailVerified: user?.emailVerified ?? false,
+        lastLoginAt: user?.lastLoginAt ?? null,
+        passwordUpdatedAt: user?.updatedAt ?? null,
+        activeSessions,
+        twoFactorAvailable: false,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/security/revoke-sessions", async (req: RequestWithAuth, res: Response, next: NextFunction) => {
+  try {
+    const result = await prisma.refreshToken.updateMany({
+      where: { userId: req.userId!, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    await logAudit({
+      tenantId: req.tenantId!,
+      userId: req.userId!,
+      action: "LOGOUT",
+      resource: "RefreshToken",
+      newValues: { revokedSessions: result.count },
+      ...extractRequestMeta(req),
+    });
+    res.json({ success: true, data: { revokedSessions: result.count } });
   } catch (err) {
     next(err);
   }

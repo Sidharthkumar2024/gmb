@@ -129,7 +129,7 @@ export default function GmbSupportPage() {
   // Detail view
   if (openId) {
     return (
-      <GmbShell title="Support">
+      <GmbShell title="My tickets">
         {error && <ErrorNote>{error}</ErrorNote>}
         <button
           type="button"
@@ -212,7 +212,7 @@ export default function GmbSupportPage() {
 
   // List view
   return (
-    <GmbShell title="Support">
+    <GmbShell title="My tickets">
       {error && <ErrorNote>{error}</ErrorNote>}
 
       <div className="mb-3.5 flex items-center justify-between">

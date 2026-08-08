@@ -25,33 +25,42 @@ const NAV: Array<{ label: string; items: Array<{ href: string; name: string; bad
     label: "Overview",
     items: [
       { href: "/gmb-dashboard", name: "Dashboard" },
-      { href: "/gmb-autopilot", name: "Autopilot" },
-      { href: "/gmb-insights", name: "Insights" },
-      { href: "/gmb-reports", name: "Reports" },
+      { href: "/gmb-advisor", name: "Advisor" },
     ],
   },
   {
-    label: "Grow",
+    label: "Visibility",
     items: [
-      { href: "/gmb-reputation", name: "Reviews", badgeKey: "reviews" },
-      { href: "/gmb-reviewlink", name: "Review link" },
+      { href: "/gmb-ranking", name: "Rank tracker" },
+      { href: "/gmb-insights", name: "Insights" },
+      { href: "/gmb-citations", name: "Citations" },
+    ],
+  },
+  {
+    label: "Engage",
+    items: [
+      { href: "/gmb-reputation", name: "Reputation", badgeKey: "reviews" },
       { href: "/gmb-qa", name: "Q&A", badgeKey: "questions" },
       { href: "/gmb", name: "Posts" },
-      { href: "/gmb-descriptions", name: "Descriptions" },
-      { href: "/gmb-images", name: "Photos" },
-      { href: "/gmb-ranking", name: "Rank tracker" },
-      { href: "/gmb-citations", name: "Citations" },
-      { href: "/gmb-advisor", name: "Advisor" },
+    ],
+  },
+  { label: "Support", items: [{ href: "/gmb-support", name: "My tickets" }] },
+  {
+    label: "Grow",
+    items: [
+      { href: "/gmb-whitelabel", name: "Go white-label" },
+      { href: "/gmb-reviewlink", name: "Review link & QR" },
     ],
   },
   {
     label: "Profile",
     items: [
       { href: "/gmb-locations", name: "Locations" },
-      { href: "/gmb-actions", name: "Action links" },
-      { href: "/gmb-verifications", name: "Verification" },
+      { href: "/gmb-actions", name: "Place actions" },
+      { href: "/gmb-verifications", name: "Verifications" },
+      { href: "/gmb-images", name: "Images" },
+      { href: "/gmb-reports", name: "Reports" },
       { href: "/gmb-billing", name: "Billing & plan" },
-      { href: "/gmb-support", name: "Support" },
       { href: "/gmb-settings", name: "Settings" },
     ],
   },
@@ -105,6 +114,7 @@ export function GmbShell({
   const [activeId, setActiveId] = useState<string>("");
   const [credits, setCredits] = useState<number | null>(null);
   const [score, setScore] = useState<{ value: number; grade: string | null } | null>(null);
+  const [badges, setBadges] = useState<Record<string, number>>({});
   const [locMenu, setLocMenu] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
   const [branding, setBranding] = useState<{
@@ -199,18 +209,27 @@ export function GmbShell({
     // keep showing the previously-selected location until a full reload.
     window.dispatchEvent(new Event(ACTIVE_LOCATION_EVENT));
     let cancelled = false;
-    void api
-      .get<{ businessScore?: number | null; grade?: string | null }>(
-        `/api/v1/gmb/dashboard?locationId=${activeId}`,
-      )
-      .then((d) => {
-        if (!cancelled && typeof d.businessScore === "number") {
+    const locationQuery = `?locationId=${encodeURIComponent(activeId)}`;
+    void Promise.all([
+      api.get<{ businessScore?: number | null; grade?: string | null }>(
+        `/api/v1/gmb/dashboard${locationQuery}`,
+      ).catch(() => null),
+      api.get<{ unanswered?: number }>(`/api/v1/gmb/reviews/summary${locationQuery}`).catch(() => ({ unanswered: 0 })),
+      api.get<{ unanswered?: number }>(`/api/v1/gmb/questions/summary${locationQuery}`).catch(() => ({ unanswered: 0 })),
+    ])
+      .then(([dashboard, reviews, questions]) => {
+        if (cancelled) return;
+        if (dashboard && typeof dashboard.businessScore === "number") {
           // The design shows "+6 since last month". The API exposes no
           // month-over-month delta, so the grade is shown instead of inventing
           // a trend — a fabricated number here would be indistinguishable from
           // a real one to whoever reads it.
-          setScore({ value: d.businessScore, grade: d.grade ?? null });
+          setScore({ value: dashboard.businessScore, grade: dashboard.grade ?? null });
         }
+        setBadges({
+          reviews: Math.max(0, reviews.unanswered ?? 0),
+          questions: Math.max(0, questions.unanswered ?? 0),
+        });
       })
       // The score is chrome; a failure must not surface as an error.
       .catch(() => undefined);
@@ -383,6 +402,11 @@ export function GmbShell({
                       }`}
                     >
                       <span>{item.name}</span>
+                      {item.badgeKey && (badges[item.badgeKey] ?? 0) > 0 ? (
+                        <span className="rounded-full bg-gmb-brand px-1.5 py-px font-geist-mono text-[9px] leading-[14px] text-white">
+                          {badges[item.badgeKey]}
+                        </span>
+                      ) : null}
                     </Link>
                   );
                 })}
@@ -427,6 +451,13 @@ export function GmbShell({
               {!mounted || credits === null ? "—" : credits.toLocaleString()} credits
             </span>
           </span>
+
+          <Link
+            href="/gmb-billing"
+            className="rounded-[9px] bg-[#1a1726] px-4 py-2 text-sm2 font-medium text-white no-underline hover:bg-[#2c2839] hover:no-underline"
+          >
+            Buy credits
+          </Link>
 
           <div className="relative" ref={userRef}>
             <button

@@ -27,9 +27,8 @@ export interface EmailPayload {
   html?: string;
   attachments?: EmailAttachment[];
   /**
-   * Accepted for source compatibility with the monorepo's signature. Per-tenant
-   * sender domains are not implemented here, so this is currently unused —
-   * every message goes out from the platform sender.
+   * Used to resolve a partner-owned SMTP relay and verified white-label sender
+   * for the partner tenant or one of its child customer tenants.
    */
   tenantId?: string;
 }
@@ -38,6 +37,7 @@ const PLATFORM_CTX = { scope: SecretScope.PLATFORM, tenantId: null } as const;
 
 /** Fixed label of the single platform SMTP vault entry (Admin → Email). */
 export const SMTP_VAULT_LABEL = "Platform SMTP";
+export const PARTNER_SMTP_VAULT_LABEL = "Partner SMTP";
 
 /** Ciphertext sentinel for auth-less relays — the vault requires a non-empty value. */
 export const SMTP_NO_AUTH_SENTINEL = "no-auth";
@@ -50,7 +50,7 @@ export interface SmtpSettings {
   password: string | null;
   fromEmail: string;
   fromName: string | null;
-  source: "admin" | "env";
+  source: "partner" | "admin" | "env";
 }
 
 interface SmtpMetadata {
@@ -67,7 +67,40 @@ interface SmtpMetadata {
  * null means email is off. Read per send — a config change applies to the
  * very next email, and email volume here is nowhere near where that matters.
  */
-export async function resolveSmtpSettings(): Promise<SmtpSettings | null> {
+export async function resolveSmtpSettings(tenantId?: string): Promise<SmtpSettings | null> {
+  if (tenantId) {
+    try {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { type: true, parentTenantId: true },
+      });
+      const partnerTenantId = tenant?.parentTenantId ?? (tenant?.type === "WHITE_LABEL" ? tenantId : null);
+      if (partnerTenantId) {
+        const partnerCtx = { scope: SecretScope.PARTNER, tenantId: partnerTenantId } as const;
+        const entries = await listSecrets(partnerCtx, { provider: SecretProvider.SMTP });
+        const entry = entries.find((candidate) => candidate.label === PARTNER_SMTP_VAULT_LABEL);
+        const meta = (entry?.metadata ?? {}) as SmtpMetadata;
+        if (entry && meta.host) {
+          const raw = await resolveSecretValue(partnerCtx, entry.id);
+          const password = raw && raw !== SMTP_NO_AUTH_SENTINEL ? raw : null;
+          const port = meta.port ?? 587;
+          return {
+            host: meta.host,
+            port,
+            secure: meta.secure ?? port === 465,
+            user: meta.user ?? null,
+            password,
+            fromEmail: meta.fromEmail ?? "no-reply@localhost",
+            fromName: meta.fromName ?? null,
+            source: "partner",
+          };
+        }
+      }
+    } catch (err) {
+      console.error("[email] partner SMTP lookup failed, trying platform settings", err);
+    }
+  }
+
   try {
     const entries = await listSecrets(PLATFORM_CTX, { provider: SecretProvider.SMTP });
     const entry = entries.find((e) => e.label === SMTP_VAULT_LABEL);
@@ -123,7 +156,7 @@ function formatFrom(s: Pick<SmtpSettings, "fromName" | "fromEmail">): string {
 }
 
 export async function sendEmail(payload: EmailPayload): Promise<void> {
-  const settings = await resolveSmtpSettings();
+  const settings = await resolveSmtpSettings(payload.tenantId);
   if (!settings) {
     console.warn(
       `[email] SMTP not configured — skipping "${payload.subject}" to ${payload.to}`,
@@ -177,12 +210,12 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 export interface SmtpTestResult {
   ok: boolean;
   message: string;
-  source: "admin" | "env" | null;
+  source: "partner" | "admin" | "env" | null;
 }
 
 /** Send a real test email and report the outcome honestly (never fake success). */
-export async function sendTestEmail(to: string): Promise<SmtpTestResult> {
-  const settings = await resolveSmtpSettings();
+export async function sendTestEmail(to: string, tenantId?: string): Promise<SmtpTestResult> {
+  const settings = await resolveSmtpSettings(tenantId);
   if (!settings) {
     return {
       ok: false,
